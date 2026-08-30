@@ -89,6 +89,7 @@ def sweep_all_models(conversations: list[Conversation], knowledge_dir: str,
     from voiceagent.knowledge import load_docs, build_index
     from voiceagent.agent import build_agent
     from voiceagent.llm import list_available_models, load_llm
+    from voiceagent.intent import IntentClassifier
 
     docs = load_docs(knowledge_dir)
     index = build_index(docs)
@@ -96,10 +97,11 @@ def sweep_all_models(conversations: list[Conversation], knowledge_dir: str,
     if not models:
         raise RuntimeError("no models downloaded — run scripts/smoke_llm.py first")
 
+    classifier = IntentClassifier()
     reports = []
     for m in models:
         llm = load_llm(m["model_path"], params=m["params"], size_mb=m["size_mb"])
-        agent = build_agent(index, llm)
+        agent = build_agent(index, llm, classifier=classifier)
         report = run_benchmark(agent, conversations,
                                max_rows=min(max_rows or len(conversations),
                                             max_conversations),
