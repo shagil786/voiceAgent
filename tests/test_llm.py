@@ -13,7 +13,7 @@ def test_generate_returns_string():
 
 def test_candidate_models_span_sizes():
     names = {m["name"] for m in CANDIDATE_MODELS}
+    assert "qwen3-0.6b-q4" in names
     assert "qwen2.5-0.5b-q4" in names
     assert "qwen2.5-1.5b-q4" in names
-    assert "phi-3.5-mini-q4" in names
     assert all(m["size_mb"] > 0 for m in CANDIDATE_MODELS)

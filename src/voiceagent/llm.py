@@ -6,6 +6,13 @@ from llama_cpp import Llama
 
 CANDIDATE_MODELS = [
     {
+        "name": "qwen3-0.6b-q4",
+        "url": ("https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/"
+                "resolve/main/Qwen3-0.6B-Q4_K_M.gguf"),
+        "size_mb": 397,
+        "params": "0.6B",
+    },
+    {
         "name": "qwen2.5-0.5b-q4",
         "url": ("https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/"
                 "resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"),
@@ -19,13 +26,6 @@ CANDIDATE_MODELS = [
         "size_mb": 1100,
         "params": "1.5B",
     },
-    {
-        "name": "phi-3.5-mini-q4",
-        "url": ("https://huggingface.co/microsoft/Phi-3.5-mini-instruct-GGUF/"
-                "resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf"),
-        "size_mb": 2400,
-        "params": "3.8B",
-    },
 ]
 
 
@@ -36,6 +36,15 @@ class LLMHandle:
     def generate(self, prompt: str, max_tokens: int = 256,
                  stop: list[str] | None = None) -> str:
         raise NotImplementedError
+
+    def chat_template(self, system: str, context: str, user_text: str) -> str:
+        """Wrap a raw prompt in the model's chat format. Base returns the
+        plain concatenation so non-chat (e.g. test) handles behave like a
+        raw completion prompt."""
+        return (
+            f"{system}\n\nContext:\n{context}\n\n"
+            f"Customer: {user_text}\nAssistant:"
+        )
 
 
 class LlamaCppLLM(LLMHandle):
@@ -54,6 +63,17 @@ class LlamaCppLLM(LLMHandle):
                  stop: list[str] | None = None) -> str:
         out = self._llm(prompt, max_tokens=max_tokens, stop=stop, echo=False)
         return out["choices"][0]["text"].strip()
+
+    def chat_template(self, system: str, context: str, user_text: str) -> str:
+        """Qwen3/Qwen2.5 ChatML template — the format these instruct models
+        were trained on. Raw-completion prompts cause small instruct models
+        to ramble and ignore the ACTION instruction."""
+        user = f"{context}\n\nCustomer: {user_text}"
+        return (
+            "<|im_start|>system\n" + system + "<|im_end|>\n"
+            "<|im_start|>user\n" + user + "<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
 
 
 def download_model(url: str, model_dir: str = "data/models") -> str:
