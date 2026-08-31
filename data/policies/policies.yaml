@@ -1,0 +1,41 @@
+# VoiceAgent policy-as-code — edited by the company's support/compliance team.
+# A change here is audited (decision log) and validated before deploy
+# (scripts/validate_policies.py).
+
+# Actions that always escalate to a human.
+escalate:
+  - fraud
+  - legal
+  - chargeback
+  - high_value_refund
+
+refund:
+  require_auth: true
+  max_without_approval: 5000
+
+high_value_refund:
+  require_auth: true
+  escalate: true
+
+order_status:
+  allow: true
+
+order_cancellation:
+  require_auth: true
+  allowed_until: shipped
+
+account_changes:
+  require_auth: true
+  require_otp: true
+
+billing:
+  allow: true
+
+recharge:
+  allow: true
+
+payment_declined:
+  allow: true
+
+otp:
+  require_auth: true
