@@ -58,3 +58,14 @@ The CPU-only, under-1B, sub-1s thesis is validated with real numbers.
   On 200 evals: 157 billable → ₹1,256 revenue. `python scripts/run_benchmark.py 200`.
 - **Fine-tune:** `scripts/kaggle/README.md` — train Qwen2.5-0.5B on Hinglish
   support data on a free Kaggle GPU (LoRA), convert to GGUF, re-benchmark.
+
+## M3 — Voice pipeline (CPU)
+
+- **Voice turn:** `python scripts/voice_demo.py` — closed-loop demo: TTS a
+  Hinglish query → ASR → agent → TTS reply (end-to-end 7.2s incl. cold loads).
+- **Components:** energy VAD, faster-whisper streaming ASR (int8 CPU, 7.6×
+  realtime), chunked Piper TTS (start speaking while generating).
+- **Safety finding:** when ASR garbles the input, the policy engine DENIES the
+  wrong action — the AI refuses to act on speech it can't understand.
+- **Next (M3b):** SIP (sipx) / WebRTC (LiveKit) + Indic/Hinglish ASR for real
+  phone integration.
