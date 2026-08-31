@@ -87,3 +87,13 @@ class _FakeIndex:
     def search(self, query, k=3):
         return [{"id": "a", "text": "Refunds processed in 5-7 days.",
                  "section": "Refunds", "score": 0.9}]
+
+def test_run_benchmark_policy_summary():
+    from voiceagent.policy import Decision
+    class FixedAgent2:
+        def handle(self, user_text):
+            return AgentResult(text="ok", action="refund",
+                               retrieved=[{"text": "ok"}], latency_s=0.1,
+                               decision=Decision("ALLOW", ["ok"]))
+    report = run_benchmark(FixedAgent2(), _convs(3))
+    assert report.policy_summary.get("ALLOW") == 3

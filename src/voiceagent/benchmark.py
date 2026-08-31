@@ -27,6 +27,7 @@ class BenchmarkReport:
     per_language: dict[str, EvalSummary]
     rows: list[EvalRow]
     model_specs: dict
+    policy_summary: dict = field(default_factory=dict)
 
 
 def run_benchmark(agent, conversations: list[Conversation],
@@ -34,16 +35,21 @@ def run_benchmark(agent, conversations: list[Conversation],
                   model_specs: dict | None = None) -> BenchmarkReport:
     rows: list[EvalRow] = []
     by_lang: dict[str, list[EvalRow]] = {}
+    verdicts: dict[str, int] = {}
     for conv in conversations[:max_rows]:
         res = agent.handle(conv.user_text)
         row = score_conversation(conv, res)
         rows.append(row)
         by_lang.setdefault(conv.language, []).append(row)
+        if getattr(res, "decision", None) is not None:
+            v = res.decision.verdict
+            verdicts[v] = verdicts.get(v, 0) + 1
     return BenchmarkReport(
         summary=aggregate(rows),
         per_language={k: aggregate(v) for k, v in by_lang.items()},
         rows=rows,
         model_specs=model_specs or {},
+        policy_summary=verdicts,
     )
 
 
@@ -82,7 +88,8 @@ def estimate_cost_per_conversation(model_specs: dict, avg_latency_s: float,
 
 def sweep_all_models(conversations: list[Conversation], knowledge_dir: str,
                      model_dir: str, max_rows: int | None = None,
-                     max_conversations: int = 200) -> list[BenchmarkReport]:
+                     max_conversations: int = 200, policy: dict | None = None,
+                     decision_log=None) -> list[BenchmarkReport]:
     """Run the full pipeline once per downloaded model. Return sorted by
     (passed gate, resolution desc, size asc). Uses at most max_conversations
     so a sweep over 3 models stays fast."""
@@ -101,7 +108,8 @@ def sweep_all_models(conversations: list[Conversation], knowledge_dir: str,
     reports = []
     for m in models:
         llm = load_llm(m["model_path"], params=m["params"], size_mb=m["size_mb"])
-        agent = build_agent(index, llm, classifier=classifier)
+        agent = build_agent(index, llm, classifier=classifier, policy=policy,
+                            decision_log=decision_log)
         report = run_benchmark(agent, conversations,
                                max_rows=min(max_rows or len(conversations),
                                             max_conversations),

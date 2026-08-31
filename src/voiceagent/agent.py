@@ -36,15 +36,21 @@ class AgentResult:
     action: str | None
     retrieved: list[dict]
     latency_s: float
+    decision: "Decision | None" = None
 
 class Agent:
-    def __init__(self, index, llm, classifier=None):
+    def __init__(self, index, llm, classifier=None, policy=None, decision_log=None):
         self._index = index
         self._llm = llm
         self._classifier = classifier
         # Default to raw-completion prompt (tests use FakeLLM which has no
         # chat template). Real LlamaCppLLM opts in via build_agent below.
         self._use_template = False
+        self._policy = None
+        if policy is not None:
+            from voiceagent.policy import PolicyEngine
+            self._policy = PolicyEngine(policy)
+        self._decision_log = decision_log
 
     def handle(self, user_text: str) -> AgentResult:
         t0 = time.time()
@@ -76,8 +82,25 @@ class Agent:
             clean = _patch_reply(clean, required)
         else:
             action = extract_action(clean)
+        # Policy gate: every action passes through the deterministic policy
+        # engine (ALLOW / DENY / REQUIRE_AUTH / REQUIRE_HUMAN_APPROVAL /
+        # ESCALATE). No LLM in this path. Every decision is appended to the
+        # audit trail when a DecisionLog is attached.
+        decision = None
+        if self._policy is not None:
+            from voiceagent.policy import PolicyContext
+            ctx = PolicyContext(amount=None, authenticated=False, otp_verified=False)
+            decision = self._policy.evaluate(action or "", ctx)
+            if self._decision_log is not None:
+                from voiceagent.decisionlog import DecisionEntry
+                self._decision_log.record(DecisionEntry(
+                    ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    conv_id="", action=action or "",
+                    verdict=decision.verdict, reasons=decision.reasons,
+                    amount=None, authenticated=False))
         return AgentResult(text=clean, action=action,
-                           retrieved=retrieved, latency_s=time.time() - t0)
+                           retrieved=retrieved, latency_s=time.time() - t0,
+                           decision=decision)
 
 ACTION_RE = re.compile(r"ACTION:\s*([a-z_]+)", re.IGNORECASE)
 
@@ -133,8 +156,9 @@ def _patch_reply(reply: str, required: list[str]) -> str:
     return confirm + reply
 
 
-def build_agent(index, llm, classifier=None) -> Agent:
-    agent = Agent(index, llm, classifier=classifier)
+def build_agent(index, llm, classifier=None, policy=None, decision_log=None) -> Agent:
+    agent = Agent(index, llm, classifier=classifier, policy=policy,
+                  decision_log=decision_log)
     # Real LlamaCppLLM has chat_template; FakeLLM (tests) does not.
     agent._use_template = hasattr(llm, "chat_template")
     return agent

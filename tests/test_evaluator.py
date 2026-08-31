@@ -62,3 +62,16 @@ def test_echoed_customer_fact_is_not_hallucination():
     row = score_conversation(conv, res)
     assert row.grounded
     assert row.hallucinated_facts == []
+
+def test_escalate_row_resolves_on_escalate_decision():
+    from voiceagent.policy import Decision
+    conv = Conversation(id="c4", language="en", intent="high_value_refund",
+                        user_text="refund 20000", expected_action="high_value_refund",
+                        key_facts=["20000"], escalate=True)
+    res = AgentResult(text="This needs a human.", action="high_value_refund",
+                      retrieved=[{"text": "ok"}], latency_s=0.2,
+                      decision=Decision("ESCALATE", ["requires human"]))
+    row = score_conversation(conv, res)
+    assert row.resolved
+    assert row.grounded
+    assert not row.wrong_action

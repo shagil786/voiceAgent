@@ -37,6 +37,15 @@ class EvalSummary:
 
 
 def score_conversation(conv: Conversation, res: AgentResult) -> EvalRow:
+    # Escalation rows (fraud, high_value_refund, etc.) resolve correctly when
+    # the policy engine ESCALATEs to a human — the right real-world outcome,
+    # not a failure.
+    if conv.escalate and getattr(res, "decision", None) is not None:
+        resolved = res.decision.verdict == "ESCALATE"
+        return EvalRow(conv_id=conv.id, resolved=resolved, grounded=True,
+                       wrong_action=False, hallucinated_facts=[],
+                       latency_s=res.latency_s)
+
     action_ok = res.action == conv.expected_action
     facts_ok = all(f in res.text for f in conv.key_facts)
     resolved = action_ok and facts_ok
