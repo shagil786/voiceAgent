@@ -74,6 +74,11 @@ class Agent:
         # was provided — e.g. unit tests — from the LLM's ACTION line).
         if self._classifier is not None:
             action, _ = self._classifier.classify(user_text)
+            # Deterministic promotion: a refund with an extracted amount above
+            # the policy threshold IS a high-value refund — don't leave that
+            # call to embedding similarity (which can't use the number).
+            if action == "refund" and amount is not None and amount > 5000:
+                action = "high_value_refund"
             # Echo guardrail: a support reply must acknowledge the customer's
             # specific reference (order id, phone, intent keyword). The small
             # LLM often answers generically, so patch any missing reference

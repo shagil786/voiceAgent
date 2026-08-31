@@ -47,15 +47,18 @@ def score_conversation(conv: Conversation, res: AgentResult) -> EvalRow:
                        latency_s=res.latency_s)
 
     action_ok = res.action == conv.expected_action
-    facts_ok = all(f in res.text for f in conv.key_facts)
+    # Case-insensitive fact matching: "otp" matches "OTP", "ORD-55671" matches "ORD-55671".
+    text_lower = res.text.lower()
+    facts_ok = all(f.lower() in text_lower for f in conv.key_facts)
     resolved = action_ok and facts_ok
 
-    retrieved_text = "\n".join(r["text"] for r in res.retrieved)
+    retrieved_text = "\n".join(r["text"] for r in res.retrieved).lower()
+    user_lower = conv.user_text.lower()
     # A key_fact the customer stated in their own query is not a
     # hallucination when echoed back, even if absent from retrieval.
-    hallucinated = [f for f in conv.key_facts if f in res.text
-                    and f not in retrieved_text
-                    and f not in conv.user_text]
+    hallucinated = [f for f in conv.key_facts if f.lower() in text_lower
+                    and f.lower() not in retrieved_text
+                    and f.lower() not in user_lower]
     grounded = len(hallucinated) == 0
 
     return EvalRow(

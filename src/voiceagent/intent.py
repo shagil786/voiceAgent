@@ -135,6 +135,12 @@ INTENT_EXEMPLARS: dict[str, list[str]] = {
         "बड़ी रकम का रिफंड",
         "refund of 20000",
         "high value refund",
+        "I need a large refund of 50000",
+        "big amount ka refund chahiye",
+        "मेरी बड़ी रकम वापस करो",
+        "refund of 25000 rupees urgently",
+        "my 100000 refund is stuck",
+        "huge refund pending for 2 months",
     ],
 }
 
