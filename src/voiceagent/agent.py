@@ -52,7 +52,8 @@ class Agent:
             self._policy = PolicyEngine(policy)
         self._decision_log = decision_log
 
-    def handle(self, user_text: str) -> AgentResult:
+    def handle(self, user_text: str, authenticated: bool = False,
+               amount: float | None = None, conv_id: str = "") -> AgentResult:
         t0 = time.time()
         retrieved = self._index.search(user_text, k=3)
         context = "\n".join(f"[{r['section']}] {r['text']}" for r in retrieved)
@@ -85,19 +86,21 @@ class Agent:
         # Policy gate: every action passes through the deterministic policy
         # engine (ALLOW / DENY / REQUIRE_AUTH / REQUIRE_HUMAN_APPROVAL /
         # ESCALATE). No LLM in this path. Every decision is appended to the
-        # audit trail when a DecisionLog is attached.
+        # audit trail when a DecisionLog is attached. Context comes from the
+        # real session (auth state, amount from entity extraction / backend).
         decision = None
         if self._policy is not None:
             from voiceagent.policy import PolicyContext
-            ctx = PolicyContext(amount=None, authenticated=False, otp_verified=False)
+            ctx = PolicyContext(amount=amount, authenticated=authenticated,
+                                otp_verified=False)
             decision = self._policy.evaluate(action or "", ctx)
             if self._decision_log is not None:
                 from voiceagent.decisionlog import DecisionEntry
                 self._decision_log.record(DecisionEntry(
                     ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    conv_id="", action=action or "",
+                    conv_id=conv_id, action=action or "",
                     verdict=decision.verdict, reasons=decision.reasons,
-                    amount=None, authenticated=False))
+                    amount=amount, authenticated=authenticated))
         return AgentResult(text=clean, action=action,
                            retrieved=retrieved, latency_s=time.time() - t0,
                            decision=decision)

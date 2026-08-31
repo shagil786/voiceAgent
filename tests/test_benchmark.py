@@ -11,7 +11,7 @@ class FixedAgent:
     def __init__(self, action, text):
         self.action = action
         self.text = text
-    def handle(self, user_text):
+    def handle(self, user_text, authenticated=False, amount=None, conv_id=""):
         return AgentResult(text=self.text, action=self.action,
                            retrieved=[{"text": "ok"}], latency_s=0.5)
 
@@ -91,7 +91,7 @@ class _FakeIndex:
 def test_run_benchmark_policy_summary():
     from voiceagent.policy import Decision
     class FixedAgent2:
-        def handle(self, user_text):
+        def handle(self, user_text, authenticated=False, amount=None, conv_id=""):
             return AgentResult(text="ok", action="refund",
                                retrieved=[{"text": "ok"}], latency_s=0.1,
                                decision=Decision("ALLOW", ["ok"]))

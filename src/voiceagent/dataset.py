@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 DATASET_SCHEMA = [
     "id", "language", "intent", "user_text", "expected_action",
-    "key_facts", "escalate",
+    "key_facts", "escalate", "authenticated", "amount",
 ]
 
 INTENTS = [
@@ -56,11 +56,25 @@ def generate_eval_set(out_path: str, n: int = 1000, seed: int = 42) -> int:
             order_id = f"ORD-{rng.randint(10000, 99999)}"
             text = text.replace("ORD-77812", order_id)
             facts = [order_id if f == "ORD-77812" else f for f in facts]
+            # Auth: a customer quoting their order id is treated as an
+            # authenticated session (they're tied to that order).
+            authenticated = any(f.startswith("ORD-") for f in facts)
+            amount = _template_amount(intent, rng)
             writer.writerow([
                 f"conv-{i:04d}", lang, intent, _mutate(text, rng),
-                action, "|".join(facts), escalate,
+                action, "|".join(facts), escalate, authenticated, amount,
             ])
     return n
+
+
+def _template_amount(intent: str, rng: random.Random) -> float | None:
+    """Assign a representative amount for amount-relevant intents."""
+    if intent == "high_value_refund":
+        return float(rng.choice([20000, 25000, 50000]))
+    if intent == "refund":
+        return float(rng.choice([1000, 2500, 4000]))
+    return None
+
 
 def load_conversations(path: str) -> list["Conversation"]:
     out = []
@@ -71,8 +85,11 @@ def load_conversations(path: str) -> list["Conversation"]:
                 user_text=row["user_text"], expected_action=row["expected_action"],
                 key_facts=[k for k in row["key_facts"].split("|") if k],
                 escalate=row["escalate"].lower() == "true",
+                authenticated=row.get("authenticated", "false").lower() == "true",
+                amount=float(row["amount"]) if row.get("amount") else None,
             ))
     return out
+
 
 @dataclass
 class Conversation:
@@ -83,3 +100,5 @@ class Conversation:
     expected_action: str
     key_facts: list[str] = field(default_factory=list)
     escalate: bool = False
+    authenticated: bool = False
+    amount: float | None = None

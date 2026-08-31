@@ -37,7 +37,8 @@ def run_benchmark(agent, conversations: list[Conversation],
     by_lang: dict[str, list[EvalRow]] = {}
     verdicts: dict[str, int] = {}
     for conv in conversations[:max_rows]:
-        res = agent.handle(conv.user_text)
+        res = agent.handle(conv.user_text, authenticated=conv.authenticated,
+                           amount=conv.amount, conv_id=conv.id)
         row = score_conversation(conv, res)
         rows.append(row)
         by_lang.setdefault(conv.language, []).append(row)

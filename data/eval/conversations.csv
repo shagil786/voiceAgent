@@ -1,1001 +1,1001 @@
-id,language,intent,user_text,expected_action,key_facts,escalate
-conv-0000,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0001,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0002,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0003,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0004,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0005,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0006,en,order_status,Where is my order #ORD-13905?,order_status,ORD-13905,False
-conv-0007,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0008,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0009,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0010,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0011,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0012,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0013,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0014,en,order_status,Where is my order #ORD-30926?,order_status,ORD-30926,False
-conv-0015,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0016,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0017,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0018,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0019,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0020,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0021,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0022,en,order_status,Where is my order #ORD-70217?,order_status,ORD-70217,False
-conv-0023,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0024,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0025,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0026,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0027,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0028,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0029,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0030,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0031,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0032,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0033,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0034,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0035,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0036,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0037,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0038,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0039,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0040,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0041,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0042,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0043,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0044,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0045,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0046,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0047,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0048,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0049,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0050,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0051,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0052,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0053,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0054,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0055,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0056,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0057,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0058,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0059,en,order_status,Where is my order #ORD-24371?,order_status,ORD-24371,False
-conv-0060,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0061,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0062,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0063,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0064,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0065,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0066,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0067,en,order_status,Where is my order #ORD-99166?,order_status,ORD-99166,False
-conv-0068,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0069,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0070,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0071,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0072,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0073,en,order_status,Where is my order #ORD-44522?,order_status,ORD-44522,False
-conv-0074,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0075,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0076,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0077,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0078,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0079,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0080,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0081,en,order_status,Where is my order #ORD-88504?,order_status,ORD-88504,False
-conv-0082,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0083,en,order_status,Where is my order #ORD-24662?,order_status,ORD-24662,False
-conv-0084,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0085,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0086,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0087,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0088,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0089,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0090,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0091,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0092,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0093,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0094,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0095,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0096,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0097,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0098,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0099,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0100,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0101,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0102,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0103,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0104,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0105,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0106,en,order_status,Where is my order #ORD-40007?,order_status,ORD-40007,False
-conv-0107,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0108,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0109,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0110,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0111,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0112,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0113,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0114,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0115,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0116,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0117,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0118,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0119,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0120,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0121,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0122,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0123,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0124,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0125,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0126,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0127,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0128,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0129,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0130,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0131,en,order_status,Where is my order #ORD-95477?,order_status,ORD-95477,False
-conv-0132,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0133,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0134,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0135,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0136,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0137,en,order_status,Where is my order #ORD-31579?,order_status,ORD-31579,False
-conv-0138,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0139,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0140,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0141,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0142,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0143,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0144,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0145,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0146,en,order_status,Where is my order #ORD-51104?,order_status,ORD-51104,False
-conv-0147,en,order_status,Where is my order #ORD-16572?,order_status,ORD-16572,False
-conv-0148,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0149,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0150,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0151,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0152,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0153,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0154,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0155,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0156,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0157,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0158,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0159,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0160,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0161,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0162,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0163,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0164,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0165,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0166,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0167,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0168,en,order_status,Where is my order #ORD-70068?,order_status,ORD-70068,False
-conv-0169,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0170,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0171,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0172,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0173,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0174,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0175,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0176,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0177,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0178,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0179,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0180,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0181,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0182,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0183,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0184,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0185,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0186,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0187,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0188,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0189,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0190,en,order_status,Where is my order #ORD-22097?,order_status,ORD-22097,False
-conv-0191,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0192,en,order_status,Where is my order #ORD-10464?,order_status,ORD-10464,False
-conv-0193,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0194,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0195,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0196,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0197,en,order_status,Where is my order #ORD-24663?,order_status,ORD-24663,False
-conv-0198,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0199,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0200,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0201,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0202,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0203,en,order_status,Where is my order #ORD-50404?,order_status,ORD-50404,False
-conv-0204,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0205,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0206,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0207,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0208,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0209,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0210,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0211,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0212,en,order_status,Where is my order #ORD-33509?,order_status,ORD-33509,False
-conv-0213,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0214,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0215,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0216,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0217,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0218,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0219,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0220,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0221,en,order_status,Where is my order #ORD-96511?,order_status,ORD-96511,False
-conv-0222,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0223,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0224,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0225,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0226,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0227,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0228,en,order_status,Where is my order #ORD-25118?,order_status,ORD-25118,False
-conv-0229,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0230,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0231,en,order_status,Where is my order #ORD-24208?,order_status,ORD-24208,False
-conv-0232,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0233,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0234,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0235,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0236,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0237,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0238,en,order_status,Where is my order #ORD-67154?,order_status,ORD-67154,False
-conv-0239,en,order_status,Where is my order #ORD-78146?,order_status,ORD-78146,False
-conv-0240,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0241,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0242,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0243,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0244,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0245,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0246,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0247,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0248,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0249,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0250,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0251,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0252,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0253,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0254,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0255,en,order_status,Where is my order #ORD-49829?,order_status,ORD-49829,False
-conv-0256,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0257,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0258,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0259,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0260,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0261,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0262,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0263,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0264,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0265,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0266,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0267,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0268,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0269,en,order_status,Where is my order #ORD-16057?,order_status,ORD-16057,False
-conv-0270,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0271,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0272,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0273,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0274,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0275,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0276,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0277,en,order_status,Where is my order #ORD-23970?,order_status,ORD-23970,False
-conv-0278,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0279,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0280,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0281,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0282,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0283,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0284,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0285,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0286,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0287,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0288,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0289,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0290,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0291,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0292,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0293,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0294,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0295,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0296,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0297,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0298,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0299,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0300,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0301,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0302,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0303,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0304,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0305,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0306,en,order_status,Where is my order #ORD-37110?,order_status,ORD-37110,False
-conv-0307,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0308,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0309,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0310,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0311,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0312,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0313,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0314,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0315,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0316,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0317,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0318,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0319,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0320,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0321,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0322,en,order_status,Where is my order #ORD-61645?,order_status,ORD-61645,False
-conv-0323,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0324,en,order_status,Where is my order #ORD-21003?,order_status,ORD-21003,False
-conv-0325,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0326,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0327,en,order_status,Where is my order #ORD-44099?,order_status,ORD-44099,False
-conv-0328,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0329,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0330,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0331,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0332,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0333,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0334,en,order_status,Where is my order #ORD-80702?,order_status,ORD-80702,False
-conv-0335,en,order_status,Where is my order #ORD-55870?,order_status,ORD-55870,False
-conv-0336,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0337,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0338,en,order_status,Where is my order #ORD-14067?,order_status,ORD-14067,False
-conv-0339,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0340,en,order_status,Where is my order #ORD-91439?,order_status,ORD-91439,False
-conv-0341,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0342,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0343,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0344,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0345,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0346,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0347,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0348,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0349,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0350,en,order_status,Where is my order #ORD-50888?,order_status,ORD-50888,False
-conv-0351,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0352,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0353,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0354,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0355,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0356,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0357,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0358,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0359,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0360,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0361,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0362,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0363,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0364,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0365,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0366,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0367,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0368,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0369,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0370,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0371,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0372,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0373,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0374,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0375,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0376,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0377,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0378,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0379,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0380,en,order_status,Where is my order #ORD-74789?,order_status,ORD-74789,False
-conv-0381,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0382,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0383,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0384,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0385,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0386,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0387,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0388,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0389,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0390,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0391,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0392,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0393,en,order_status,Where is my order #ORD-22196?,order_status,ORD-22196,False
-conv-0394,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0395,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0396,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0397,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0398,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0399,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0400,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0401,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0402,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0403,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0404,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0405,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0406,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0407,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0408,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0409,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0410,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0411,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0412,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0413,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0414,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0415,en,order_status,Where is my order #ORD-80010?,order_status,ORD-80010,False
-conv-0416,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0417,en,order_status,Where is my order #ORD-17146?,order_status,ORD-17146,False
-conv-0418,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0419,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0420,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0421,en,order_status,Where is my order #ORD-85243?,order_status,ORD-85243,False
-conv-0422,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0423,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0424,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0425,en,order_status,Where is my order #ORD-43092?,order_status,ORD-43092,False
-conv-0426,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0427,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0428,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0429,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0430,en,order_status,Where is my order #ORD-29887?,order_status,ORD-29887,False
-conv-0431,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0432,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0433,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0434,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0435,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0436,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0437,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0438,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0439,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0440,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0441,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0442,en,order_status,Where is my order #ORD-89905?,order_status,ORD-89905,False
-conv-0443,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0444,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0445,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0446,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0447,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0448,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0449,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0450,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0451,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0452,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0453,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0454,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0455,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0456,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0457,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0458,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0459,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0460,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0461,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0462,en,order_status,Where is my order #ORD-31747?,order_status,ORD-31747,False
-conv-0463,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0464,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0465,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0466,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0467,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0468,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0469,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0470,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0471,en,order_status,Where is my order #ORD-66626?,order_status,ORD-66626,False
-conv-0472,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0473,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0474,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0475,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0476,en,order_status,Where is my order #ORD-98117?,order_status,ORD-98117,False
-conv-0477,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0478,en,order_status,Where is my order #ORD-32962?,order_status,ORD-32962,False
-conv-0479,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0480,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0481,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0482,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0483,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0484,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0485,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0486,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0487,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0488,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0489,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0490,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0491,en,order_status,Where is my order #ORD-69614?,order_status,ORD-69614,False
-conv-0492,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0493,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0494,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0495,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0496,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0497,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0498,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0499,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0500,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0501,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0502,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0503,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0504,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0505,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0506,en,order_status,Where is my order #ORD-92578?,order_status,ORD-92578,False
-conv-0507,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0508,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0509,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0510,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0511,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0512,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0513,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0514,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0515,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0516,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0517,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0518,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0519,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0520,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0521,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0522,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0523,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0524,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0525,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0526,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0527,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0528,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0529,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0530,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0531,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0532,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0533,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0534,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0535,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0536,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0537,en,order_status,Where is my order #ORD-51704?,order_status,ORD-51704,False
-conv-0538,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0539,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0540,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0541,en,order_status,Where is my order #ORD-26547?,order_status,ORD-26547,False
-conv-0542,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0543,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0544,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0545,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0546,en,order_status,Where is my order #ORD-28894?,order_status,ORD-28894,False
-conv-0547,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0548,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0549,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0550,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0551,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0552,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0553,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0554,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0555,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0556,en,order_status,Where is my order #ORD-90931?,order_status,ORD-90931,False
-conv-0557,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0558,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0559,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0560,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0561,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0562,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0563,en,order_status,Where is my order #ORD-16028?,order_status,ORD-16028,False
-conv-0564,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0565,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0566,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0567,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0568,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0569,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0570,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0571,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0572,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0573,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0574,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0575,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0576,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0577,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0578,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0579,en,order_status,Where is my order #ORD-70981?,order_status,ORD-70981,False
-conv-0580,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0581,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0582,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0583,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0584,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0585,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0586,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0587,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0588,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0589,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0590,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0591,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0592,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0593,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0594,en,order_status,Where is my order #ORD-84177?,order_status,ORD-84177,False
-conv-0595,en,order_status,Where is my order #ORD-89482?,order_status,ORD-89482,False
-conv-0596,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0597,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0598,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0599,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0600,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0601,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0602,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0603,en,order_status,Where is my order #ORD-50492?,order_status,ORD-50492,False
-conv-0604,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0605,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0606,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0607,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0608,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0609,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0610,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0611,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0612,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0613,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0614,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0615,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0616,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0617,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0618,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0619,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0620,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0621,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0622,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0623,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0624,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0625,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0626,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0627,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0628,en,order_status,Where is my order #ORD-91205?,order_status,ORD-91205,False
-conv-0629,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0630,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0631,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0632,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0633,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0634,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0635,en,order_status,Where is my order #ORD-49893?,order_status,ORD-49893,False
-conv-0636,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0637,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0638,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0639,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0640,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0641,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0642,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0643,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0644,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0645,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0646,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0647,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0648,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0649,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0650,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0651,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0652,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0653,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0654,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0655,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0656,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0657,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0658,en,order_status,Where is my order #ORD-53713?,order_status,ORD-53713,False
-conv-0659,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0660,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0661,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0662,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0663,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0664,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0665,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0666,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0667,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0668,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0669,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0670,en,order_status,Where is my order #ORD-27275?,order_status,ORD-27275,False
-conv-0671,en,order_status,Where is my order #ORD-56955?,order_status,ORD-56955,False
-conv-0672,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0673,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0674,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0675,en,order_status,Where is my order #ORD-26614?,order_status,ORD-26614,False
-conv-0676,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0677,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0678,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0679,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0680,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0681,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0682,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0683,en,order_status,Where is my order #ORD-96363?,order_status,ORD-96363,False
-conv-0684,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0685,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0686,en,order_status,Where is my order #ORD-17972?,order_status,ORD-17972,False
-conv-0687,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0688,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0689,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0690,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0691,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0692,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0693,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0694,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0695,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0696,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0697,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0698,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0699,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0700,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0701,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0702,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0703,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0704,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0705,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0706,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0707,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0708,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0709,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0710,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0711,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0712,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0713,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0714,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0715,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0716,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0717,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0718,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0719,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0720,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0721,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0722,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0723,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0724,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0725,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0726,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0727,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0728,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0729,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0730,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0731,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0732,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0733,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0734,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0735,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0736,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0737,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0738,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0739,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0740,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0741,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0742,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0743,en,order_status,Where is my order #ORD-22026?,order_status,ORD-22026,False
-conv-0744,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0745,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0746,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0747,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0748,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0749,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0750,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0751,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0752,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0753,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0754,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0755,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0756,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0757,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0758,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0759,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0760,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0761,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0762,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0763,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0764,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0765,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0766,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0767,en,order_status,Where is my order #ORD-36794?,order_status,ORD-36794,False
-conv-0768,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0769,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0770,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0771,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0772,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0773,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0774,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0775,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0776,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0777,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0778,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0779,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0780,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0781,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0782,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0783,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0784,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0785,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0786,en,order_status,Where is my order #ORD-52568?,order_status,ORD-52568,False
-conv-0787,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0788,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0789,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0790,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0791,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0792,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0793,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0794,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0795,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0796,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0797,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0798,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0799,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0800,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0801,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0802,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0803,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0804,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0805,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0806,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0807,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0808,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0809,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0810,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0811,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0812,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0813,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0814,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0815,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0816,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0817,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0818,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0819,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0820,en,order_status,Where is my order #ORD-17456?,order_status,ORD-17456,False
-conv-0821,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0822,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0823,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0824,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0825,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0826,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0827,en,order_status,Where is my order #ORD-68947?,order_status,ORD-68947,False
-conv-0828,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0829,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0830,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0831,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0832,en,order_status,Where is my order #ORD-69050?,order_status,ORD-69050,False
-conv-0833,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0834,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0835,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0836,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0837,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0838,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0839,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0840,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0841,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0842,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0843,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0844,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0845,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0846,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0847,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0848,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0849,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0850,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0851,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0852,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0853,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0854,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0855,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0856,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0857,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0858,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0859,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0860,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0861,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0862,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0863,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0864,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0865,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0866,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0867,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0868,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0869,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0870,en,order_status,Where is my order #ORD-96760?,order_status,ORD-96760,False
-conv-0871,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0872,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0873,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0874,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0875,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0876,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0877,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0878,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0879,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0880,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0881,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0882,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0883,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0884,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0885,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0886,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0887,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0888,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0889,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0890,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0891,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0892,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0893,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0894,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0895,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0896,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0897,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0898,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0899,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0900,en,order_status,Where is my order #ORD-64381?,order_status,ORD-64381,False
-conv-0901,en,order_status,Where is my order #ORD-61964?,order_status,ORD-61964,False
-conv-0902,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0903,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0904,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0905,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0906,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0907,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0908,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0909,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0910,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0911,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0912,en,order_status,Where is my order #ORD-20384?,order_status,ORD-20384,False
-conv-0913,en,order_status,Where is my order #ORD-43544?,order_status,ORD-43544,False
-conv-0914,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0915,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0916,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0917,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0918,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0919,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0920,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0921,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0922,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0923,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0924,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0925,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0926,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0927,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0928,en,order_status,Where is my order #ORD-90584?,order_status,ORD-90584,False
-conv-0929,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0930,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False
-conv-0931,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0932,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0933,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0934,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0935,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0936,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0937,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0938,en,order_status,Where is my order #ORD-93318?,order_status,ORD-93318,False
-conv-0939,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0940,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0941,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0942,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0943,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0944,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0945,en,order_status,Where is my order #ORD-56176?,order_status,ORD-56176,False
-conv-0946,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0947,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0948,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0949,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0950,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0951,en,order_status,Where is my order #ORD-48462?,order_status,ORD-48462,False
-conv-0952,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0953,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0954,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0955,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0956,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0957,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0958,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0959,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0960,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0961,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0962,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0963,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0964,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0965,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0966,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0967,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0968,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0969,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0970,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0971,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0972,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0973,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0974,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
-conv-0975,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0976,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0977,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0978,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0979,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0980,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0981,en,order_status,Where is my order #ORD-19835?,order_status,ORD-19835,False
-conv-0982,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0983,en,fraud,Someone used my account. Block it now.,fraud,block,True
-conv-0984,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0985,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0986,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0987,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0988,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False
-conv-0989,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0990,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False
-conv-0991,en,order_status,Where is my order #ORD-89310?,order_status,ORD-89310,False
-conv-0992,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0993,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True
-conv-0994,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0995,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False
-conv-0996,en,payment_declined,Why was my payment declined?,payment_declined,declined,False
-conv-0997,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0998,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False
-conv-0999,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False
+id,language,intent,user_text,expected_action,key_facts,escalate,authenticated,amount
+conv-0000,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0001,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0002,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0003,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0004,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0005,en,order_status,Where is my order #ORD-13905?,order_status,ORD-13905,False,True,
+conv-0006,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0007,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0008,en,order_status,Where is my order #ORD-83563?,order_status,ORD-83563,False,True,
+conv-0009,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0010,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0011,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0012,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0013,en,order_status,Where is my order #ORD-30926?,order_status,ORD-30926,False,True,
+conv-0014,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0015,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0016,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0017,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0018,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0019,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0020,en,order_status,Where is my order #ORD-70217?,order_status,ORD-70217,False,True,
+conv-0021,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0022,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0023,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0024,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0025,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0026,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0027,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0028,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0029,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0030,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0031,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0032,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0033,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0034,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0035,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0036,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0037,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0038,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0039,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0040,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0041,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0042,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0043,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0044,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0045,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0046,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0047,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0048,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0049,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0050,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0051,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0052,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0053,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0054,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0055,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0056,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0057,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0058,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0059,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0060,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0061,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0062,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0063,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0064,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0065,en,order_status,Where is my order #ORD-44522?,order_status,ORD-44522,False,True,
+conv-0066,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0067,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0068,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0069,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0070,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0071,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0072,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0073,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0074,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0075,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0076,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0077,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0078,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0079,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0080,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0081,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0082,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0083,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0084,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0085,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0086,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0087,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0088,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0089,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0090,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0091,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0092,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0093,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0094,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0095,en,order_status,Where is my order #ORD-53309?,order_status,ORD-53309,False,True,
+conv-0096,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0097,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0098,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0099,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0100,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0101,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0102,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0103,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0104,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0105,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0106,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0107,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0108,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0109,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0110,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0111,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0112,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0113,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0114,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0115,en,order_status,Where is my order #ORD-95477?,order_status,ORD-95477,False,True,
+conv-0116,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0117,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0118,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0119,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0120,en,order_status,Where is my order #ORD-31579?,order_status,ORD-31579,False,True,
+conv-0121,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0122,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0123,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0124,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0125,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0126,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0127,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0128,en,order_status,Where is my order #ORD-51104?,order_status,ORD-51104,False,True,
+conv-0129,en,order_status,Where is my order #ORD-16572?,order_status,ORD-16572,False,True,
+conv-0130,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0131,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0132,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0133,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0134,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0135,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0136,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0137,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0138,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0139,en,order_status,Where is my order #ORD-91183?,order_status,ORD-91183,False,True,
+conv-0140,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0141,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0142,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0143,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0144,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0145,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0146,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0147,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0148,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0149,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0150,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0151,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0152,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0153,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0154,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0155,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0156,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0157,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0158,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0159,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0160,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0161,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0162,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0163,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0164,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0165,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0166,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0167,en,order_status,Where is my order #ORD-10464?,order_status,ORD-10464,False,True,
+conv-0168,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0169,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0170,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0171,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0172,en,order_status,Where is my order #ORD-24663?,order_status,ORD-24663,False,True,
+conv-0173,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0174,en,order_status,Where is my order #ORD-58393?,order_status,ORD-58393,False,True,
+conv-0175,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0176,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0177,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0178,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0179,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0180,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0181,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0182,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0183,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0184,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0185,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0186,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0187,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0188,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0189,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0190,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0191,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0192,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0193,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0194,en,order_status,Where is my order #ORD-96511?,order_status,ORD-96511,False,True,
+conv-0195,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0196,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0197,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0198,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0199,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0200,en,order_status,Where is my order #ORD-25118?,order_status,ORD-25118,False,True,
+conv-0201,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0202,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0203,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0204,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0205,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0206,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0207,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0208,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0209,en,order_status,Where is my order #ORD-67154?,order_status,ORD-67154,False,True,
+conv-0210,en,order_status,Where is my order #ORD-78146?,order_status,ORD-78146,False,True,
+conv-0211,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0212,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0213,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0214,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0215,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0216,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0217,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0218,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0219,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0220,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0221,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0222,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0223,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0224,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0225,en,order_status,Where is my order #ORD-49829?,order_status,ORD-49829,False,True,
+conv-0226,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0227,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0228,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0229,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0230,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0231,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0232,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0233,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0234,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0235,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0236,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0237,en,order_status,Where is my order #ORD-42092?,order_status,ORD-42092,False,True,
+conv-0238,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0239,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0240,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0241,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0242,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0243,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0244,en,order_status,Where is my order #ORD-23970?,order_status,ORD-23970,False,True,
+conv-0245,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0246,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0247,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0248,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0249,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0250,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0251,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0252,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0253,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0254,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0255,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0256,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0257,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0258,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0259,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0260,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0261,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0262,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0263,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0264,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0265,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0266,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0267,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0268,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0269,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0270,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0271,en,order_status,Where is my order #ORD-85456?,order_status,ORD-85456,False,True,
+conv-0272,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0273,en,order_status,Where is my order #ORD-56105?,order_status,ORD-56105,False,True,
+conv-0274,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0275,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0276,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0277,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0278,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0279,en,order_status,Where is my order #ORD-60968?,order_status,ORD-60968,False,True,
+conv-0280,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0281,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0282,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0283,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0284,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0285,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0286,en,order_status,Where is my order #ORD-21003?,order_status,ORD-21003,False,True,
+conv-0287,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0288,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0289,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0290,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0291,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0292,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0293,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0294,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0295,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0296,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0297,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0298,en,order_status,Where is my order #ORD-42411?,order_status,ORD-42411,False,True,
+conv-0299,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0300,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0301,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0302,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0303,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0304,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0305,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0306,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0307,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0308,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0309,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0310,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0311,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0312,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0313,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0314,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0315,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0316,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0317,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0318,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0319,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0320,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0321,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0322,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0323,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0324,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0325,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0326,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0327,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0328,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0329,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0330,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0331,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0332,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0333,en,order_status,Where is my order #ORD-74789?,order_status,ORD-74789,False,True,
+conv-0334,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0335,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0336,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0337,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0338,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0339,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0340,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0341,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0342,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0343,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0344,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0345,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0346,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0347,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0348,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0349,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0350,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0351,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0352,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0353,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0354,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0355,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0356,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0357,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0358,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0359,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0360,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0361,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0362,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0363,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0364,en,order_status,Where is my order #ORD-80010?,order_status,ORD-80010,False,True,
+conv-0365,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0366,en,order_status,Where is my order #ORD-17146?,order_status,ORD-17146,False,True,
+conv-0367,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0368,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0369,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0370,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0371,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0372,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0373,en,order_status,Where is my order #ORD-43092?,order_status,ORD-43092,False,True,
+conv-0374,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0375,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0376,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0377,en,order_status,Where is my order #ORD-29887?,order_status,ORD-29887,False,True,
+conv-0378,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0379,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0380,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0381,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0382,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0383,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0384,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0385,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0386,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0387,en,order_status,Where is my order #ORD-89905?,order_status,ORD-89905,False,True,
+conv-0388,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0389,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0390,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0391,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0392,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0393,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0394,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0395,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0396,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0397,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0398,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0399,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0400,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0401,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0402,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0403,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0404,en,order_status,Where is my order #ORD-31747?,order_status,ORD-31747,False,True,
+conv-0405,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0406,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0407,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0408,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0409,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0410,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0411,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0412,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0413,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0414,en,order_status,Where is my order #ORD-21970?,order_status,ORD-21970,False,True,
+conv-0415,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0416,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0417,en,order_status,Where is my order #ORD-98117?,order_status,ORD-98117,False,True,
+conv-0418,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0419,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0420,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0421,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0422,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0423,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0424,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0425,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0426,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0427,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0428,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0429,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0430,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0431,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0432,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0433,en,order_status,Where is my order #ORD-96200?,order_status,ORD-96200,False,True,
+conv-0434,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0435,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0436,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0437,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0438,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0439,en,order_status,Where is my order #ORD-36680?,order_status,ORD-36680,False,True,
+conv-0440,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0441,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0442,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0443,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0444,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0445,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0446,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0447,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0448,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0449,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0450,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0451,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0452,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0453,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0454,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0455,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0456,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0457,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0458,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0459,en,order_status,Where is my order #ORD-47072?,order_status,ORD-47072,False,True,
+conv-0460,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0461,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0462,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0463,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0464,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0465,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0466,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0467,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0468,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0469,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0470,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0471,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0472,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0473,en,order_status,Where is my order #ORD-26547?,order_status,ORD-26547,False,True,
+conv-0474,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0475,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0476,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0477,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0478,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0479,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0480,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0481,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0482,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0483,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0484,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0485,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0486,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0487,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0488,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0489,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0490,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0491,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0492,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0493,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0494,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0495,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0496,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0497,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0498,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0499,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0500,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0501,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0502,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0503,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0504,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0505,en,order_status,Where is my order #ORD-70981?,order_status,ORD-70981,False,True,
+conv-0506,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0507,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0508,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0509,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0510,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0511,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0512,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0513,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0514,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0515,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0516,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0517,en,order_status,Where is my order #ORD-84177?,order_status,ORD-84177,False,True,
+conv-0518,en,order_status,Where is my order #ORD-89482?,order_status,ORD-89482,False,True,
+conv-0519,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0520,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0521,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0522,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0523,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0524,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0525,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0526,en,order_status,Where is my order #ORD-50492?,order_status,ORD-50492,False,True,
+conv-0527,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0528,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0529,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0530,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0531,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0532,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0533,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0534,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0535,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0536,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0537,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0538,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0539,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0540,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0541,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0542,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0543,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0544,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0545,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0546,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0547,en,order_status,Where is my order #ORD-91205?,order_status,ORD-91205,False,True,
+conv-0548,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0549,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0550,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0551,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0552,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0553,en,order_status,Where is my order #ORD-49893?,order_status,ORD-49893,False,True,
+conv-0554,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0555,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0556,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0557,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0558,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0559,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0560,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0561,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0562,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0563,en,order_status,Where is my order #ORD-58566?,order_status,ORD-58566,False,True,
+conv-0564,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0565,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0566,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0567,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0568,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0569,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0570,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0571,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0572,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0573,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0574,en,order_status,Where is my order #ORD-53713?,order_status,ORD-53713,False,True,
+conv-0575,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0576,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0577,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0578,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0579,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0580,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0581,en,order_status,Where is my order #ORD-46342?,order_status,ORD-46342,False,True,
+conv-0582,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0583,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0584,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0585,en,order_status,Where is my order #ORD-27275?,order_status,ORD-27275,False,True,
+conv-0586,en,order_status,Where is my order #ORD-56955?,order_status,ORD-56955,False,True,
+conv-0587,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0588,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0589,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0590,en,order_status,Where is my order #ORD-26614?,order_status,ORD-26614,False,True,
+conv-0591,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0592,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0593,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0594,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0595,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0596,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0597,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0598,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0599,en,order_status,Where is my order #ORD-72781?,order_status,ORD-72781,False,True,
+conv-0600,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0601,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0602,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0603,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0604,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0605,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0606,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0607,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0608,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0609,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0610,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0611,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0612,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0613,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0614,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0615,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0616,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0617,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0618,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0619,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0620,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0621,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0622,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0623,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0624,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0625,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0626,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0627,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0628,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0629,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0630,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0631,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0632,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0633,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0634,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0635,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0636,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0637,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0638,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0639,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0640,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0641,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0642,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0643,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0644,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0645,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0646,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0647,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0648,en,order_status,Where is my order #ORD-22026?,order_status,ORD-22026,False,True,
+conv-0649,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0650,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0651,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0652,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0653,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0654,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0655,en,order_status,Where is my order #ORD-30392?,order_status,ORD-30392,False,True,
+conv-0656,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0657,en,order_status,Where is my order #ORD-98338?,order_status,ORD-98338,False,True,
+conv-0658,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0659,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0660,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0661,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0662,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0663,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0664,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0665,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0666,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0667,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0668,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0669,en,order_status,Where is my order #ORD-11007?,order_status,ORD-11007,False,True,
+conv-0670,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0671,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0672,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0673,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0674,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0675,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0676,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0677,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0678,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0679,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0680,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0681,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0682,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0683,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0684,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0685,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0686,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0687,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0688,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0689,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0690,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0691,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0692,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0693,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0694,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0695,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0696,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0697,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0698,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0699,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0700,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0701,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0702,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0703,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0704,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0705,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0706,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0707,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0708,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0709,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0710,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0711,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0712,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0713,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0714,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0715,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0716,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0717,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0718,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0719,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0720,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0721,en,order_status,Where is my order #ORD-68947?,order_status,ORD-68947,False,True,
+conv-0722,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0723,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0724,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0725,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0726,en,order_status,Where is my order #ORD-69050?,order_status,ORD-69050,False,True,
+conv-0727,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0728,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0729,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0730,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0731,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0732,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0733,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0734,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0735,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0736,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0737,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0738,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0739,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0740,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0741,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0742,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0743,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0744,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0745,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0746,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0747,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0748,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0749,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0750,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0751,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0752,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0753,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0754,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0755,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0756,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0757,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0758,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0759,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0760,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0761,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0762,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0763,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0764,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0765,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0766,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0767,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0768,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0769,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0770,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0771,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0772,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0773,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0774,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0775,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0776,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0777,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0778,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0779,en,order_status,Where is my order #ORD-94040?,order_status,ORD-94040,False,True,
+conv-0780,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0781,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0782,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0783,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0784,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0785,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0786,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0787,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0788,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0789,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0790,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0791,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0792,en,order_status,Where is my order #ORD-51770?,order_status,ORD-51770,False,True,
+conv-0793,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0794,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0795,en,order_status,Where is my order #ORD-47601?,order_status,ORD-47601,False,True,
+conv-0796,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0797,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0798,en,order_status,Where is my order #ORD-20384?,order_status,ORD-20384,False,True,
+conv-0799,en,order_status,Where is my order #ORD-43544?,order_status,ORD-43544,False,True,
+conv-0800,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0801,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0802,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0803,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0804,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0805,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0806,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0807,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0808,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0809,en,order_status,Where is my order #ORD-92831?,order_status,ORD-92831,False,True,
+conv-0810,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0811,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0812,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0813,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0814,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0815,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0816,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0817,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0818,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0819,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0820,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0821,en,order_status,Where is my order #ORD-93318?,order_status,ORD-93318,False,True,
+conv-0822,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0823,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0824,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0825,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0826,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0827,en,order_status,Where is my order #ORD-56176?,order_status,ORD-56176,False,True,
+conv-0828,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0829,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0830,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0831,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0832,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0833,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0834,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0835,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0836,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0837,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0838,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0839,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0840,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0841,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0842,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0843,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0844,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0845,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0846,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0847,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0848,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0849,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0850,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0851,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0852,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0853,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0854,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0855,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0856,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0857,en,order_status,Where is my order #ORD-56210?,order_status,ORD-56210,False,True,
+conv-0858,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0859,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0860,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0861,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0862,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0863,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0864,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0865,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0866,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0867,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0868,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0869,en,order_status,Where is my order #ORD-89310?,order_status,ORD-89310,False,True,
+conv-0870,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0871,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0872,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0873,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0874,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0875,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0876,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0877,en,order_status,Where is my order #ORD-34385?,order_status,ORD-34385,False,True,
+conv-0878,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0879,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0880,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0881,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0882,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0883,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0884,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0885,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0886,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0887,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0888,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0889,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0890,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0891,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0892,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0893,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0894,en,order_status,Where is my order #ORD-57303?,order_status,ORD-57303,False,True,
+conv-0895,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0896,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0897,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0898,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0899,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0900,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0901,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0902,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0903,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0904,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0905,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0906,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0907,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0908,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0909,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0910,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0911,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0912,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0913,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0914,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0915,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0916,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0917,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0918,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0919,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0920,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0921,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0922,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0923,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0924,en,order_status,Where is my order #ORD-13718?,order_status,ORD-13718,False,True,
+conv-0925,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0926,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0927,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0928,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0929,en,order_status,Where is my order #ORD-75278?,order_status,ORD-75278,False,True,
+conv-0930,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0931,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0932,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0933,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0934,en,order_status,Where is my order #ORD-30719?,order_status,ORD-30719,False,True,
+conv-0935,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0936,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0937,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0938,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0939,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0940,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0941,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0942,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,1000.0
+conv-0943,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0944,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0945,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,2500.0
+conv-0946,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0947,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0948,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0949,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0950,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0951,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0952,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0953,en,order_status,Where is my order #ORD-21802?,order_status,ORD-21802,False,True,
+conv-0954,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0955,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,20000.0
+conv-0956,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0957,en,order_status,Where is my order #ORD-16624?,order_status,ORD-16624,False,True,
+conv-0958,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0959,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
+conv-0960,en,order_status,Where is my order #ORD-24089?,order_status,ORD-24089,False,True,
+conv-0961,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0962,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0963,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0964,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0965,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0966,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0967,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0968,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0969,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0970,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0971,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0972,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0973,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0974,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0975,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0976,hinglish,order_status,"Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai.",order_status,ORD-55671,False,True,
+conv-0977,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0978,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0979,en,order_status,Where is my order #ORD-15100?,order_status,ORD-15100,False,True,
+conv-0980,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0981,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0982,en,payment_declined,Why was my payment declined?,payment_declined,declined,False,False,
+conv-0983,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0984,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0985,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0986,hi,billing,मुझे अपना bill समझ नहीं आया।,billing,bill,False,False,
+conv-0987,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,2500.0
+conv-0988,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0989,en,fraud,Someone used my account. Block it now.,fraud,block,True,False,
+conv-0990,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0991,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,25000.0
+conv-0992,hi,recharge,मेरा recharge क्यों fail हुआ?,recharge,fail,False,False,
+conv-0993,en,refund,I need a refund for order #ORD-22109.,refund,ORD-22109,False,True,4000.0
+conv-0994,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,1000.0
+conv-0995,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0996,hinglish,refund,"Actually can you refund my order, order #ORD-99032?",refund,ORD-99032,False,True,4000.0
+conv-0997,hinglish,otp,"OTP nahi aaya mere phone pe, resend karo.",otp,otp,False,False,
+conv-0998,en,order_status,Where is my order #ORD-86483?,order_status,ORD-86483,False,True,
+conv-0999,en,high_value_refund,"I want a refund of ₹25,000 for order #ORD-11223.",high_value_refund,ORD-11223,True,True,50000.0
