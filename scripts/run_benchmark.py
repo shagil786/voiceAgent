@@ -1,4 +1,5 @@
 import sys
+import json
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -30,3 +31,24 @@ if __name__ == "__main__":
               f"lat={r.summary.avg_latency_s:.3f}s "
               f"policy={r.policy_summary} "
               f"gate={'PASS' if passed else 'FAIL'}")
+
+    # --- M2: handoff sample + billing summary ---
+    if len(reports):
+        from voiceagent.handoff import HandoffBundle, handoff_markdown
+        from voiceagent.billing import compute_billing
+        top = reports[0]
+        esc = [e for e in log.entries() if e.verdict == "ESCALATE"]
+        if esc:
+            e = esc[0]
+            conv = next((c for c in convs if c.id == e.conv_id), convs[0])
+            h = HandoffBundle(conv_id=e.conv_id, user_text=conv.user_text,
+                              reply="<see decision log>", action=e.action,
+                              decision=e.verdict, decision_reasons=e.reasons,
+                              retrieved=[], amount=e.amount, order_id=None,
+                              authenticated=e.authenticated)
+            Path("data/out/handoff-sample.md").write_text(
+                handoff_markdown(h), encoding="utf-8")
+        b = compute_billing([r for r in top.rows], log)
+        Path("data/out/billing.json").write_text(
+            json.dumps(b, indent=2), encoding="utf-8")
+        print("billing:", b)

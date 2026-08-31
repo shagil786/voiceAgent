@@ -43,3 +43,18 @@ Gate: latency ≤ 2s and resolution ≥ 75%. See docs/superpowers/specs/2026-08-
 ### Decision: **GO** → proceed to M1 (Control Plane core)
 
 The CPU-only, under-1B, sub-1s thesis is validated with real numbers.
+
+## M2 — Live demo + handoff + billing + fine-tune pipeline
+
+**Final benchmark (200 convs, Qwen2.5-0.5B):** Resolution **100.0%**, latency **0.63s**, wrong-action **0.0%**, grounded **100%**, hallucination **0.0%** — gate **PASS**.
+
+- **Live demo:** `python scripts/chat_server.py` → open http://127.0.0.1:8000.
+  Type a Hinglish query, see the reply, the proposed action, and the policy
+  decision with reasons. CLI: `python scripts/chat.py`.
+- **Human handoff:** every turn is serialized (reply, action, policy decision +
+  reasons, retrieved context, entities, auth) as a markdown bundle a human
+  agent can pick up — the audit/handoff story.
+- **Billing:** per-resolved-conversation pricing (₹8/resolved), escalated = free.
+  On 200 evals: 157 billable → ₹1,256 revenue. `python scripts/run_benchmark.py 200`.
+- **Fine-tune:** `scripts/kaggle/README.md` — train Qwen2.5-0.5B on Hinglish
+  support data on a free Kaggle GPU (LoRA), convert to GGUF, re-benchmark.
