@@ -20,6 +20,13 @@ high_value_refund:
 order_status:
   allow: true
 
+# M5c: read-only informational intents — always allow, no auth, no escalation.
+refund_info:
+  allow: true
+
+delivery_eta:
+  allow: true
+
 order_cancellation:
   require_auth: true
   allowed_until: shipped

@@ -12,3 +12,13 @@ def test_real_policy_file_semantics():
     assert eng.evaluate("refund", PolicyContext(amount=1000, authenticated=False)).verdict == "REQUIRE_AUTH"
     assert eng.evaluate("order_status").verdict == "ALLOW"
     assert eng.evaluate("not_a_real_action").verdict == "DENY"
+
+def test_informational_actions_always_allow():
+    # M5c Fix 2: refund_info / delivery_eta are read-only informational —
+    # always ALLOW, no auth, no escalation, regardless of amount.
+    from voiceagent.policy import load_policies
+    eng = PolicyEngine(load_policies("data/policies/policies.yaml"))
+    assert eng.evaluate("refund_info").verdict == "ALLOW"
+    assert eng.evaluate("refund_info", PolicyContext(amount=99999)).verdict == "ALLOW"
+    assert eng.evaluate("delivery_eta").verdict == "ALLOW"
+    assert eng.evaluate("delivery_eta", PolicyContext(amount=99999)).verdict == "ALLOW"

@@ -31,3 +31,15 @@ def test_hinglish_rows_are_code_switched():
             c in h.user_text for c in "abc"
         )
         assert "expected_action" in h.__dict__
+
+def test_eval_set_has_appended_informational_rows():
+    # M5c Fix 2: NEW eval rows (id sequence continues at conv-1000; no
+    # history rewrite) covering refund-timing / ETA questions that used to
+    # misroute to high_value_refund -> ESCALATE.
+    rows = load_conversations("data/eval/conversations.csv")
+    info = [r for r in rows
+            if r.expected_action in ("refund_info", "delivery_eta")]
+    assert len(info) >= 8
+    assert {r.language for r in info} == {"en", "hinglish"}
+    assert all(not r.escalate and not r.authenticated for r in info)
+    assert all(int(r.id.split("-")[1]) >= 1000 for r in info)

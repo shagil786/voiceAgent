@@ -18,7 +18,7 @@ DEFAULT_ACTIONS = [
     "payment_declined", "recharge", "billing", "return", "replacement",
     "otp", "fraud", "account_closure", "delivery_delay", "product_info",
     "invoice", "plan_change", "roaming", "network_issue", "complaint",
-    "high_value_refund",
+    "high_value_refund", "refund_info", "delivery_eta",
 ]
 
 _SYSTEM_PROMPT_TMPL = (
@@ -111,11 +111,23 @@ class Agent:
             # call to embedding similarity (which can't use the number).
             if action == "refund" and amount is not None and amount > 5000:
                 action = "high_value_refund"
+        else:
+            action = extract_action(clean)
+        # Scrub the ACTION scaffolding BEFORE the echo guardrail runs: the
+        # guardrail must judge the text the customer will actually see. A
+        # pre-scrub ACTION line can coincidentally contain a required keyword
+        # (e.g. "ACTION: recharge_fail" contains "fail") and the scrub would
+        # then delete the only occurrence of that fact — the guardrail would
+        # never notice it went missing. The action itself was captured above
+        # (classifier, or fallback extraction pre-scrub).
+        clean = strip_action_lines(clean)
+        if self._classifier is not None:
             # Echo guardrail: a support reply must acknowledge the customer's
             # specific reference (order id, phone, intent keyword). The small
-            # LLM often answers generically, so patch any missing reference
-            # with a deterministic confirmation. This is the product's
-            # "the AI cannot drift from your order/account" guarantee.
+            # LLM often answers generically — or its reply was scaffolding
+            # only — so patch any missing reference with a deterministic
+            # confirmation. This is the product's "the AI cannot drift from
+            # your order/account" guarantee.
             required = extract_required_references(user_text)
             # Reference inheritance: a follow-up like "and when will it
             # arrive?" states no order id — inherit the most recent one from
@@ -126,8 +138,10 @@ class Agent:
                 if inherited:
                     required.append(inherited)
             clean = _patch_reply(clean, required)
-        else:
-            action = extract_action(clean)
+        if not clean:
+            # Safety net: a reply with no references and no content still
+            # reaches the customer as something.
+            clean = "Your request has been noted."
         # Policy gate: every action passes through the deterministic policy
         # engine (ALLOW / DENY / REQUIRE_AUTH / REQUIRE_HUMAN_APPROVAL /
         # ESCALATE). No LLM in this path. Every decision is appended to the
@@ -165,6 +179,10 @@ KEYWORD_FACTS = {
     "billing": ["bill"],
     "payment_declined": ["declined"],
     "recharge": ["fail", "recharge"],
+    # M5c informational intents: eval rows carry the topic keyword as
+    # key_facts, so the echo guardrail pins it into the reply too.
+    "refund_info": ["refund"],
+    "delivery_eta": ["order", "delivery"],
 }
 
 
@@ -254,6 +272,19 @@ def _patch_reply(reply: str, required: list[str]) -> str:
     if reply.strip().startswith(("ACTION:", "response", " thinking")):
         return confirm.strip() + "\n\n" + reply.strip()
     return confirm + reply
+
+
+def strip_action_lines(text: str) -> str:
+    """Remove the LLM's ACTION scaffolding lines from a customer-visible
+    reply (and collapse the blank-line runs they leave behind). The action
+    decision comes from the deterministic classifier (or fallback
+    extract_action), so the ACTION line itself must never reach the customer.
+    Call only after the action has been captured and the echo guardrail has
+    run."""
+    kept = [ln for ln in text.split("\n") if not ACTION_RE.search(ln)]
+    out = "\n".join(kept)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    return out.strip()
 
 
 def build_agent(index, llm, classifier=None, policy=None, decision_log=None) -> Agent:

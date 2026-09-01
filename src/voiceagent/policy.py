@@ -10,6 +10,8 @@ DEFAULT_POLICIES = {
     "refund": {"require_auth": True, "max_without_approval": 5000},
     "high_value_refund": {"require_auth": True, "escalate": True},
     "order_status": {"allow": True},
+    "refund_info": {"allow": True},
+    "delivery_eta": {"allow": True},
     "order_cancellation": {"require_auth": True, "allowed_until": "shipped"},
     "account_changes": {"require_auth": True, "require_otp": True},
     "billing": {"allow": True},

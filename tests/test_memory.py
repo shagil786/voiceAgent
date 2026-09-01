@@ -254,7 +254,8 @@ def test_no_inheritance_when_history_has_no_ref():
     agent = Agent(FakeIndex(), CapturingLLM(), classifier=FakeClassifier())
     history = [Turn("t1", "user", "hello"), Turn("t2", "agent", "hi there")]
     res = agent.handle("thanks", history=history)
-    assert res.text == "It is out for delivery.\nACTION: order_status"
+    # M5c: ACTION scaffolding scrubbed from the customer-visible text.
+    assert res.text == "It is out for delivery."
 
 
 # ---------------------------------------------------------------------------

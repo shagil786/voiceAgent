@@ -276,7 +276,9 @@ def test_agent_calls_adapter_postprocess():
             return clean_thinking_text(text)
     llm = ThinkingLLM(stop_tokens=[" thinking"])
     res = build_agent(FakeIndex(), llm).handle("hi")
-    assert res.text == "Answer\nACTION: refund"
+    # M5c: the ACTION line is decision scaffolding, scrubbed from the
+    # customer-visible text after extract_action() captured "refund".
+    assert res.text == "Answer"
     assert res.action == "refund"
 
 def test_policy_declared_actions_drive_system_prompt():
@@ -303,7 +305,9 @@ def test_policy_engine_known_actions_accessor():
 
 def test_system_prompt_byte_identical_to_legacy_text():
     # Pin the exact pre-refactor SYSTEM_PROMPT so prompt changes are always
-    # a conscious, reviewed decision.
+    # a conscious, reviewed decision. Updated in M5c: the two new
+    # informational actions (refund_info, delivery_eta) were consciously
+    # added to the vocabulary.
     assert SYSTEM_PROMPT == (
         "You are a customer support assistant for an Indian ecommerce "
         "company. Answer directly and concisely — do NOT use a thinking or "
@@ -315,6 +319,7 @@ def test_system_prompt_byte_identical_to_legacy_text():
         "is one of: order_status, refund, cancel_order, address_change, "
         "payment_declined, recharge, billing, return, replacement, otp, "
         "fraud, account_closure, delivery_delay, product_info, invoice, "
-        "plan_change, roaming, network_issue, complaint, high_value_refund. "
+        "plan_change, roaming, network_issue, complaint, high_value_refund, "
+        "refund_info, delivery_eta. "
         "If no action is needed, do not emit an ACTION line."
     )

@@ -142,6 +142,31 @@ INTENT_EXEMPLARS: dict[str, list[str]] = {
         "my 100000 refund is stuck",
         "huge refund pending for 2 months",
     ],
+    # M5c: informational questions about refund timing — NOT refund requests.
+    # Without these, "refund kitne din me aata hai?" misroutes to
+    # high_value_refund -> ESCALATE.
+    "refund_info": [
+        "refund kitne din me aata hai",
+        "when will I get my refund back",
+        "paise kab wapas milenge",
+        "how long does a refund take",
+        "how many days for the refund",
+        "refund kab tak aayega",
+        "mera refund kab milega",
+        "when is my money refunded",
+    ],
+    # M5c: informational ETA questions about a pending delivery — distinct
+    # from order_status ("where is it") and delivery_delay ("it is late").
+    "delivery_eta": [
+        "when will my order be delivered",
+        "order kab tak aayega",
+        "delivery kab hogi",
+        "how many days will delivery take",
+        "when will my order arrive",
+        "mera order kab milega",
+        "delivery date kya hai",
+        "when can I expect my delivery",
+    ],
 }
 
 
