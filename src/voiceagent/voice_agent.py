@@ -2,11 +2,26 @@
 from __future__ import annotations
 
 import time
+import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from voiceagent.asr import transcribe_wav
 from voiceagent.tts import synthesize_to_wav
 from voiceagent.chat import run_turn
+from voiceagent.memory import SQLiteMemory
+
+_MEMORY: SQLiteMemory | None = None
+
+
+def _default_memory() -> SQLiteMemory:
+    """Shared working-memory store for the voice path (M4a). Lives in the
+    gitignored data/out/ next to the HTTP server's store."""
+    global _MEMORY
+    if _MEMORY is None:
+        Path("data/out").mkdir(parents=True, exist_ok=True)
+        _MEMORY = SQLiteMemory("data/out/memory.db")
+    return _MEMORY
 
 
 @dataclass
@@ -20,12 +35,17 @@ class VoiceTurnResult:
     latency_s: float
 
 
-def voice_turn(agent, audio_path: str, out_audio: str | None = None) -> VoiceTurnResult:
+def voice_turn(agent, audio_path: str, out_audio: str | None = None,
+               memory: SQLiteMemory | None = None) -> VoiceTurnResult:
     """Speech in -> speech out. ASR the audio, run the agent, synthesize the
-    reply. out_audio defaults to a temp WAV (returned in tts_path)."""
+    reply. out_audio defaults to a temp WAV (returned in tts_path). Each call
+    is its own conversation (fresh conv id) recorded in working memory; pass
+    memory=None to use the shared data/out/memory.db store."""
     t0 = time.time()
     transcript = transcribe_wav(audio_path)
-    out = run_turn(agent, transcript)
+    conv_id = f"voice-{uuid.uuid4().hex[:12]}"
+    out = run_turn(agent, transcript, conv_id=conv_id,
+                   memory=memory if memory is not None else _default_memory())
     if out_audio is None:
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:

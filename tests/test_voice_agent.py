@@ -2,10 +2,12 @@
 import wave
 import tempfile
 from pathlib import Path
+from voiceagent.memory import InMemoryMemory
 from voiceagent.voice_agent import voice_turn
 
 class FakeAgent:
-    def handle(self, text, authenticated=False, amount=None, conv_id=""):
+    def handle(self, text, authenticated=False, amount=None, conv_id="",
+               history=None):
         return type("R", (), {
             "text": "Your order ORD-1 is on the way.",
             "action": "order_status",
@@ -35,3 +37,25 @@ def test_voice_turn_returns_transcript_reply_and_tts():
         assert res.decision == "ALLOW"
         assert res.latency_s >= 0
         assert Path(out).exists()
+
+class SpyMemory(InMemoryMemory):
+    """Records which conv ids turns are appended under."""
+    def __init__(self):
+        super().__init__()
+        self.conv_ids = []
+    def append(self, conv_id, turn):
+        self.conv_ids.append(conv_id)
+        super().append(conv_id, turn)
+
+def test_voice_turn_records_turns_under_one_per_call_conv_id():
+    with tempfile.TemporaryDirectory() as d:
+        audio = str(Path(d) / "in.wav")
+        out = str(Path(d) / "out.wav")
+        _tone_wav(audio)
+        mem = SpyMemory()
+        voice_turn(FakeAgent(), audio, out_audio=out, memory=mem)
+        assert mem.conv_ids == [mem.conv_ids[0], mem.conv_ids[0]]
+        assert mem.conv_ids[0].startswith("voice-")
+        turns = mem.history(mem.conv_ids[0])
+        assert [t.role for t in turns] == ["user", "agent"]
+        assert turns[1].action == "order_status"

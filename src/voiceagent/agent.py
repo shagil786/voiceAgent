@@ -4,18 +4,24 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-# Qwen3 emits a "thinking" phase before the answer. llama.cpp renders it
-# either as " thinking\n...\n response" or as "<think>...</think>"
-# depending on version. Words inside the thinking block (e.g. "cancel_order"
-# considered then rejected) would corrupt action extraction, so strip it.
-THINKING_RE = re.compile(
-    r"(?:<think>.*?</think>|^\s*thinking\s*\n.*?(?=\s*response|\Z))",
-    re.DOTALL | re.MULTILINE,
-)
-RESPONSE_PREFIX_RE = re.compile(r"^\s*response\s*\n?", re.MULTILINE)
+if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
+    from voiceagent.memory import Turn
 
-SYSTEM_PROMPT = (
+# Fallback action vocabulary for the system prompt. Used when the loaded
+# policy does not declare its own action set — policy rule keys are NOT the
+# vocabulary (partial coverage, differing names like order_cancellation vs
+# cancel_order): see PolicyEngine.known_actions.
+DEFAULT_ACTIONS = [
+    "order_status", "refund", "cancel_order", "address_change",
+    "payment_declined", "recharge", "billing", "return", "replacement",
+    "otp", "fraud", "account_closure", "delivery_delay", "product_info",
+    "invoice", "plan_change", "roaming", "network_issue", "complaint",
+    "high_value_refund",
+]
+
+_SYSTEM_PROMPT_TMPL = (
     "You are a customer support assistant for an Indian ecommerce company. "
     "Answer directly and concisely — do NOT use a thinking or reasoning "
     "phase. Answer ONLY from the provided context. "
@@ -23,12 +29,16 @@ SYSTEM_PROMPT = (
     "plan, account) from their message in your reply — echo it verbatim. "
     "If the customer's request requires an action (refund, cancel, etc.), "
     "end your reply with a line: ACTION: <action_name> where action_name is "
-    "one of: order_status, refund, cancel_order, address_change, "
-    "payment_declined, recharge, billing, return, replacement, otp, fraud, "
-    "account_closure, delivery_delay, product_info, invoice, plan_change, "
-    "roaming, network_issue, complaint, high_value_refund. "
+    "one of: {actions}. "
     "If no action is needed, do not emit an ACTION line."
 )
+
+SYSTEM_PROMPT = _SYSTEM_PROMPT_TMPL.format(actions=", ".join(DEFAULT_ACTIONS))
+
+
+def system_prompt_with_actions(actions: list[str]) -> str:
+    """SYSTEM_PROMPT with the action list taken from policy-as-code."""
+    return _SYSTEM_PROMPT_TMPL.format(actions=", ".join(actions))
 
 @dataclass
 class AgentResult:
@@ -51,25 +61,47 @@ class Agent:
             from voiceagent.policy import PolicyEngine
             self._policy = PolicyEngine(policy)
         self._decision_log = decision_log
+        # Single-source the action list: a policy that declares its action
+        # vocabulary (PolicyEngine.known_actions) drives the system prompt;
+        # otherwise the static DEFAULT_ACTIONS list above is kept.
+        self._system_prompt = SYSTEM_PROMPT
+        if self._policy is not None:
+            declared = self._policy.known_actions()
+            if declared:
+                self._system_prompt = system_prompt_with_actions(declared)
 
     def handle(self, user_text: str, authenticated: bool = False,
-               amount: float | None = None, conv_id: str = "") -> AgentResult:
+               amount: float | None = None, conv_id: str = "",
+               *, history: list["Turn"] | None = None) -> AgentResult:
         t0 = time.time()
         retrieved = self._index.search(user_text, k=3)
         context = "\n".join(f"[{r['section']}] {r['text']}" for r in retrieved)
+        # Working memory (M4a): replay the last few complete exchanges as a
+        # compact transcript between the RAG context and the current turn —
+        # both prompt paths consume `context`, so placement is identical.
+        # None/empty history leaves the prompt byte-identical to before.
+        if history:
+            transcript = render_history(history)
+            if transcript:
+                context = f"{context}\n\n{transcript}"
         if self._use_template:
-            # ChatML for Qwen3/Qwen2.5 instruct models — vastly better
-            # format-following than a raw completion prompt on small models.
-            prompt = self._llm.chat_template(SYSTEM_PROMPT, context, user_text)
+            # Chat template for the model's family (Qwen ChatML, Llama 3
+            # headers, ...) — vastly better format-following than a raw
+            # completion prompt on small instruct models.
+            prompt = self._llm.chat_template(self._system_prompt, context,
+                                             user_text)
         else:
             prompt = (
-                f"{SYSTEM_PROMPT}\n\nContext:\n{context}\n\n"
+                f"{self._system_prompt}\n\nContext:\n{context}\n\n"
                 f"Customer: {user_text}\nAssistant:"
             )
-        # Stop at the thinking marker so Qwen3's deliberation never consumes
-        # tokens/latency — the answer comes after " response".
-        text = self._llm.generate(prompt, max_tokens=300, stop=[" thinking"])
-        clean = RESPONSE_PREFIX_RE.sub("", THINKING_RE.sub("", text)).strip()
+        # Stop tokens and output cleanup are adapter concerns: the llama.cpp
+        # adapter stops at Qwen3's thinking marker and strips the reasoning
+        # phase; bare/test handles default to no stops and a no-op cleanup.
+        stop = getattr(self._llm, "stop_tokens", None)
+        text = self._llm.generate(prompt, max_tokens=300, stop=stop)
+        post = getattr(self._llm, "postprocess", None)
+        clean = post(text) if callable(post) else text
         # The action comes from the deterministic classifier (or, if none
         # was provided — e.g. unit tests — from the LLM's ACTION line).
         if self._classifier is not None:
@@ -84,7 +116,15 @@ class Agent:
             # LLM often answers generically, so patch any missing reference
             # with a deterministic confirmation. This is the product's
             # "the AI cannot drift from your order/account" guarantee.
-            required = _extract_required_references(user_text)
+            required = extract_required_references(user_text)
+            # Reference inheritance: a follow-up like "and when will it
+            # arrive?" states no order id — inherit the most recent one from
+            # the conversation so the guardrail keeps the reply pinned to the
+            # customer's reference. No LLM involved.
+            if history and find_order_id(user_text) is None:
+                inherited = find_recent_order_id(history)
+                if inherited:
+                    required.append(inherited)
             clean = _patch_reply(clean, required)
         else:
             action = extract_action(clean)
@@ -133,9 +173,10 @@ def extract_action(text: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
-def _extract_required_references(user_text: str) -> list[str]:
+def extract_required_references(user_text: str) -> list[str]:
     """References the reply must contain: the customer's stated order id(s)
-    and any intent keyword that is a ground-truth fact."""
+    and any intent keyword that is a ground-truth fact. Shared with chat.py
+    (turn records) and the echo guardrail."""
     refs: list[str] = []
     for m in ORDER_ID_RE.finditer(user_text):
         refs.append(m.group(0))
@@ -146,6 +187,57 @@ def _extract_required_references(user_text: str) -> list[str]:
                 refs.append(k)
                 break
     return refs
+
+
+def find_order_id(text: str) -> str | None:
+    """First order-id match in text ('ORD-1234' or bare digits), else None.
+    The single entry point to ORDER_ID_RE outside this module."""
+    m = ORDER_ID_RE.search(text)
+    return m.group(0) if m else None
+
+
+def find_recent_order_id(history: list["Turn"]) -> str | None:
+    """Most recent order id in a conversation (scan newest -> oldest)."""
+    for t in reversed(history):
+        oid = find_order_id(t.text)
+        if oid:
+            return oid
+    return None
+
+
+# History replay budget: ~400 tokens at ~4 chars/token.
+HISTORY_MAX_EXCHANGES = 4
+HISTORY_CHAR_BUDGET = 1600
+
+
+def _render_exchange(exchange: list["Turn"]) -> str:
+    who = {"user": "Customer", "agent": "Agent"}
+    return "\n".join(f"{who[t.role]}: {t.text}" for t in exchange)
+
+
+def render_history(turns: list["Turn"]) -> str:
+    """Render the last complete user/agent exchanges as a compact transcript
+    block ("Customer: ...\\nAgent: ..."). Selection is newest-first under the
+    char budget (older exchanges are dropped first); output is chronological.
+    A trailing unpaired user turn is the current turn — already rendered as
+    the prompt's own 'Customer:' line — so only completed pairs are shown."""
+    exchanges: list[list["Turn"]] = []
+    for t in turns:
+        if t.role == "user":
+            exchanges.append([t])
+        elif exchanges:
+            exchanges[-1].append(t)
+    chosen: list[str] = []
+    total = 0
+    for exchange in reversed([e for e in exchanges
+                              if e and e[-1].role == "agent"]
+                             [-HISTORY_MAX_EXCHANGES:]):
+        rendered = _render_exchange(exchange)
+        if total and total + len(rendered) + 1 > HISTORY_CHAR_BUDGET:
+            break
+        chosen.append(rendered)
+        total += len(rendered) + 1
+    return "\n\n".join(reversed(chosen))
 
 
 def _patch_reply(reply: str, required: list[str]) -> str:

@@ -50,6 +50,18 @@ class PolicyEngine:
     def __init__(self, policies: dict | None = None):
         self.policies = policies or dict(DEFAULT_POLICIES)
 
+    def known_actions(self) -> list[str]:
+        """Action vocabulary the policy explicitly declares, via an optional
+        top-level `actions:` list in the policy file. Rule keys are NOT the
+        vocabulary: many supported actions have no rule (least-privilege
+        DENY) and rule names can differ from action names (order_cancellation
+        vs cancel_order), so an empty result means "not declared" and callers
+        keep their own default list."""
+        acts = self.policies.get("actions")
+        if not isinstance(acts, list):
+            return []
+        return [a for a in acts if isinstance(a, str)]
+
     def evaluate(self, action: str, ctx: PolicyContext | None = None) -> Decision:
         ctx = ctx or PolicyContext()
         escalate = set(self.policies.get("escalate", []))
