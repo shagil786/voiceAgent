@@ -1,5 +1,6 @@
-import sys
+import argparse
 import json
+import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -10,13 +11,37 @@ from voiceagent.policy import load_policies
 from voiceagent.decisionlog import DecisionLog
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="Run the model sweep benchmark.")
+    ap.add_argument("n", nargs="?", type=int, default=200,
+                    help="max conversations per model (default 200)")
+    ap.add_argument("--models", default=None,
+                    help="comma-separated model stems/names to include "
+                         "(default: every downloaded model), e.g. "
+                         "qwen2.5-0.5b-instruct-q4_k_m,qwen2.5-0.5b-hinglish-q4_k_m")
+    ap.add_argument("--sample", choices=["head", "stride"], default="head",
+                    help="head = first n conversations (legacy behavior; "
+                         "excludes appended conv-2000+ rows); stride = "
+                         "deterministic even sample across the whole file "
+                         "so appended language blocks are represented")
+    ap.add_argument("--max-convs", type=int, default=200,
+                    help="per-model conversation cap in sweep_all_models "
+                         "(default 200; raise to >= dataset size to evaluate "
+                         "every row, including conv-2000+ native rows)")
+    args = ap.parse_args()
+
     convs = load_conversations("data/eval/conversations.csv")
+    if args.sample == "stride" and args.n < len(convs):
+        step = len(convs) / args.n
+        convs = [convs[int(i * step)] for i in range(args.n)]
     policy = load_policies("data/policies/policies.yaml")
     log = DecisionLog()
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 200
+    wanted = [m for m in args.models.split(",") if m.strip()] \
+        if args.models else None
     reports = sweep_all_models(convs, knowledge_dir="data/knowledge",
-                               model_dir="data/models", max_rows=n,
-                               policy=policy, decision_log=log)
+                               model_dir="data/models", max_rows=args.n,
+                               policy=policy, decision_log=log,
+                               model_filter=wanted,
+                               max_conversations=args.max_convs)
     path = write_sweep_report(reports, "data/out")
     print("wrote", path)
     log.to_json("data/out/decision-log.json")

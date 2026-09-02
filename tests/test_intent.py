@@ -58,3 +58,62 @@ def test_live_misroute_no_longer_escalates(classifier):
     assert action == "refund_info"
     eng = PolicyEngine(load_policies("data/policies/policies.yaml"))
     assert eng.evaluate(action, PolicyContext()).verdict == "ALLOW"
+
+
+# ---------------------------------------------------------------------------
+# M5a: hi (Devanagari) / ta / te exemplars per intent. Classification checks
+# below use HELD-OUT phrasings (not the exemplar strings themselves) so the
+# tests prove generalization, not memorization. Exemplars are LLM-authored
+# synthetic support-customer phrasings (quality caveat documented in
+# intent.py) — the multilingual embedding model does the cross-lingual work.
+# ---------------------------------------------------------------------------
+
+def _has_char_in_block(text: str, lo: int, hi: int) -> bool:
+    return any(lo <= ord(c) <= hi for c in text)
+
+
+def _is_devanagari(t):  return _has_char_in_block(t, 0x0900, 0x097F)
+def _is_tamil(t):       return _has_char_in_block(t, 0x0B80, 0x0BFF)
+def _is_telugu(t):      return _has_char_in_block(t, 0x0C00, 0x0C7F)
+
+
+def test_every_intent_has_hi_ta_te_exemplars():
+    from voiceagent.intent import INTENT_EXEMPLARS
+    for intent, exemplars in INTENT_EXEMPLARS.items():
+        for name, pred in (("hi", _is_devanagari), ("ta", _is_tamil),
+                           ("te", _is_telugu)):
+            n = sum(1 for e in exemplars if pred(e))
+            assert n >= 3, f"{intent}: only {n} {name} exemplars"
+
+
+def test_tamil_order_status_text_classifies(classifier):
+    action, score = classifier.classify("என் ஆர்டர் எங்கே இருக்கிறது?")
+    assert action == "order_status", f"score={score:.3f}"
+
+
+def test_telugu_refund_text_classifies(classifier):
+    action, score = classifier.classify("నా ఆర్డర్ డబ్బు రీఫండ్ చేయండి")
+    assert action == "refund", f"score={score:.3f}"
+
+
+def test_tamil_otp_text_classifies(classifier):
+    action, score = classifier.classify("ஓடிபி எனக்கு கிடைக்கவில்லை")
+    assert action == "otp", f"score={score:.3f}"
+
+
+def test_tamil_delivery_eta_text_classifies(classifier):
+    # Tamil ETA generalizes with a clear margin. (Telugu ETA phrasings sit
+    # on a ~0.003 cosine margin vs replacement/otp — too fragile to pin in
+    # a test; noted as a known boundary in the M5a report.)
+    action, score = classifier.classify("என் ஆர்டர் எப்போது டெலிவரி ஆகும்")
+    assert action == "delivery_eta", f"score={score:.3f}"
+
+
+def test_telugu_account_closure_text_classifies(classifier):
+    action, score = classifier.classify("నా ఖాతా మూసేయాలని అనుకుంటున్నాను")
+    assert action == "account_closure", f"score={score:.3f}"
+
+
+def test_tamil_cancel_order_text_classifies(classifier):
+    action, score = classifier.classify("என் ஆர்டரை இப்போது ரத்து செய்யுங்கள்")
+    assert action == "cancel_order", f"score={score:.3f}"

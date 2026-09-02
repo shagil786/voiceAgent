@@ -92,3 +92,79 @@ def test_informational_actions_in_default_action_list():
     from voiceagent.agent import DEFAULT_ACTIONS
     assert "refund_info" in DEFAULT_ACTIONS
     assert "delivery_eta" in DEFAULT_ACTIONS
+
+
+# ---------------------------------------------------------------------------
+# M5a: per-turn reply-language directive for native-script queries. The
+# directive is appended to THIS turn's prompt only — self._system_prompt and
+# SYSTEM_PROMPT stay untouched, and en/hinglish prompts stay byte-identical.
+# ---------------------------------------------------------------------------
+
+class PromptCaptureLLM(LLMHandle):
+    def __init__(self, reply="Your request has been noted."):
+        super().__init__({"model": "fake"})
+        self.prompts: list[str] = []
+        self.reply = reply
+
+    def generate(self, prompt, max_tokens=256, stop=None):
+        self.prompts.append(prompt)
+        return self.reply
+
+
+DIRECTIVE = "Reply in the customer's language (code: {lang})."
+
+
+def test_native_script_query_gets_language_directive():
+    llm = PromptCaptureLLM()
+    agent = build_agent(FakeIndex(), llm)
+    agent.handle("मेरा recharge क्यों fail हुआ?")
+    assert DIRECTIVE.format(lang="hi") in llm.prompts[0]
+
+
+def test_explicit_language_param_adds_directive():
+    llm = PromptCaptureLLM()
+    agent = build_agent(FakeIndex(), llm)
+    agent.handle("where is my order ORD-77812", language="ta")
+    assert DIRECTIVE.format(lang="ta") in llm.prompts[0]
+
+
+def test_english_prompt_byte_identical_with_language_param():
+    # Auto-detect (language=None) and explicit language="en" must both
+    # produce a prompt byte-identical to the pre-M5a prompt.
+    llm = PromptCaptureLLM()
+    agent = build_agent(FakeIndex(), llm)
+    agent.handle("where is my order ORD-77812")               # auto -> en
+    agent.handle("where is my order ORD-77812", language="en")
+    agent.handle("where is my order ORD-77812", language=None)
+    assert llm.prompts[0] == llm.prompts[1]
+    assert llm.prompts[0] == llm.prompts[2]
+
+
+def test_hinglish_prompt_byte_identical_no_directive():
+    llm = PromptCaptureLLM()
+    agent = build_agent(FakeIndex(), llm)
+    agent.handle("mera order ORD-55671 abhi tak nahi aaya")
+    assert llm.prompts[0].count("Customer:") == 1
+    assert "Reply in the customer's language" not in llm.prompts[0]
+
+
+def test_directive_does_not_mutate_stored_system_prompt():
+    from voiceagent.agent import Agent
+    llm = PromptCaptureLLM()
+    agent = Agent(FakeIndex(), llm)
+    before = agent._system_prompt
+    agent.handle("मेरा recharge क्यों fail हुआ?")     # native -> directive
+    agent.handle("where is my order")                # english -> no directive
+    assert agent._system_prompt == before
+    assert "Reply in the customer's language" not in llm.prompts[1]
+
+
+def test_template_path_receives_directive_in_system_arg():
+    class TemplateCaptureLLM(PromptCaptureLLM):
+        def chat_template(self, system, context, user_text):
+            self.prompts.append(f"SYS<<{system}>>{context}{user_text}")
+            return self.reply
+
+    llm = TemplateCaptureLLM()
+    build_agent(FakeIndex(), llm).handle("मेरा ऑर्डर कहाँ है")
+    assert DIRECTIVE.format(lang="hi") in llm.prompts[0]

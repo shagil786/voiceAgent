@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from voiceagent.langid import NATIVE_SCRIPT_LANGS, detect_language
+
 if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
     from voiceagent.memory import Turn
 
@@ -72,8 +74,15 @@ class Agent:
 
     def handle(self, user_text: str, authenticated: bool = False,
                amount: float | None = None, conv_id: str = "",
-               *, history: list["Turn"] | None = None) -> AgentResult:
+               *, history: list["Turn"] | None = None,
+               language: str | None = None) -> AgentResult:
         t0 = time.time()
+        # M5a: reply-language. Auto-detect when the caller doesn't know;
+        # native-script languages get a per-turn directive appended to the
+        # prompt build below (never to self._system_prompt, so en/hinglish
+        # prompts stay byte-identical and the benchmark is unaffected).
+        if language is None:
+            language = detect_language(user_text)
         retrieved = self._index.search(user_text, k=3)
         context = "\n".join(f"[{r['section']}] {r['text']}" for r in retrieved)
         # Working memory (M4a): replay the last few complete exchanges as a
@@ -84,15 +93,19 @@ class Agent:
             transcript = render_history(history)
             if transcript:
                 context = f"{context}\n\n{transcript}"
+        if language in NATIVE_SCRIPT_LANGS:
+            system = (f"{self._system_prompt}\nReply in the customer's "
+                      f"language (code: {language}).")
+        else:
+            system = self._system_prompt
         if self._use_template:
             # Chat template for the model's family (Qwen ChatML, Llama 3
             # headers, ...) — vastly better format-following than a raw
             # completion prompt on small instruct models.
-            prompt = self._llm.chat_template(self._system_prompt, context,
-                                             user_text)
+            prompt = self._llm.chat_template(system, context, user_text)
         else:
             prompt = (
-                f"{self._system_prompt}\n\nContext:\n{context}\n\n"
+                f"{system}\n\nContext:\n{context}\n\n"
                 f"Customer: {user_text}\nAssistant:"
             )
         # Stop tokens and output cleanup are adapter concerns: the llama.cpp

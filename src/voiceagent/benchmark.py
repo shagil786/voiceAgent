@@ -87,13 +87,33 @@ def estimate_cost_per_conversation(model_specs: dict, avg_latency_s: float,
             "vps_tier": tier["vps_tier"]}
 
 
+def filter_models(models: list[dict], wanted: list[str] | None) -> list[dict]:
+    """Keep only models whose GGUF filename stem or candidate name matches a
+    wanted token (case-insensitive substring). None/empty keeps all models —
+    the pre-M5a behavior."""
+    if not wanted:
+        return models
+    tokens = [w.strip().lower() for w in wanted if w.strip()]
+    if not tokens:
+        return models
+    out = []
+    for m in models:
+        stem = Path(m["model_path"]).stem.lower()
+        name = str(m.get("name", "")).lower()
+        if any(t in stem or t in name for t in tokens):
+            out.append(m)
+    return out
+
+
 def sweep_all_models(conversations: list[Conversation], knowledge_dir: str,
                      model_dir: str, max_rows: int | None = None,
                      max_conversations: int = 200, policy: dict | None = None,
-                     decision_log=None) -> list[BenchmarkReport]:
+                     decision_log=None,
+                     model_filter: list[str] | None = None) -> list[BenchmarkReport]:
     """Run the full pipeline once per downloaded model. Return sorted by
     (passed gate, resolution desc, size asc). Uses at most max_conversations
-    so a sweep over 3 models stays fast."""
+    so a sweep over 3 models stays fast. model_filter limits the sweep to
+    matching model stems/names (None = every downloaded model)."""
     from voiceagent.knowledge import load_docs, build_index
     from voiceagent.agent import build_agent
     from voiceagent.llm import list_available_models, load_llm
@@ -101,7 +121,7 @@ def sweep_all_models(conversations: list[Conversation], knowledge_dir: str,
 
     docs = load_docs(knowledge_dir)
     index = build_index(docs)
-    models = list_available_models(model_dir)
+    models = filter_models(list_available_models(model_dir), model_filter)
     if not models:
         raise RuntimeError("no models downloaded — run scripts/smoke_llm.py first")
 

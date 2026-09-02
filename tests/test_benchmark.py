@@ -97,3 +97,37 @@ def test_run_benchmark_policy_summary():
                                decision=Decision("ALLOW", ["ok"]))
     report = run_benchmark(FixedAgent2(), _convs(3))
     assert report.policy_summary.get("ALLOW") == 3
+
+
+# ---------------------------------------------------------------------------
+# M5a: --models filter so a sweep can target specific GGUF files (e.g. the
+# two qwen2.5 models) without reloading the slow Qwen3.
+# ---------------------------------------------------------------------------
+
+def test_filter_models_matches_stem_name_case_insensitive():
+    from voiceagent.benchmark import filter_models
+    models = [
+        {"name": "qwen2.5-0.5b-q4",
+         "model_path": "data/models/qwen2.5-0.5b-instruct-q4_k_m.gguf"},
+        {"name": "qwen2.5-0.5b-hinglish-q4",
+         "model_path": "data/models/qwen2.5-0.5b-hinglish-q4_k_m.gguf"},
+        {"name": "qwen3-0.6b-q4",
+         "model_path": "data/models/Qwen3-0.6B-Q4_K_M.gguf"},
+    ]
+    got = filter_models(models, ["qwen2.5-0.5b-instruct-q4_k_m",
+                                 "qwen2.5-0.5b-hinglish-q4_k_m"])
+    assert got == models[:2]
+    assert filter_models(models, ["QWEN3"]) == [models[2]]
+
+
+def test_filter_models_none_or_empty_keeps_all():
+    from voiceagent.benchmark import filter_models
+    models = [{"name": "a", "model_path": "data/models/a.gguf"}]
+    assert filter_models(models, None) == models
+    assert filter_models(models, []) == models
+
+
+def test_filter_models_unknown_token_yields_empty():
+    from voiceagent.benchmark import filter_models
+    assert filter_models([{"name": "a", "model_path": "m/a.gguf"}],
+                         ["nope"]) == []

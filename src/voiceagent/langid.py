@@ -1,0 +1,68 @@
+# src/voiceagent/langid.py
+"""M5a: stdlib-only language identification for text turns.
+
+Native Unicode-script detection runs first — the script with the most
+characters wins (majority rule, not single-character), and ANY meaningful
+native-script presence beats Latin so code-switched text like
+"मेरा recharge क्यों fail हुआ?" is treated as native (hi) and gets the
+reply-language directive. Pure Latin text is "hinglish" when it carries >= 2
+DISTINCT tokens from a small Hinglish lexicon, else "en".
+
+Note: Marathi shares the Devanagari block with Hindi, so Devanagari-script
+text is reported as "hi"; callers that know better may pass language="mr"
+explicitly (the agent directive accepts any native-script code).
+"""
+from __future__ import annotations
+
+import re
+
+# Languages the reply-language directive fires for (non-Latin scripts).
+NATIVE_SCRIPT_LANGS = frozenset(
+    {"hi", "ta", "te", "bn", "mr", "gu", "kn", "ml", "pa"})
+
+# Unicode block per language. Devanagari maps to hi (Marathi is script-
+# identical); every other block is unambiguous.
+_SCRIPT_RANGES = (
+    ("hi", 0x0900, 0x097F),  # Devanagari
+    ("bn", 0x0980, 0x09FF),  # Bengali
+    ("pa", 0x0A00, 0x0A7F),  # Gurmukhi
+    ("gu", 0x0A80, 0x0AFF),  # Gujarati
+    ("ta", 0x0B80, 0x0BFF),  # Tamil
+    ("te", 0x0C00, 0x0C7F),  # Telugu
+    ("kn", 0x0C80, 0x0CFF),  # Kannada
+    ("ml", 0x0D00, 0x0D7F),  # Malayalam
+)
+
+# Native-script characters required before the native script beats Latin.
+_MAJORITY_MIN = 2
+
+# Small Latin-script Hinglish lexicon. Hits are DISTINCT tokens, so common
+# English words on the list ("do") cannot flip detection on their own.
+HINGLISH_LEXICON = frozenset({
+    "kya", "hai", "nahi", "nhi", "kab", "kahan", "kaha", "kyu", "kyun",
+    "mera", "meri", "mere", "karo", "kro", "kar", "krna", "karna", "karke",
+    "karu", "do", "chahiye", "aayega", "aayegi", "milenga", "milega",
+    "batao", "bhai", "lag", "gaya", "gayi", "hua", "hui", "ho", "raha",
+    "rahi", "kitna", "kitni", "abhi", "wapas", "paisa", "paise",
+})
+
+_TOKEN_RE = re.compile(r"[a-z]+")
+
+
+def detect_language(text: str) -> str:
+    """Return one of: en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa."""
+    counts: dict[str, int] = {}
+    for ch in text:
+        cp = ord(ch)
+        for lang, lo, hi in _SCRIPT_RANGES:
+            if lo <= cp <= hi:
+                counts[lang] = counts.get(lang, 0) + 1
+                break
+    if counts:
+        best = max(counts, key=lambda k: counts[k])
+        if counts[best] >= _MAJORITY_MIN:
+            return best
+    tokens = set(_TOKEN_RE.findall(text.lower()))
+    if len(tokens & HINGLISH_LEXICON) >= 2:
+        return "hinglish"
+    return "en"
