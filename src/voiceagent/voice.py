@@ -76,13 +76,15 @@ def tts_latency(text: str = "Namaste, aapka order kal deliver ho jayega.") -> fl
     return time.time() - t0
 
 
-def asr_latency(audio_path: str | None = None) -> tuple[float, str]:
+def asr_latency(audio_path: str | None = None,
+                language: str | None = None) -> tuple[float, str]:
     """Production-accurate ASR latency (M5b-2): the language-routed path —
-    whisper small auto-detect, with IndicConformer reroute for te/ta/native."""
-    from voiceagent.asr import transcribe_wav_auto
+    known-language contexts route (te/ta -> IndicConformer); the blind path
+    stays on whisper small auto-detect."""
+    from voiceagent.asr import transcribe_wav_routed
     t0 = time.time()
     if audio_path and Path(audio_path).exists():
-        text = transcribe_wav_auto(audio_path)
+        text = transcribe_wav_routed(audio_path, language=language)
     else:
         text = ""
     return time.time() - t0, text

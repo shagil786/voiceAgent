@@ -12,7 +12,7 @@ from voiceagent.asr import (
     IndicASRHandle,
     WhisperASRHandle,
     get_asr_for_language,
-    transcribe_wav_auto,
+    transcribe_wav_routed,
 )
 
 
@@ -204,31 +204,9 @@ def test_whisper_handle_hinglish_maps_to_hi_hint():
     assert engine.calls[0]["language"] == "hi"
 
 
-def _raising_segs_engine(detected):
-    """Engine whose segments raise if iterated — proves decode was skipped."""
-
-    class RaisingSegsEngine:
-        def __init__(self):
-            self.calls = []
-
-        def transcribe(self, audio, language=None):
-            self.calls.append({"audio": audio, "language": language})
-            info = type("Info", (), {"language": detected})()
-
-            def _segs():
-                raise AssertionError("segments must not be decoded when rerouted")
-                yield  # pragma: no cover - makes it a generator
-
-            return _segs(), info
-
-    return RaisingSegsEngine()
-
-
-# --------------------------------------------------------------------------
-# transcribe_detected (auto-detect + skip-decode reroute)
-# --------------------------------------------------------------------------
-
 def test_transcribe_detected_returns_text_and_detected_language():
+    """The blind path gets (text, detected_language) from one whisper pass;
+    the detected language is metadata — it never triggers a reroute."""
     engine = StubWhisperEngine()  # reports the hinted (or default) language
     handle = WhisperASRHandle(engine_loader=lambda m, d, c: engine)
     text, lang = handle.transcribe_detected(np.zeros(8000, dtype=np.float32),
@@ -237,71 +215,61 @@ def test_transcribe_detected_returns_text_and_detected_language():
     assert lang == "en"
 
 
-def test_transcribe_detected_skips_decode_for_rerouted_autodetect():
-    engine = _raising_segs_engine(detected="te")
-    handle = WhisperASRHandle(engine_loader=lambda m, d, c: engine)
-    text, lang = handle.transcribe_detected(np.zeros(8000, dtype=np.float32),
-                                            language=None,
-                                            reroute=frozenset({"te", "ta"}))
-    assert text is None
-    assert lang == "te"
-    assert engine.calls[0]["language"] is None  # auto-detect ran, decode didn't
-
-
-def test_transcribe_detected_explicit_hint_never_reroutes():
-    """An explicit language hint means the caller already knows the language;
-    reroute only guards the auto-detection path."""
-    engine = StubWhisperEngine()
-    handle = WhisperASRHandle(engine_loader=lambda m, d, c: engine)
-    text, lang = handle.transcribe_detected(np.zeros(8000, dtype=np.float32),
-                                            language="te",
-                                            reroute=frozenset({"te"}))
-    assert text == "hello world"
-    assert lang == "te"
-
-
 # --------------------------------------------------------------------------
-# transcribe_wav_auto (the blind production voice-loop entry)
+# transcribe_wav_routed (the voice-loop entry)
 # --------------------------------------------------------------------------
 
-class _StubAutoWhisper:
-    def __init__(self, result):
-        self.result = result
+class _StubRoutedIndic:
+    def __init__(self, error=None):
+        self.calls = []
+        self.error = error
 
-    def transcribe_detected(self, audio, language=None, reroute=frozenset()):
-        self.last = {"audio": audio, "reroute": reroute}
-        return self.result
+    def transcribe(self, audio, language=None):
+        self.calls.append(language)
+        if self.error:
+            raise self.error
+        return "indic transcript"
 
 
-class _StubAutoIndic:
+class _StubRoutedWhisper:
     def __init__(self):
         self.calls = []
 
     def transcribe(self, audio, language=None):
         self.calls.append(language)
-        return "indic transcript"
+        return "whisper transcript"
 
 
-def test_transcribe_wav_auto_reroutes_detected_native_lang_to_indic():
-    w = _StubAutoWhisper((None, "te"))
-    i = _StubAutoIndic()
-    assert transcribe_wav_auto("x.wav", whisper=w, indic=i) == "indic transcript"
-    assert i.calls == ["te"]
-    assert w.last["reroute"] == asr_mod.INDIC_ROUTE_LANGS
+def test_transcribe_wav_routed_known_te_goes_to_indic(monkeypatch):
+    indic = _StubRoutedIndic()
+    monkeypatch.setattr(asr_mod, "_indic_handle", indic)
+    monkeypatch.setattr(asr_mod, "_whisper_small_handle", _StubRoutedWhisper())
+    assert transcribe_wav_routed("x.wav", language="te") == "indic transcript"
+    assert indic.calls == ["te"]
 
 
-def test_transcribe_wav_auto_keeps_en_on_whisper():
-    w = _StubAutoWhisper(("english text", "en"))
-    i = _StubAutoIndic()
-    assert transcribe_wav_auto("x.wav", whisper=w, indic=i) == "english text"
-    assert i.calls == []
+def test_transcribe_wav_routed_blind_stays_on_whisper(monkeypatch):
+    """language=None is the blind path: whisper auto-detect only, never an
+    auto-reroute (Hinglish misdetects as te/pa at the same confidence where
+    real te lives — see voiceagent.asr module docstring)."""
+    whisper = _StubRoutedWhisper()
+    monkeypatch.setattr(asr_mod, "_whisper_small_handle", whisper)
+    monkeypatch.setattr(asr_mod, "_indic_handle", _StubRoutedIndic())
+    assert transcribe_wav_routed("x.wav", language=None) == "whisper transcript"
+    assert whisper.calls == [None]
 
 
-def test_transcribe_wav_auto_defaults_to_lazy_singletons(monkeypatch):
-    monkeypatch.setattr(asr_mod, "_whisper_small_handle",
-                        _StubAutoWhisper((None, "ta")))
-    monkeypatch.setattr(asr_mod, "_indic_handle", _StubAutoIndic())
-    assert transcribe_wav_auto("x.wav") == "indic transcript"
+def test_transcribe_wav_routed_falls_back_when_routed_engine_fails(monkeypatch):
+    """A routed-engine failure (gated repo, download error) must not kill the
+    voice turn mid-call: fall back to whisper small with a warning."""
+    warnings = []
+    monkeypatch.setattr(asr_mod.logger, "warning",
+                        lambda *a, **k: warnings.append(" ".join(map(str, a))))
+    monkeypatch.setattr(asr_mod, "_indic_handle",
+                        _StubRoutedIndic(error=OSError("gated repo")))
+    monkeypatch.setattr(asr_mod, "_whisper_small_handle", _StubRoutedWhisper())
+    assert transcribe_wav_routed("x.wav", language="te") == "whisper transcript"
+    assert any("gated" in str(w) or "OSError" in str(w) for w in warnings)
 
 
 def _stub_engines():

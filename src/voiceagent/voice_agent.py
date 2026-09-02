@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from voiceagent.asr import transcribe_wav_auto
+from voiceagent.asr import transcribe_wav_routed
 from voiceagent.chat import run_turn
 from voiceagent.memory import SQLiteMemory
 from voiceagent.tts import speak
@@ -36,13 +36,19 @@ class VoiceTurnResult:
 
 
 def voice_turn(agent, audio_path: str, out_audio: str | None = None,
-               memory: SQLiteMemory | None = None) -> VoiceTurnResult:
+               memory: SQLiteMemory | None = None,
+               language: str | None = None) -> VoiceTurnResult:
     """Speech in -> speech out. ASR the audio, run the agent, synthesize the
     reply. out_audio defaults to a temp WAV (returned in tts_path). Each call
     is its own conversation (fresh conv id) recorded in working memory; pass
-    memory=None to use the shared data/out/memory.db store."""
+    memory=None to use the shared data/out/memory.db store.
+
+    language: the deployment's known query language (telephony trunk config,
+    per-vertical config). None = blind whisper auto-detect, which never
+    auto-reroutes to the Indic engine (whisper's detection cannot separate
+    Hinglish from native Indic audio — see voiceagent.asr)."""
     t0 = time.time()
-    transcript = transcribe_wav_auto(audio_path)
+    transcript = transcribe_wav_routed(audio_path, language=language)
     conv_id = f"voice-{uuid.uuid4().hex[:12]}"
     out = run_turn(agent, transcript, conv_id=conv_id,
                    memory=memory if memory is not None else _default_memory())
@@ -52,8 +58,8 @@ def voice_turn(agent, audio_path: str, out_audio: str | None = None,
             out_audio = tmp.name
     # M5b-1: reply TTS is multilingual — speak() auto-detects the reply's
     # language (langid) and routes to the matching piper voice. M5b-2: query
-    # ASR is language-routed too — whisper small auto-detects; te/ta/native
-    # Indic langs re-transcribe with IndicConformer (see voiceagent.asr).
+    # ASR is language-routed too (known-language contexts go to
+    # IndicConformer for te/ta; the blind path stays on whisper small).
     speak(out["reply"], out_path=out_audio)
     return VoiceTurnResult(
         transcript=transcript,

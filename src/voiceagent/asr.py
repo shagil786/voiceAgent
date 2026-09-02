@@ -10,17 +10,24 @@ points (get_asr/transcribe_wav stay backward compatible):
   head, 22 Indic languages, ~2.4 GB download on first use). The conformer
   REQUIRES the target language as input per its recipe — the router supplies
   it from known language context (loopback tests, future telephony routing).
-- get_asr_for_language(lang): en/hi/hinglish -> whisper small (proven);
+- get_asr_for_language(lang) / transcribe_wav_routed(path, lang): the router,
+  for contexts that KNOW the language (telephony trunk config, per-vertical
+  deployments, loopback tests). en/hi/hinglish -> whisper small (proven);
   te/ta/bn/mr/gu/kn/ml/pa -> IndicConformer (all in its model-card language
-  list); None/unknown -> whisper small auto-detect. For contexts that already
-  know the language (telephony routing, loopback tests).
-- transcribe_wav_auto(path): the blind voice-loop entry (voice_agent) — one
-  whisper-small pass auto-detects the language; detected te/ta/native langs
-  skip whisper's decode (the hallucination part) and re-transcribe with
-  IndicConformer.
+  list); None/unknown -> whisper small auto-detect.
+- The BLIND voice-loop path (language unknown before ASR) stays on whisper
+  small auto-detect and never auto-reroutes: real-inference probing showed
+  whisper's detection cannot separate Hinglish from Indic-native audio
+  (Hinglish demo query detected as te @0.74 and pa @0.74 confidence; a REAL
+  te sample detected at only 0.69) — a misdetection would corrupt the
+  product's core language (Hinglish) on exactly the confidence band where
+  real te lives. te/ta native audio needs the language supplied out of band.
 
 Loopback measurement (M5b-1) showed whisper te WER >= 1.0 at every size
-(small hallucination-loops), hence the dedicated Indic engine.
+(small hallucination-loops), hence the dedicated Indic engine for known-
+language contexts. NOTE: ai4bharat/indic-conformer-600m-multilingual is a
+GATED HF repo — first use requires accepting the license on the model page
+and an authenticated HF token (huggingface-cli login / HF_TOKEN).
 """
 from __future__ import annotations
 
@@ -119,23 +126,17 @@ class WhisperASRHandle:
         audio is Hindi — whisper has no "hinglish" code)."""
         return self.transcribe_detected(audio, language)[0]
 
-    def transcribe_detected(self, audio, language: str | None = None,
-                            reroute: frozenset = frozenset()):
+    def transcribe_detected(self, audio, language: str | None = None):
         """One whisper pass returning (text, detected_language). With
-        language=None the encoder's language-id result comes back too — and
-        if it is in `reroute`, segments are NOT decoded (auto-detection
-        happens before any decoder pass, so skipping the iteration skips the
-        pathological decode — M5b-1: whisper te hallucination-loops at every
-        size) and text is None. An explicit language hint never reroutes:
-        the caller already knows better."""
+        language=None the encoder's language-id result comes back too — for
+        logging and known-language corroboration. The detected language is
+        deliberately NOT used to reroute (see module docstring: whisper
+        cannot reliably separate Hinglish from Indic-native audio)."""
         hint = {"hinglish": "hi"}.get(language, language)
         engine = self._ensure_engine()
         segments, info = engine.transcribe(audio, language=hint)
-        lang = getattr(info, "language", None)
-        if hint is None and lang in reroute:
-            return None, lang
         text = " ".join(s.text.strip() for s in segments if s.text.strip()).strip()
-        return text, lang
+        return text, getattr(info, "language", None)
 
 
 def _real_indic_loader(model_id: str):
@@ -252,22 +253,18 @@ def get_asr_for_language(lang: str | None, engines=None, supported=None,
 
 
 def transcribe_wav_routed(path: str, language: str | None = None) -> str:
-    """Transcribe a WAV file through the language router. language=None
-    defers to whisper's auto-detection on the small model."""
-    return get_asr_for_language(language).transcribe(path, language=language)
+    """Transcribe a WAV file through the language router — the voice-loop
+    entry when the deployment knows its language (telephony trunk config,
+    per-vertical config, loopback tests). language=None defers to whisper's
+    auto-detection on the small model (the blind path — never auto-reroutes,
+    see module docstring).
 
-
-def transcribe_wav_auto(path: str, whisper: WhisperASRHandle | None = None,
-                        indic: IndicASRHandle | None = None) -> str:
-    """Production voice-loop entry (M5b-2): one whisper-small pass with
-    auto-detection. A detected te/ta/native-Indic language skips whisper's
-    decode (M5b-1: te hallucination-loops at every size) and re-transcribes
-    with IndicConformer; en/hi/hinglish/unknown decode on whisper small —
-    the proven path (en WER 0.038, hi 0.423). Handles are injectable for
-    tests; defaults are the process-wide lazy singletons."""
-    whisper = whisper if whisper is not None else _get_whisper_small()
-    indic = indic if indic is not None else _get_indic_asr()
-    text, lang = whisper.transcribe_detected(path, reroute=INDIC_ROUTE_LANGS)
-    if text is None:
-        return indic.transcribe(path, language=lang)
-    return text
+    If the routed engine fails (model download/gated repo, load error), the
+    turn must not die mid-call: falls back to whisper small with a warning."""
+    try:
+        return get_asr_for_language(language).transcribe(path, language=language)
+    except Exception as e:
+        logger.warning("routed ASR failed for language=%s (%s: %s); "
+                       "falling back to whisper small",
+                       language, type(e).__name__, e)
+        return _get_whisper_small().transcribe(path, language=language)
