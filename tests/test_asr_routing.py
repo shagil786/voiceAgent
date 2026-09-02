@@ -10,6 +10,7 @@ import pytest
 from voiceagent import asr as asr_mod
 from voiceagent.asr import (
     IndicASRHandle,
+    QwenASRHandle,
     WhisperASRHandle,
     get_asr_for_language,
     transcribe_wav_routed,
@@ -27,6 +28,11 @@ class StubWhisperEngine:
         info = type("Info", (), {"language": language or "en"})()
         segs = [type("Seg", (), {"text": "hello "})(), type("Seg", (), {"text": "world"})()]
         return segs, info
+
+
+class StubQwenEngine:
+    """Stands in for the QwenASRHandle core engine (type-level only — the
+    router never calls it, it just returns the factory's instance)."""
 
 
 class StubIndicModel:
@@ -63,10 +69,12 @@ def test_router_te_and_ta_use_indic_engine():
         assert isinstance(handle, StubIndicModel), f"{lang} must route to IndicConformer"
 
 
-def test_router_en_and_hi_use_whisper_engine():
-    for lang in ("en", "hi"):
+def test_router_en_hi_hinglish_none_and_unknown_use_qwen_engine():
+    """M5b-3: the core slot is Qwen3-ASR-0.6B — en ties whisper at 3x speed,
+    hi beats it, and its built-in LID covers None/unknown/hinglish."""
+    for lang in ("en", "hi", "hinglish", None, "de"):
         handle = get_asr_for_language(lang, engines=_stub_engines())
-        assert isinstance(handle, StubWhisperEngine), f"{lang} must route to whisper small"
+        assert isinstance(handle, StubQwenEngine), f"{lang!r} must route to the Qwen core"
 
 
 def test_router_other_native_langs_use_indic_engine():
@@ -77,44 +85,38 @@ def test_router_other_native_langs_use_indic_engine():
         assert isinstance(handle, StubIndicModel), f"{lang} must route to IndicConformer"
 
 
-def test_router_hinglish_none_and_unknown_use_whisper_engine():
-    # hinglish is Romanized Hindi — the proven whisper hi path; None/unknown
-    # languages fall back to whisper small (auto-detect inside whisper).
-    for lang in ("hinglish", None, "de"):
-        handle = get_asr_for_language(lang, engines=_stub_engines())
-        assert isinstance(handle, StubWhisperEngine), f"{lang!r} must route to whisper small"
-
-
-def test_router_falls_back_to_whisper_for_unsupported_native_lang():
+def test_router_falls_back_to_qwen_for_unsupported_native_lang():
     """If a native language ever falls outside the conformer's card list,
-    routing must fall back to whisper small WITH a warning (documented)."""
+    routing must fall back to the Qwen core WITH a warning (documented)."""
     warnings = []
-    engines = {"whisper": StubWhisperEngine, "indic": StubIndicModel}
+    engines = {"qwen": StubQwenEngine, "indic": StubIndicModel}
     # Pretend the conformer only supports 'te' — 'ta' must then fall back.
     handle = get_asr_for_language("ta", engines=engines,
                                   supported=frozenset({"te"}),
                                   warn=warnings.append)
-    assert isinstance(handle, StubWhisperEngine)
+    assert isinstance(handle, StubQwenEngine)
     assert any("ta" in w for w in warnings), "unsupported native language must warn"
 
 
 def test_router_returns_singleton_engines_by_default(monkeypatch):
     """By default the router delegates to the module factories; injected
     engines must NOT touch the global cache."""
-    whisper_handle, indic_handle = object(), object()
-    monkeypatch.setattr(asr_mod, "_get_whisper_small", lambda: whisper_handle)
+    qwen_handle, indic_handle = object(), object()
+    monkeypatch.setattr(asr_mod, "_get_qwen_asr", lambda: qwen_handle)
     monkeypatch.setattr(asr_mod, "_get_indic_asr", lambda: indic_handle)
 
     assert get_asr_for_language("te") is indic_handle
     assert get_asr_for_language("ta") is indic_handle
-    assert get_asr_for_language("en") is whisper_handle
+    assert get_asr_for_language("en") is qwen_handle
+    assert get_asr_for_language(None) is qwen_handle
 
 
 def test_engine_factories_are_lazy_singletons():
     """Default factories cache per engine kind: repeated calls return the same
     handle object. Handles are lazy, so this downloads nothing."""
-    assert asr_mod._get_whisper_small() is asr_mod._get_whisper_small()
+    assert asr_mod._get_qwen_asr() is asr_mod._get_qwen_asr()
     assert asr_mod._get_indic_asr() is asr_mod._get_indic_asr()
+    assert asr_mod._get_whisper_small() is asr_mod._get_whisper_small()
 
 
 # --------------------------------------------------------------------------
@@ -240,6 +242,15 @@ class _StubRoutedWhisper:
         return "whisper transcript"
 
 
+class _StubRoutedQwen:
+    def __init__(self):
+        self.calls = []
+
+    def transcribe(self, audio, language=None):
+        self.calls.append(language)
+        return "qwen transcript"
+
+
 def test_transcribe_wav_routed_known_te_goes_to_indic(monkeypatch):
     indic = _StubRoutedIndic()
     monkeypatch.setattr(asr_mod, "_indic_handle", indic)
@@ -248,15 +259,19 @@ def test_transcribe_wav_routed_known_te_goes_to_indic(monkeypatch):
     assert indic.calls == ["te"]
 
 
-def test_transcribe_wav_routed_blind_stays_on_whisper(monkeypatch):
-    """language=None is the blind path: whisper auto-detect only, never an
-    auto-reroute (Hinglish misdetects as te/pa at the same confidence where
-    real te lives — see voiceagent.asr module docstring)."""
+def test_transcribe_wav_routed_blind_goes_to_qwen_core(monkeypatch):
+    """language=None is the blind path: the Qwen core with its built-in LID,
+    never an auto-reroute on detected language (whisper-era probing showed
+    detection cannot separate Hinglish from native Indic audio — see
+    voiceagent.asr module docstring). Whisper must stay untouched."""
+    qwen = _StubRoutedQwen()
     whisper = _StubRoutedWhisper()
+    monkeypatch.setattr(asr_mod, "_qwen_handle", qwen)
     monkeypatch.setattr(asr_mod, "_whisper_small_handle", whisper)
     monkeypatch.setattr(asr_mod, "_indic_handle", _StubRoutedIndic())
-    assert transcribe_wav_routed("x.wav", language=None) == "whisper transcript"
-    assert whisper.calls == [None]
+    assert transcribe_wav_routed("x.wav", language=None) == "qwen transcript"
+    assert qwen.calls == [None]
+    assert whisper.calls == []
 
 
 def test_transcribe_wav_routed_falls_back_when_routed_engine_fails(monkeypatch):
@@ -273,4 +288,99 @@ def test_transcribe_wav_routed_falls_back_when_routed_engine_fails(monkeypatch):
 
 
 def _stub_engines():
-    return {"whisper": StubWhisperEngine, "indic": StubIndicModel}
+    return {"qwen": StubQwenEngine, "indic": StubIndicModel}
+
+
+# --------------------------------------------------------------------------
+# QwenASRHandle (real class, stubbed processor+model — exercises the logic)
+# --------------------------------------------------------------------------
+
+class _FakeQwenInputs(dict):
+    """Mapping-backed (real code does model.generate(**inputs)) with an
+    input_ids tensor-ish attribute and a no-op .to() like BatchDict."""
+
+    def __init__(self, input_len):
+        super().__init__(input_ids=np.zeros((1, input_len), dtype=np.int64))
+        self.input_ids = self["input_ids"]
+
+    def to(self, *args, **kwargs):
+        return self
+
+
+class _FakeQwenModel:
+    device = "cpu"
+    dtype = "float32"
+
+    def __init__(self, total_len=9):
+        self._out = np.zeros((1, total_len), dtype=np.int64)
+
+    def generate(self, **kwargs):
+        assert kwargs["max_new_tokens"] == 256
+        assert kwargs["do_sample"] is False  # deterministic ASR
+        return self._out
+
+
+class _FakeQwenProcessor:
+    """mode='parsed' mimics the documented decode(return_format='parsed')
+    dict; mode='plain' breaks the parsed path so the fallback decode runs."""
+
+    def __init__(self, mode="parsed"):
+        self.paths = []
+        self.decode_calls = []
+        self.mode = mode
+
+    def apply_transcription_request(self, audio=None):
+        self.paths.append(audio)
+        return _FakeQwenInputs(input_len=5)
+
+    def decode(self, ids, **kwargs):
+        self.decode_calls.append(kwargs.get("return_format"))
+        if self.mode == "parsed":
+            return {"transcription": "stub qwen text", "language": "English"}
+        return "plain qwen text"
+
+
+def _qwen_handle_with(processor, model):
+    return QwenASRHandle(loader=lambda: (processor, model))
+
+
+def test_qwen_handle_returns_parsed_transcription():
+    proc = _FakeQwenProcessor()
+    handle = _qwen_handle_with(proc, _FakeQwenModel())
+    assert handle.transcribe("x.wav") == "stub qwen text"
+    assert proc.paths == ["x.wav"]
+
+
+def test_qwen_handle_transcribe_detected_returns_language():
+    proc = _FakeQwenProcessor()
+    handle = _qwen_handle_with(proc, _FakeQwenModel())
+    text, lang = handle.transcribe_detected("x.wav", language="hi")
+    assert text == "stub qwen text"
+    assert lang == "English"
+    # the hint is accepted but never forced into the request
+    assert proc.decode_calls == ["parsed"]
+
+
+def test_qwen_handle_falls_back_to_plain_decode():
+    proc = _FakeQwenProcessor(mode="plain")
+    handle = _qwen_handle_with(proc, _FakeQwenModel())
+    text, lang = handle.transcribe_detected("x.wav")
+    assert text == "plain qwen text"
+    assert lang is None
+
+
+def test_qwen_handle_model_is_lazy():
+    loaded = []
+    handle = QwenASRHandle(
+        loader=lambda: loaded.append(1) or (_FakeQwenProcessor(), _FakeQwenModel()))
+    assert loaded == []
+    handle.transcribe("x.wav")
+    assert loaded == [1]
+
+
+def test_qwen_handle_accepts_float_array_via_temp_wav():
+    proc = _FakeQwenProcessor()
+    handle = _qwen_handle_with(proc, _FakeQwenModel())
+    handle.transcribe(np.zeros(8000, dtype=np.float32))
+    assert isinstance(proc.paths[0], str)
+    assert proc.paths[0].endswith(".wav")

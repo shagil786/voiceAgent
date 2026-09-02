@@ -1,33 +1,32 @@
 # src/voiceagent/asr.py
 """ASR for the voice path.
 
-M5b-2 adds language-routed ASR on top of the original faster-whisper entry
-points (get_asr/transcribe_wav stay backward compatible):
+M5b-3 language-routed ASR, engines chosen by loopback bake-off
+(data/out/asr-measurement-qwen.json + asr-measurement-indic.json):
 
-- WhisperASRHandle: uniform wrapper around faster-whisper (small by default —
-  the proven M5b-1 size). language=None keeps whisper's auto-detection.
-- IndicASRHandle: ai4bharat/indic-conformer-600m-multilingual (CTC conformer
-  head, 22 Indic languages, ~2.4 GB download on first use). The conformer
-  REQUIRES the target language as input per its recipe — the router supplies
-  it from known language context (loopback tests, future telephony routing).
-- get_asr_for_language(lang) / transcribe_wav_routed(path, lang): the router,
-  for contexts that KNOW the language (telephony trunk config, per-vertical
-  deployments, loopback tests). en/hi/hinglish -> whisper small (proven);
-  te/ta/bn/mr/gu/kn/ml/pa -> IndicConformer (all in its model-card language
-  list); None/unknown -> whisper small auto-detect.
-- The BLIND voice-loop path (language unknown before ASR) stays on whisper
-  small auto-detect and never auto-reroutes: real-inference probing showed
-  whisper's detection cannot separate Hinglish from Indic-native audio
-  (Hinglish demo query detected as te @0.74 and pa @0.74 confidence; a REAL
-  te sample detected at only 0.69) — a misdetection would corrupt the
-  product's core language (Hinglish) on exactly the confidence band where
-  real te lives. te/ta native audio needs the language supplied out of band.
+- QwenASRHandle (core slot): Qwen/Qwen3-ASR-0.6B-hf, Apache-2.0. Serves
+  en/hi/hinglish/unknown. en WER 0.038 ties whisper small at ~3x the CPU
+  speed; hi WER 0.247 beats whisper 0.423; natively emits code-switched
+  text (Latin-script words inside Hindi) that feeds the hinglish-text
+  LLM/intent pipeline. Built-in LID (correct on all bake-off en/hi samples).
+- IndicASRHandle (native slot): ai4bharat/indic-conformer-600m-multilingual
+  (CTC head, 22 Indic languages, ~2.4 GB download, GATED repo — license
+  acceptance + HF token needed once). te WER 0.348 vs whisper 1.067 /
+  Qwen 1.315 at ~0.11s warm. The conformer REQUIRES the target language as
+  input per its recipe — the router supplies it from known-language context.
+- WhisperASRHandle: faster-whisper small — the legacy engine, kept as the
+  router's failure fallback (battle-tested, always cached).
 
-Loopback measurement (M5b-1) showed whisper te WER >= 1.0 at every size
-(small hallucination-loops), hence the dedicated Indic engine for known-
-language contexts. NOTE: ai4bharat/indic-conformer-600m-multilingual is a
-GATED HF repo — first use requires accepting the license on the model page
-and an authenticated HF token (huggingface-cli login / HF_TOKEN).
+Routing (get_asr_for_language / transcribe_wav_routed, the voice-loop entry):
+te/ta/bn/mr/gu/kn/ml/pa -> IndicConformer; everything else -> Qwen. The
+BLIND path never auto-reroutes on detected language: whisper-era probing
+showed language detection cannot separate Hinglish from native Indic audio
+(hinglish demo query detected as te/pa @0.74 while a REAL te sample scored
+0.69) — native languages must be supplied out of band (telephony trunk
+config, per-vertical config).
+
+Loopback caveat throughout: piper TTS audio (clean, no mic/channel noise) —
+WER numbers are optimistic; they decide engines relative to each other.
 """
 from __future__ import annotations
 
@@ -74,6 +73,14 @@ def transcribe_chunks(audio_chunks, model: str = "tiny") -> str:
 # ---------------------------------------------------------------------------
 
 INDIC_MODEL_ID = "ai4bharat/indic-conformer-600m-multilingual"
+
+# M5b-3 core engine (bake-off winner, data/out/asr-measurement-qwen.json):
+# en WER 0.038 ties whisper small at ~3x the speed (0.84s vs 2.77s median);
+# hi WER 0.247 beats whisper 0.423; natively emits code-switched text
+# (Latin-script English words inside Hindi), which feeds the hinglish-text
+# LLM/intent pipeline directly. Apache-2.0. te/ta are NOT covered (detected
+# as Hindi) — native languages route to IndicConformer instead.
+QWEN_ASR_MODEL_ID = "Qwen/Qwen3-ASR-0.6B-hf"
 
 # CPU default decoding head ("ctc"; the conformer's remote code also offers
 # "rnnt"). CTC is deterministic and needs no streaming state.
@@ -206,12 +213,98 @@ class IndicASRHandle:
         return text.strip() if isinstance(text, str) else text
 
 
+def _real_qwen_loader(model_id: str):
+    """Load Qwen3-ASR via transformers (needs transformers>=5.13; the project
+    venv upgraded 4.46.3 -> 5.16.1 with sentence-transformers 5->6 — the
+    full suite was re-verified green on the upgrade)."""
+    import torch
+    from transformers import AutoModelForMultimodalLM, AutoProcessor
+    processor = AutoProcessor.from_pretrained(model_id)
+    model = AutoModelForMultimodalLM.from_pretrained(model_id,
+                                                     dtype=torch.float32)
+    model.eval()
+    return processor, model
+
+
+class QwenASRHandle:
+    """Qwen/Qwen3-ASR-0.6B-hf handle — the M5b-3 core engine (en/hi/hinglish
+    and any unknown language).
+
+    Language hints are accepted for interface uniformity but NOT forced:
+    the model's built-in LID was correct on every en/hi bake-off sample
+    (including hinglish audio, detected as Hindi), and forcing via the
+    assistant-prefill mechanism is deferred until a measured need shows up.
+    loader is injectable so tests stub the ~1.6 GB download."""
+
+    def __init__(self, model_id: str = QWEN_ASR_MODEL_ID, loader=None):
+        self._model_id = model_id
+        self._loader = loader or (lambda: _real_qwen_loader(model_id))
+        self._engine = None
+
+    def _ensure_engine(self):
+        if self._engine is None:
+            self._engine = self._loader()
+        return self._engine
+
+    @staticmethod
+    def _array_to_wav_path(audio) -> str:
+        """16 kHz mono float array -> temp 16-bit PCM WAV (the processor
+        consumes file paths; the voice loop normally passes paths anyway)."""
+        import numpy as np
+        import tempfile
+        import wave
+        data = (np.asarray(audio, dtype=np.float32).clip(-1, 1)
+                * 32767).astype(np.int16).tobytes()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            with wave.open(tmp.name, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(16000)
+                w.writeframes(data)
+            return tmp.name
+
+    def transcribe(self, audio, language: str | None = None) -> str:
+        """Transcribe a WAV path (or 16 kHz mono float array) to text.
+        Returns the transcription; Qwen's detected language is available via
+        transcribe_detected()."""
+        return self.transcribe_detected(audio, language)[0]
+
+    def transcribe_detected(self, audio, language: str | None = None):
+        """One Qwen pass returning (text, detected_language_or_None)."""
+        import torch
+        path = audio if isinstance(audio, (str, Path)) \
+            else self._array_to_wav_path(audio)
+        processor, model = self._ensure_engine()
+        inputs = processor.apply_transcription_request(audio=str(path))
+        inputs = inputs.to(model.device, model.dtype)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=256, do_sample=False)
+        gen = out[:, inputs["input_ids"].shape[1]:]
+        try:
+            parsed = processor.decode(gen[0], return_format="parsed")
+            return parsed.get("transcription", "").strip(), parsed.get("language")
+        except Exception:
+            text = processor.decode(gen[0], skip_special_tokens=True).strip()
+            return text, None
+
+
 def _get_whisper_small() -> WhisperASRHandle:
-    """Lazy singleton for the router's whisper-small path."""
+    """Lazy singleton for whisper small — the M5b-3 failure fallback engine
+    (battle-tested, always available offline once cached)."""
     global _whisper_small_handle
     if _whisper_small_handle is None:
         _whisper_small_handle = WhisperASRHandle(model="small")
     return _whisper_small_handle
+
+
+def _get_qwen_asr() -> QwenASRHandle:
+    """Lazy singleton for the router's core path (~1.6 GB model downloads on
+    first use; float32 ~3.1 GB RAM — int8/bf16 quantization is the VPS-tier
+    optimization path, deferred until measured)."""
+    global _qwen_handle
+    if _qwen_handle is None:
+        _qwen_handle = QwenASRHandle()
+    return _qwen_handle
 
 
 def _get_indic_asr() -> IndicASRHandle:
@@ -224,6 +317,7 @@ def _get_indic_asr() -> IndicASRHandle:
 
 
 _whisper_small_handle: WhisperASRHandle | None = None
+_qwen_handle: QwenASRHandle | None = None
 _indic_handle: IndicASRHandle | None = None
 
 
@@ -232,14 +326,16 @@ def get_asr_for_language(lang: str | None, engines=None, supported=None,
     """Route a language to an ASR handle with a uniform
     transcribe(audio, language) interface.
 
-    en/hi/hinglish -> whisper small (M5b-1: proven); te/ta/bn/mr/gu/kn/ml/pa
-    -> IndicConformer; None/unknown -> whisper small auto-detect. A native
-    language outside the conformer's card list falls back to whisper small
+    M5b-3 routing (bake-off data): te/ta/bn/mr/gu/kn/ml/pa -> IndicConformer
+    (te WER 0.348 vs whisper 1.067 / Qwen 1.315, 0.11s warm); everything
+    else — en, hi, hinglish, None, unknown — -> Qwen3-ASR-0.6B (en tie with
+    whisper at 3x speed, hi 0.247 vs 0.423, code-switch output). A native
+    language outside the conformer's card list falls back to the Qwen core
     with a warning. `engines`/`supported`/`warn` are injectable for tests;
     default engines are cached per engine kind (process-wide singletons).
     """
     if engines is None:
-        engines = {"whisper": _get_whisper_small, "indic": _get_indic_asr}
+        engines = {"qwen": _get_qwen_asr, "indic": _get_indic_asr}
     if supported is None:
         supported = INDIC_CONFORMER_LANGUAGES
     if warn is None:
@@ -248,8 +344,8 @@ def get_asr_for_language(lang: str | None, engines=None, supported=None,
         if lang in supported:
             return engines["indic"]()
         warn(f"language '{lang}' is not supported by "
-             f"{INDIC_MODEL_ID}; falling back to whisper small")
-    return engines["whisper"]()
+             f"{INDIC_MODEL_ID}; falling back to the Qwen core engine")
+    return engines["qwen"]()
 
 
 def transcribe_wav_routed(path: str, language: str | None = None) -> str:
