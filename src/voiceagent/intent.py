@@ -7,15 +7,28 @@ into the wrong action the way a small generative model does.
 Output is constrained to the fixed intent vocabulary by construction.
 
 M5a: each intent carries 3 Hindi (Devanagari), 3 Tamil and 3 Telugu
-exemplars so native-script queries match same-language neighbours. NOTE:
-the non-en exemplars (Hinglish, hi/ta/te) are LLM-authored SYNTHETIC
-phrasings, not transcripts of real customers — plausible support language,
-but real-traffic validation is still pending (quality caveat).
+exemplars so native-script queries match same-language neighbours. M5a-2
+swapped the default embedder to LaBSE (768-dim, 109 languages): native-script
+resolution jumped (bn 0.300->1.000, te 0.700->1.000, gu 0.800->1.000,
+ta 0.533->0.967) mostly via LaBSE cross-lingual transfer onto the existing
+en/hinglish/hi/ta/te exemplars — the planned 3 Bengali, 3 Gujarati and 3
+Marathi exemplars per intent were NOT added (mr/gu/bn eval rows resolve on
+transfer alone). M5b: hybrid routing — the M5a-2 sweep also showed LaBSE
+COLLAPSES on Romanized code-mixed Hindi (hinglish 0.993->0.700) while MiniLM
+handles it well, so the classifier keeps TWO exemplar matrices over the SAME
+exemplar strings: MiniLM-encoded for en/hinglish queries, LaBSE-encoded for
+native-script queries, routed by script per classify() call. NOTE: the non-en
+exemplars (Hinglish, hi/ta/te) are LLM-authored SYNTHETIC phrasings, not
+transcripts of real customers — plausible support language, but real-traffic
+validation is still pending (quality caveat).
 """
 from __future__ import annotations
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
+
+from voiceagent.knowledge import (DEFAULT_EMBEDDER, LATIN_SPACE, NATIVE_SPACE,
+                                  SPACE_EMBEDDERS, route_space)
 
 INTENT_EXEMPLARS: dict[str, list[str]] = {
     "order_status": [
@@ -24,6 +37,13 @@ INTENT_EXEMPLARS: dict[str, list[str]] = {
         "मेरा ऑर्डर कहाँ है",
         "order delivery status",
         "has my order shipped",
+        # M5b: order-status queries that carry an ORD reference were being
+        # out-pulled in the latin space by the refund exemplar "refund my
+        # order ORD-12345" (70 en eval rows -> refund, en 0.859). These
+        # mirror that reference pattern for order_status.
+        "where is my order ORD-12345",
+        "my order ORD-98765 has not arrived yet",
+        "status of my order ORD-45678",
         "मेरा ऑर्डर कहां तक पहुंचा है?",
         "ऑर्डर का स्टेटस बताओ",
         "मेरा ऑर्डर कब शिप होगा",
@@ -37,6 +57,8 @@ INTENT_EXEMPLARS: dict[str, list[str]] = {
     "refund": [
         "I need a refund for my order",
         "Can you refund my order",
+        "refund my order ORD-12345",
+        "please refund my order, it arrived damaged",
         "मुझे रिफंड चाहिए",
         "refund my money",
         "mera paisa wapas karo",
@@ -375,11 +397,26 @@ INTENT_EXEMPLARS: dict[str, list[str]] = {
 
 
 class IntentClassifier:
-    def __init__(self, model_name: str = "paraphrase-multilingual-MiniLM-L12-v2"):
-        self._model = SentenceTransformer(model_name)
+    """M5b hybrid: TWO exemplar matrices over the SAME exemplar strings —
+    one LaBSE-encoded (native space) for native-script queries, one
+    MiniLM-encoded (latin space) for en/hinglish queries. classify() routes
+    by detect_language via knowledge.route_space (same routing rule as
+    IndexHandle.search, so RAG and intent always agree on the space).
+
+    Both encoders are constructed EAGERLY at init (~2-4s total, both models
+    are small and already cached): no first-query latency cliff for either
+    script family, and no lazy-init state to reason about in the voice
+    server. The matrices themselves are tiny (~350 exemplars x dim)."""
+
+    def __init__(self, model_name: str = DEFAULT_EMBEDDER,
+                 latin_model_name: str = SPACE_EMBEDDERS[LATIN_SPACE]):
+        # model_name keeps its historical meaning: the native-script-space
+        # encoder (primary). The latin-space encoder is latin_model_name.
+        self._native_model = SentenceTransformer(model_name)
+        self._latin_model = SentenceTransformer(latin_model_name)
         self._intents: list[str] = []
-        self._exemplar_embs: np.ndarray | None = None
-        self._exemplar_labels: list[str] = []
+        # space -> (exemplar matrix, labels); both spaces cover every intent
+        self._matrices: dict[str, tuple[np.ndarray, list[str]]] = {}
         self._build()
 
     def _build(self) -> None:
@@ -389,17 +426,24 @@ class IntentClassifier:
             for ex in exs:
                 queries.append(ex)
                 labels.append(intent)
-        emb = self._model.encode(queries, normalize_embeddings=True)
-        self._exemplar_embs = np.asarray(emb, dtype=np.float32)
-        self._exemplar_labels = labels
         self._intents = list(INTENT_EXEMPLARS.keys())
+        for space, model in ((NATIVE_SPACE, self._native_model),
+                             (LATIN_SPACE, self._latin_model)):
+            emb = np.asarray(model.encode(queries, normalize_embeddings=True),
+                             dtype=np.float32)
+            self._matrices[space] = (emb, list(labels))
 
     def classify(self, text: str, k: int = 1) -> tuple[str, float]:
-        """Return (best_intent, cosine_score)."""
-        q = self._model.encode([text], normalize_embeddings=True)
-        q = np.asarray(q, dtype=np.float32)
-        scores = self._exemplar_embs @ q.T  # (n_exemplars, 1)
+        """Return (best_intent, cosine_score), comparing the query against
+        the exemplar matrix of the space matched to its script."""
+        space = route_space(text)
+        embs, labels = self._matrices[space]
+        model = (self._native_model if space == NATIVE_SPACE
+                 else self._latin_model)
+        q = np.asarray(model.encode([text], normalize_embeddings=True),
+                       dtype=np.float32)
+        scores = embs @ q.T  # (n_exemplars, 1)
         scores = scores[:, 0]
         order = np.argsort(-scores)[:k]
         best = int(order[0])
-        return self._exemplar_labels[best], float(scores[best])
+        return labels[best], float(scores[best])

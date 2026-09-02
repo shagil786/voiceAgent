@@ -28,3 +28,23 @@ def test_build_index_and_search_returns_relevant_doc():
         results = idx.search("how long do refunds take?", k=1)
         assert len(results) == 1
         assert "5-7 business days" in results[0]["text"]
+
+
+def test_build_index_native_script_search_hits_same_docs():
+    # M5b hybrid: native-script queries are served by the native (LaBSE)
+    # space over the SAME chunks — cross-lingual retrieval must survive the
+    # routing (en queries take the MiniLM space, covered by the test above).
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        (d / "faqs.md").write_text(
+            "# Returns\nYou can return any item within 7 days of delivery.\n\n"
+            "# Refunds\nRefunds are processed within 5-7 business days.\n"
+        )
+        docs = load_docs(str(d))
+        idx = build_index(docs)
+        for query in ("मुझे रिफंड चाहिए",                       # hi
+                      "என் பணத்தை திரும்பத் தாருங்கள்"):        # ta
+            results = idx.search(query, k=1)
+            assert len(results) == 1
+            assert "5-7 business days" in results[0]["text"], \
+                f"{query!r} -> {results[0]['text']!r}"
