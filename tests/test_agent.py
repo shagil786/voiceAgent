@@ -168,3 +168,57 @@ def test_template_path_receives_directive_in_system_arg():
     llm = TemplateCaptureLLM()
     build_agent(FakeIndex(), llm).handle("मेरा ऑर्डर कहाँ है")
     assert DIRECTIVE.format(lang="hi") in llm.prompts[0]
+
+
+# ---------------------------------------------------------------------------
+# M5b-4: reply-language guardrail — a 0.5B model ignores the "reply in the
+# customer's language" directive often enough that the reply's language is
+# checked deterministically; mismatches get a canned reply in the customer's
+# language with the echo guardrail's reference still applied.
+# ---------------------------------------------------------------------------
+
+import sys
+sys.path.insert(0, "src")  # keep imports working when run standalone
+
+from voiceagent.langid import detect_language  # noqa: E402
+
+class EnglishOnlyLLM(LLMHandle):
+    """Simulates the observed 0.5B failure: ignores the language directive,
+    always answers in English."""
+    def __init__(self, reply="Your order ORD-77812 is out for delivery."):
+        super().__init__({"model": "fake"})
+        self.reply = reply
+    def generate(self, prompt, max_tokens=256, stop=None):
+        return self.reply
+
+def test_hi_customer_gets_hindi_reply_when_llm_answers_english():
+    agent = build_agent(FakeIndex(), EnglishOnlyLLM(), classifier=FakeClassifier())
+    res = agent.handle("मेरा ऑर्डर ORD-77812 कब आएगा")
+    assert detect_language(res.text) == "hi"
+    assert "ORD-77812" in res.text  # echo guardrail still applies
+
+def test_te_customer_gets_telugu_reply():
+    agent = build_agent(FakeIndex(), EnglishOnlyLLM(), classifier=FakeClassifier())
+    res = agent.handle("నా ఆర్డర్ ORD-77812 ఎప్పుడు వస్తుంది")
+    assert detect_language(res.text) == "te"
+    assert "ORD-77812" in res.text
+
+def test_hinglish_customer_gets_hinglish_reply():
+    agent = build_agent(FakeIndex(), EnglishOnlyLLM(), classifier=FakeClassifier())
+    res = agent.handle("mera order ORD-77812 kab aayega")
+    assert "Aapke order" in res.text  # Roman hinglish template served
+    assert "ORD-77812" in res.text
+
+def test_reply_already_in_customer_language_untouched():
+    hindi_reply = "आपका ऑर्डर ORD-77812 रास्ते में है।"
+    agent = build_agent(FakeIndex(), EnglishOnlyLLM(reply=hindi_reply),
+                        classifier=FakeClassifier())
+    res = agent.handle("मेरा ऑर्डर ORD-77812 कब आएगा")
+    assert res.text == hindi_reply  # no template substitution
+
+def test_english_turns_never_touched():
+    reply = "Your order ORD-77812 is out for delivery."
+    agent = build_agent(FakeIndex(), EnglishOnlyLLM(reply=reply),
+                        classifier=FakeClassifier())
+    res = agent.handle("where is my order ORD-77812")
+    assert res.text == reply  # en turns bypass the guardrail entirely

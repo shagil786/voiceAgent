@@ -151,10 +151,23 @@ class Agent:
                 if inherited:
                     required.append(inherited)
             clean = _patch_reply(clean, required)
+        # M5b-4 reply-language guardrail: the LLM's reply must be in the
+        # customer's language; a 0.5B model ignores the directive often
+        # enough that this is checked deterministically, not trusted.
+        target_langs = _acceptable_reply_langs(language)
+        if (target_langs is not None and clean.strip()
+                and detect_language(clean) not in target_langs):
+            clean = _canned_reply(action, language or "hi",
+                                  required if self._classifier is not None
+                                  else [])
+            if self._classifier is not None:
+                clean = _patch_reply(clean, required)
         if not clean:
             # Safety net: a reply with no references and no content still
-            # reaches the customer as something.
-            clean = "Your request has been noted."
+            # reaches the customer as something — in THEIR language.
+            clean = NOTED_REPLIES.get(
+                language if language in ("hi", "te", "hinglish") else "",
+                "Your request has been noted.")
         # Policy gate: every action passes through the deterministic policy
         # engine (ALLOW / DENY / REQUIRE_AUTH / REQUIRE_HUMAN_APPROVAL /
         # ESCALATE). No LLM in this path. Every decision is appended to the
@@ -177,9 +190,80 @@ class Agent:
                            retrieved=retrieved, latency_s=time.time() - t0,
                            decision=decision)
 
-ACTION_RE = re.compile(r"ACTION:\s*([a-z_]+)", re.IGNORECASE)
 
-# Order IDs / reference numbers the customer may state (Latin or Devanagari).
+# ---------------------------------------------------------------------------
+# M5b-4: reply-language guardrail. The prompt directive ("Reply in the
+# customer's language") is unreliable on 0.5B models — the live fresh-caller
+# voice check showed hi/te customers receiving English replies, and the
+# empty-reply safety net was English-only. After generation, verify the
+# reply's language; on mismatch substitute a deterministic canned reply in
+# the customer's language (per-intent where available), then re-apply the
+# echo guardrail so the customer's reference still appears. en turns are
+# never touched — the text-path benchmark stays byte-identical.
+# ---------------------------------------------------------------------------
+
+REPLY_TEMPLATES: dict[str, dict[str, str]] = {
+    "order_status": {
+        "hi": "आपके ऑर्डर {ref} की स्थिति जाँच ली गई है। ताज़ा स्थिति जल्द ही आपके ऐप और एसएमएस पर अपडेट होगी।",
+        "te": "మీ ఆర్డర్ {ref} స్థితి తనిఖీ చేయబడింది. తాజా స్థితి త్వరలో మీ యాప్‌లో మరియు ఎస్ఎంఎస్ ద్వారా అందుతుంది.",
+        "hinglish": "Aapke order {ref} ka status check kar liya gaya hai. Latest update jald hi app aur SMS par milega.",
+    },
+    "refund": {
+        "hi": "आपका रिफंड अनुरोध दर्ज हो गया है। प्रक्रिया पूरी होने पर स्थिति की जानकारी दी जाएगी।",
+        "te": "మీ రీఫండ్ అభ్యర్థన నమోదైంది. ప్రక్రియ పూర్తయిన తర్వాత స్థితి తెలియజేయబడుతుంది.",
+        "hinglish": "Aapka refund request note kar liya gaya hai. Process complete hone par status update mil jayega.",
+    },
+    "refund_info": {
+        "hi": "रिफंड स्वीकृत होने के 5-7 कार्यदिवसों में आपके खाते में आ जाता है।",
+        "te": "రీఫండ్ ఆమోదించబడిన 5-7 పనిదినాల్లో మీ ఖాతాలో జమ అవుతుంది.",
+        "hinglish": "Refund approve hone ke 5-7 working days mein aapke account mein aa jata hai.",
+    },
+    "delivery_eta": {
+        "hi": "आपका ऑर्डर 3-5 कार्यदिवसों में डिलीवर होने की उम्मीद है।",
+        "te": "మీ ఆర్డర్ 3-5 పనిదినాల్లో డెలివరీ అవుతుందని భావిస్తున్నాము.",
+        "hinglish": "Aapka order 3-5 working days mein deliver hone ki expectation hai.",
+    },
+    "default": {
+        "hi": "आपका अनुरोध दर्ज कर लिया गया है। हमारी टीम जल्द ही आपकी सहायता करेगी।",
+        "te": "మీ అభ్యర్థన నమోదు చేయబడింది. మా బృందం త్వరలో మీకు సహాయం చేస్తుంది.",
+        "hinglish": "Aapka request note kar liya gaya hai. Hamari team jald hi aapki help karegi.",
+    },
+}
+
+NOTED_REPLIES = {
+    "hi": "आपका अनुरोध दर्ज कर लिया गया है।",
+    "te": "మీ అభ్యర్థన నమోదు చేయబడింది.",
+    "hinglish": "Aapka request note kar liya gaya hai.",
+}
+
+
+def _acceptable_reply_langs(language: str | None) -> frozenset | None:
+    """Reply languages a turn may legitimately come back in; None disables
+    the guardrail (every en/None turn). hinglish accepts Roman hinglish or
+    Devanagari Hindi (a Hindi speaker reads both natively); native languages
+    are strict."""
+    if not language or language == "en":
+        return None
+    if language == "hinglish":
+        return frozenset({"hinglish", "hi"})
+    return frozenset({language})
+
+
+def _ref_for_template(refs: list[str]) -> str:
+    """The customer's order-id-shaped reference (keywords are not refs)."""
+    for r in refs:
+        if r.upper().startswith("ORD") or r.isdigit():
+            return r
+    return ""
+
+
+def _canned_reply(action: str | None, language: str, refs: list[str]) -> str:
+    lang_key = language if language in ("hi", "te", "hinglish") else "hi"
+    table = REPLY_TEMPLATES.get(action or "") or REPLY_TEMPLATES["default"]
+    tpl = table.get(lang_key) or REPLY_TEMPLATES["default"][lang_key]
+    return tpl.format(ref=_ref_for_template(refs))
+
+ACTION_RE = re.compile(r"ACTION:\s*([a-z_]+)", re.IGNORECASE)# Order IDs / reference numbers the customer may state (Latin or Devanagari).
 ORDER_ID_RE = re.compile(
     r"\b(?:ORD[-#]?\s*)?(\d{4,10})\b", re.IGNORECASE
 )
