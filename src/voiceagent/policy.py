@@ -40,6 +40,11 @@ class PolicyContext:
     amount: float | None = None
     authenticated: bool = False
     otp_verified: bool = False
+    # M6a: open-ended context signals (frustrated, frustration_level,
+    # customer_tier, repeat_calls, ...) set by deterministic detectors or the
+    # channel. Policies reference them via `escalate_when:` — conditions are
+    # DATA (YAML), so sentiment/state-based routing needs no code change.
+    signals: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -75,6 +80,19 @@ class PolicyEngine:
             return Decision("DENY", [f"no policy defined for action '{action}' (least privilege)"])
         if not isinstance(policy, dict):
             return Decision("ALLOW", [f"policy for '{action}' is a bare allow"])
+
+        # M6a: data-driven conditional escalation (e.g. escalate_when:
+        # {frustrated: true}) — a frustrated customer goes to a human before
+        # being asked for OTP or amounts by a bot. All listed signals must
+        # match the turn's context.
+        escalate_when = policy.get("escalate_when")
+        if (isinstance(escalate_when, dict) and escalate_when
+                and all(ctx.signals.get(k) == v
+                        for k, v in escalate_when.items())):
+            return Decision(
+                "ESCALATE",
+                [f"action '{action}' escalated by condition {escalate_when}"],
+            )
 
         if policy.get("require_auth") and not ctx.authenticated:
             return Decision("REQUIRE_AUTH", [f"action '{action}' requires customer authentication"])

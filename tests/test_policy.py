@@ -34,3 +34,36 @@ def test_escalate_intents_escalate():
     for action in ["fraud", "legal", "chargeback"]:
         d = _engine().evaluate(action)
         assert d.verdict == "ESCALATE"
+
+
+# ---------------------------------------------------------------------------
+# M6a: data-driven conditional escalation — escalate_when in YAML policies
+# against PolicyContext.signals. Sentiment/state routing is DATA, not code.
+# ---------------------------------------------------------------------------
+
+def test_escalate_when_signal_matches():
+    eng = PolicyEngine({"complaint": {"allow": True,
+                                      "escalate_when": {"frustrated": True}}})
+    ctx = PolicyContext(signals={"frustrated": True, "frustration_level": "high"})
+    d = eng.evaluate("complaint", ctx)
+    assert d.verdict == "ESCALATE"
+    assert "frustrated" in str(d.reasons)
+
+def test_escalate_when_signal_absent_allows():
+    eng = PolicyEngine({"complaint": {"allow": True,
+                                      "escalate_when": {"frustrated": True}}})
+    d = eng.evaluate("complaint", PolicyContext(signals={"frustrated": False}))
+    assert d.verdict == "ALLOW"
+
+def test_escalate_when_no_signals_context_allows():
+    eng = PolicyEngine({"complaint": {"allow": True,
+                                      "escalate_when": {"frustrated": True}}})
+    assert eng.evaluate("complaint", PolicyContext()).verdict == "ALLOW"
+
+def test_escalate_when_precedes_require_auth():
+    # A frustrated customer should reach a human WITHOUT the bot first
+    # demanding authentication.
+    eng = PolicyEngine({"complaint": {"require_auth": True,
+                                      "escalate_when": {"frustrated": True}}})
+    d = eng.evaluate("complaint", PolicyContext(signals={"frustrated": True}))
+    assert d.verdict == "ESCALATE"

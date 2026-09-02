@@ -7,6 +7,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from voiceagent.langid import NATIVE_SCRIPT_LANGS, detect_language
+from voiceagent.sentiment import (candidate_phrases_from,
+                                  detect_frustration)
+from voiceagent.security import detect_injection, sanitize_for_prompt
 
 if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
     from voiceagent.memory import Turn
@@ -23,8 +26,10 @@ DEFAULT_ACTIONS = [
     "high_value_refund", "refund_info", "delivery_eta",
 ]
 
+_DEFAULT_PERSONA = ("customer support assistant for an Indian ecommerce "
+                    "company")
 _SYSTEM_PROMPT_TMPL = (
-    "You are a customer support assistant for an Indian ecommerce company. "
+    "You are a {persona}. "
     "Answer directly and concisely — do NOT use a thinking or reasoning "
     "phase. Answer ONLY from the provided context. "
     "Always address the customer's specific reference (order id, phone, "
@@ -35,12 +40,16 @@ _SYSTEM_PROMPT_TMPL = (
     "If no action is needed, do not emit an ACTION line."
 )
 
-SYSTEM_PROMPT = _SYSTEM_PROMPT_TMPL.format(actions=", ".join(DEFAULT_ACTIONS))
+SYSTEM_PROMPT = _SYSTEM_PROMPT_TMPL.format(actions=", ".join(DEFAULT_ACTIONS),
+                                           persona=_DEFAULT_PERSONA)
 
 
-def system_prompt_with_actions(actions: list[str]) -> str:
-    """SYSTEM_PROMPT with the action list taken from policy-as-code."""
-    return _SYSTEM_PROMPT_TMPL.format(actions=", ".join(actions))
+def system_prompt_with_actions(actions: list[str],
+                               persona: str = _DEFAULT_PERSONA) -> str:
+    """SYSTEM_PROMPT with the action list taken from policy-as-code and the
+    persona from the tenant config (M6a de-hardcoding)."""
+    return _SYSTEM_PROMPT_TMPL.format(actions=", ".join(actions),
+                                      persona=persona)
 
 @dataclass
 class AgentResult:
@@ -51,10 +60,13 @@ class AgentResult:
     decision: "Decision | None" = None
 
 class Agent:
-    def __init__(self, index, llm, classifier=None, policy=None, decision_log=None):
+    def __init__(self, index, llm, classifier=None, policy=None,
+                 decision_log=None, tenant=None, sentiment_store=None):
         self._index = index
         self._llm = llm
         self._classifier = classifier
+        # M6b: the learnable frustration lexicon (None = static lexicon).
+        self._sentiment = sentiment_store
         # Default to raw-completion prompt (tests use FakeLLM which has no
         # chat template). Real LlamaCppLLM opts in via build_agent below.
         self._use_template = False
@@ -65,12 +77,13 @@ class Agent:
         self._decision_log = decision_log
         # Single-source the action list: a policy that declares its action
         # vocabulary (PolicyEngine.known_actions) drives the system prompt;
-        # otherwise the static DEFAULT_ACTIONS list above is kept.
-        self._system_prompt = SYSTEM_PROMPT
-        if self._policy is not None:
-            declared = self._policy.known_actions()
-            if declared:
-                self._system_prompt = system_prompt_with_actions(declared)
+        # otherwise the static DEFAULT_ACTIONS list above is kept. The
+        # persona comes from the tenant config (M6a); no tenant -> the
+        # historical default, byte-identical prompts for the benchmark.
+        persona = getattr(tenant, "persona", None) or _DEFAULT_PERSONA
+        declared = self._policy.known_actions() if self._policy else []
+        self._system_prompt = system_prompt_with_actions(
+            declared or DEFAULT_ACTIONS, persona)
 
     def handle(self, user_text: str, authenticated: bool = False,
                amount: float | None = None, conv_id: str = "",
@@ -83,6 +96,25 @@ class Agent:
         # prompts stay byte-identical and the benchmark is unaffected).
         if language is None:
             language = detect_language(user_text)
+        # M6a: deterministic frustration detection — the 'Sentiment Agent'
+        # without an LLM pass. The level becomes a policy signal (whether
+        # frustration escalates is data: escalate_when in policies.yaml) and
+        # shapes the reply with an empathy line in the customer's language.
+        # M6b: the lexicon LEARNS — known phrases come from the store, and
+        # novel intensity-only expressions are captured as candidates for
+        # review, so detection coverage grows with every conversation.
+        learned = self._sentiment.learned_phrases(language) \
+            if self._sentiment is not None else None
+        fr = detect_frustration(user_text, language, extra_phrases=learned)
+        if self._sentiment is not None and fr.level == "none" and fr.intensity:
+            self._sentiment.capture_candidates(
+                candidate_phrases_from(user_text), language)
+        # M6b: prompt-injection guard — detect, strip forged meta-turns from
+        # what reaches the LLM prompt, and surface a policy signal. The
+        # ACTION is decided by the classifier either way; injection cannot
+        # hijack it, only the reply text — which is sanitized and audited.
+        inj = detect_injection(user_text)
+        prompt_text = sanitize_for_prompt(user_text)
         retrieved = self._index.search(user_text, k=3)
         context = "\n".join(f"[{r['section']}] {r['text']}" for r in retrieved)
         # Working memory (M4a): replay the last few complete exchanges as a
@@ -101,12 +133,14 @@ class Agent:
         if self._use_template:
             # Chat template for the model's family (Qwen ChatML, Llama 3
             # headers, ...) — vastly better format-following than a raw
-            # completion prompt on small instruct models.
-            prompt = self._llm.chat_template(system, context, user_text)
+            # completion prompt on small instruct models. The SANITIZED
+            # customer text enters the prompt (M6b): forged meta-turns
+            # cannot reach the model as instructions.
+            prompt = self._llm.chat_template(system, context, prompt_text)
         else:
             prompt = (
                 f"{system}\n\nContext:\n{context}\n\n"
-                f"Customer: {user_text}\nAssistant:"
+                f"Customer: {prompt_text}\nAssistant:"
             )
         # Stop tokens and output cleanup are adapter concerns: the llama.cpp
         # adapter stops at Qwen3's thinking marker and strips the reasoning
@@ -177,7 +211,10 @@ class Agent:
         if self._policy is not None:
             from voiceagent.policy import PolicyContext
             ctx = PolicyContext(amount=amount, authenticated=authenticated,
-                                otp_verified=False)
+                                otp_verified=False,
+                                signals={"frustrated": fr.frustrated,
+                                         "frustration_level": fr.level,
+                                         "injection_suspected": inj.detected})
             decision = self._policy.evaluate(action or "", ctx)
             if self._decision_log is not None:
                 from voiceagent.decisionlog import DecisionEntry
@@ -186,6 +223,11 @@ class Agent:
                     conv_id=conv_id, action=action or "",
                     verdict=decision.verdict, reasons=decision.reasons,
                     amount=amount, authenticated=authenticated))
+        # M6a: acknowledge detected frustration in the customer's language
+        # before the substantive reply — but never double-apologize if the
+        # reply already carries an apology.
+        if fr.level == "high" and not _already_apologetic(clean):
+            clean = EMPATHY_PREFIXES.get(language, "") + clean
         return AgentResult(text=clean, action=action,
                            retrieved=retrieved, latency_s=time.time() - t0,
                            decision=decision)
@@ -235,6 +277,27 @@ NOTED_REPLIES = {
     "te": "మీ అభ్యర్థన నమోదు చేయబడింది.",
     "hinglish": "Aapka request note kar liya gaya hai.",
 }
+
+# M6a: empathy lines for HIGH frustration, in the customer's language
+# (languages without an entry get no prefix — never a wrong-language one).
+EMPATHY_PREFIXES = {
+    "en": "I'm really sorry about the trouble. ",
+    "hinglish": "Mujhe khed hai ki aapko pareshani hui. ",
+    "hi": "मुझे खेद है कि आपको परेशानी हुई। ",
+    "te": "ఇబ్బంది కోసం క్షమించండి. ",
+    "es": "Lamento mucho las molestias. ",
+    "fr": "Je suis vraiment désolé pour ce désagrément. ",
+    "de": "Es tut mir wirklich leid für die Umstände. ",
+}
+
+_APOLOGY_MARKERS = ("sorry", "apolog", "khed", "kshama", "माफ", "खेद",
+                    "క్షమించ", "lamento", "disculp", "désolé", "desole",
+                    "leid", "entschuldig")
+
+
+def _already_apologetic(text: str) -> bool:
+    low = text.lower()
+    return any(m in low for m in _APOLOGY_MARKERS)
 
 
 def _acceptable_reply_langs(language: str | None) -> frozenset | None:
@@ -384,9 +447,11 @@ def strip_action_lines(text: str) -> str:
     return out.strip()
 
 
-def build_agent(index, llm, classifier=None, policy=None, decision_log=None) -> Agent:
+def build_agent(index, llm, classifier=None, policy=None, decision_log=None,
+                tenant=None, sentiment_store=None) -> Agent:
     agent = Agent(index, llm, classifier=classifier, policy=policy,
-                  decision_log=decision_log)
+                  decision_log=decision_log, tenant=tenant,
+                  sentiment_store=sentiment_store)
     # Real LlamaCppLLM has chat_template; FakeLLM (tests) does not.
     agent._use_template = hasattr(llm, "chat_template")
     return agent

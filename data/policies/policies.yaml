@@ -34,6 +34,12 @@ order_cancellation:
 account_changes:
   require_auth: true
   require_otp: true
+  # M6b: injection attempts on this sensitive action go to a human, never a
+  # bot round-trip. Signal from the deterministic injection guard
+  # (voiceagent.security); the action decision itself is classifier-driven
+  # and cannot be hijacked.
+  escalate_when:
+    injection_suspected: true
 
 billing:
   allow: true
@@ -46,3 +52,12 @@ payment_declined:
 
 otp:
   require_auth: true
+
+# M6a: complaints are answered by the bot, BUT an already-frustrated
+# customer goes straight to a human instead of another bot round-trip.
+# `frustrated` is a context signal from the deterministic frustration
+# detector (voiceagent.sentiment) — conditions here are data, not code.
+complaint:
+  allow: true
+  escalate_when:
+    frustrated: true

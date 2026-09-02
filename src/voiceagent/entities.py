@@ -67,11 +67,6 @@ _HI_GARBLES = {"एकत्र": "इकहत्तर", "एकतर": "इ�
 
 _NUM_TOKENS = set(_NUM_WORDS) | set(_SCALES) | {"and"}
 
-_AMOUNT_RE = re.compile(
-    r"(?:₹|rs\.?|rupees?|रुपये?|रु\.?)?\s*"
-    r"(\d[\d,]*(?:\.\d+)?)\s*(?:₹|rs\.?|rupees?|रुपये?|रु\.?)?",
-    re.IGNORECASE,
-)
 _ORDER_RE = re.compile(r"\b(?:ORD[-#]?\s*)(\d{4,10})\b", re.IGNORECASE)
 # \bORD\b: must not match the "ord" inside the word "order".
 _ORDER_PREFIX_RE = re.compile(r"\bORD\b[-#\s:]*", re.IGNORECASE)
@@ -239,10 +234,21 @@ def _amount_from_words(text: str) -> float | None:
     return float(n) if n is not None and n >= 100 else None
 
 
-def extract_entities(text: str) -> Entities:
-    """Extract a rupee amount and an order id (ORD-xxxxx) from customer text.
-    Pure regex + number-word normalization, no LLM — deterministic and cheap."""
+def extract_entities(text: str, currency: str = "₹",
+                     min_amount: float = 100.0) -> Entities:
+    """Extract an amount and an order id (ORD-xxxxx) from customer text.
+    Pure regex + number-word normalization, no LLM — deterministic and cheap.
+
+    currency/min_amount are tenant config (M6a): the default reproduces the
+    historical ₹ behaviour; a US tenant passes currency='$'. The amount
+    regex always keeps the word forms (rupees/रुपये) alongside the symbol."""
     text = text.translate(_DEVANAGARI_DIGITS)
+    sym = re.escape(currency)
+    amount_re = re.compile(
+        r"(?:" + sym + r"|(?:rs\.?|rupees?|रुपये?|रु\.?))?\s*"
+        r"(\d[\d,]*(?:\.\d+)?)\s*(?:" + sym + r"|(?:rs\.?|rupees?|रुपये?|रु\.?))?",
+        re.IGNORECASE,
+    )
 
     order_id, order_span = _order_id_span(text)
     # Cut the order-id span so its number can't double as an amount
@@ -251,11 +257,12 @@ def extract_entities(text: str) -> Entities:
         text[:order_span[0]] + " " + text[order_span[1]:]
 
     amount: float | None = None
-    for m in _AMOUNT_RE.finditer(order_text):
+    for m in amount_re.finditer(order_text):
         candidate = float(m.group(1).replace(",", ""))
         # Guard: a bare number like "4" in "plan 4" is not a refund amount.
-        # Only accept amounts >= 100 (₹100 minimum meaningful transaction).
-        if candidate >= 100:
+        # Only accept amounts >= min_amount (the smallest meaningful
+        # transaction; ₹/$ 100 by default).
+        if candidate >= min_amount:
             amount = candidate
             break
     if amount is None:

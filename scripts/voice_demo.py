@@ -16,7 +16,12 @@ def build_live_agent():
     from voiceagent.intent import IntentClassifier
     from voiceagent.policy import load_policies
     from voiceagent.decisionlog import DecisionLog
+    from voiceagent.sentiment import SentimentStore
+    from voiceagent.tenant import TenantConfig
 
+    # M6a: tenant persona/config from data (data/tenants/default.json when
+    # present) — the deployment's identity is DATA, not code.
+    tenant = TenantConfig.load()
     docs = load_docs("data/knowledge")
     index = build_index(docs)
     models = list_available_models("data/models")
@@ -27,7 +32,12 @@ def build_live_agent():
     clf = IntentClassifier()
     policy = load_policies("data/policies/policies.yaml")
     log = DecisionLog()
-    return build_agent(index, llm, classifier=clf, policy=policy, decision_log=log), log
+    # M6b: the learnable frustration lexicon — novel expressions are
+    # captured as candidates, reviewed ones promote into the live lexicon.
+    sentiment = SentimentStore("data/out/sentiment.db")
+    return build_agent(index, llm, classifier=clf, policy=policy,
+                       decision_log=log, tenant=tenant,
+                       sentiment_store=sentiment), log
 
 
 def main():
