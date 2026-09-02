@@ -13,30 +13,31 @@ def build_live_agent():
     from voiceagent.knowledge import load_docs, build_index
     from voiceagent.llm import list_available_models, load_llm
     from voiceagent.agent import build_agent
-    from voiceagent.intent import IntentClassifier
+    from voiceagent.intent import IntentClassifier, INTENT_EXEMPLARS
     from voiceagent.policy import load_policies
     from voiceagent.decisionlog import DecisionLog
     from voiceagent.sentiment import SentimentStore
-    from voiceagent.tenant import TenantConfig
+    from voiceagent.tenant import Tenant
 
-    # M6a: tenant persona/config from data (data/tenants/default.json when
-    # present) — the deployment's identity is DATA, not code.
-    tenant = TenantConfig.load()
-    docs = load_docs("data/knowledge")
+    # M6b: the tenant BUNDLE is the composition root — identity, exemplars,
+    # policies, and knowledge all come from the tenant's namespace, each
+    # falling back to the platform default when the bundle omits it.
+    tenant = Tenant.load("data/tenants/default")
+    docs = load_docs(tenant.knowledge_dir() or "data/knowledge")
     index = build_index(docs)
     models = list_available_models("data/models")
     if not models:
         sys.exit("no models in data/models/ — run scripts/smoke_llm.py qwen2.5-0.5b-q4 first")
     m = next((x for x in models if x["name"] == "qwen2.5-0.5b-q4"), models[0])
     llm = load_llm(m["model_path"], params=m["params"], size_mb=m["size_mb"])
-    clf = IntentClassifier()
-    policy = load_policies("data/policies/policies.yaml")
+    clf = IntentClassifier(exemplars=tenant.intent_exemplars())
+    policy = load_policies(tenant.policy_file() or "data/policies/policies.yaml")
     log = DecisionLog()
     # M6b: the learnable frustration lexicon — novel expressions are
     # captured as candidates, reviewed ones promote into the live lexicon.
     sentiment = SentimentStore("data/out/sentiment.db")
     return build_agent(index, llm, classifier=clf, policy=policy,
-                       decision_log=log, tenant=tenant,
+                       decision_log=log, tenant=tenant.config,
                        sentiment_store=sentiment), log
 
 

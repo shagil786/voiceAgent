@@ -1,0 +1,13 @@
+# Example tenant policies — same schema as the platform default
+# (data/policies/policies.yaml). Only actions the tenant declares exist;
+# everything else is least-privilege DENY.
+escalate:
+  - fraud
+
+order_status:
+  allow: true
+
+complaint:
+  allow: true
+  escalate_when:
+    frustrated: true

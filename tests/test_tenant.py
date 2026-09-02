@@ -77,3 +77,64 @@ def test_never_say_rules_are_machine_assertable():
     tenant = TenantConfig(persona=Persona(never_say=["guaranteed refund"]))
     sp = build_agent(FakeIndex(), FakeLLM(), tenant=tenant)._system_prompt
     assert "Never say or imply: guaranteed refund." in sp
+
+
+# ---------------------------------------------------------------------------
+# M6b: the TENANT BUNDLE — one namespace per customer, typed surfaces
+# (tenant.json / intents/*.yaml / policies.yaml / knowledge/), every surface
+# optional with built-in fallback. This is the Control Plane's per-customer
+# artifact, validated by scripts/validate_tenant.py.
+# ---------------------------------------------------------------------------
+
+import yaml
+from voiceagent.tenant import Tenant
+from voiceagent.intent import IntentClassifier
+
+def _make_bundle(root, persona_currency="$", exemplar=None, policy=True):
+    root = Path(root)
+    (root / "intents").mkdir(parents=True)
+    (root / "tenant.json").write_text(json.dumps({
+        "name": "acme", "currency": persona_currency,
+        "persona": {"role": "an assistant for Acme",
+                    "never_say": ["legal advice"]}}))
+    if exemplar is not None:
+        (root / "intents" / "track_order.yaml").write_text(
+            yaml.safe_dump(exemplar))
+    if policy:
+        (root / "policies.yaml").write_text(
+            "escalate:\n  - fraud\norder_status:\n  allow: true\n")
+    return root
+
+def test_missing_bundle_falls_back_to_all_builtins(tmp_path):
+    t = Tenant.load(tmp_path / "nope")
+    assert not t.exists
+    assert t.intent_exemplars() is None      # caller falls back to built-ins
+    assert t.policy_file() is None
+    assert t.knowledge_dir() is None
+    assert t.config.currency == "₹"
+
+def test_bundle_surfaces_resolve(tmp_path):
+    root = _make_bundle(tmp_path / "acme", exemplar=["where is my order"])
+    t = Tenant.load(root)
+    assert t.exists and t.config.name == "acme"
+    assert t.intent_exemplars() == {"track_order": ["where is my order"]}
+    assert t.policy_file().endswith("policies.yaml")
+    assert "never_say" in (root / "tenant.json").read_text()
+
+def test_tenant_exemplars_drive_the_classifier(tmp_path):
+    root = _make_bundle(tmp_path / "acme",
+                        exemplar=["where is my acme package zyx",
+                                  "status of my acme order"])
+    t = Tenant.load(root)
+    clf = IntentClassifier(exemplars=t.intent_exemplars())
+    action, score = clf.classify("where is my acme package zyx")
+    assert action == "track_order" and score > 0.5
+    assert clf._intents == ["track_order"]  # tenant taxonomy, not built-ins
+
+def test_bundle_knowledge_dir(tmp_path):
+    root = _make_bundle(tmp_path / "acme")
+    (root / "knowledge").mkdir()
+    (root / "knowledge" / "faq.md").write_text("# FAQ\nReturn in 30 days.")
+    t = Tenant.load(root)
+    assert t.knowledge_dir() is not None
+    assert "Return in 30 days" in (Path(t.knowledge_dir()) / "faq.md").read_text()

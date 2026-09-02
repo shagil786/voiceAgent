@@ -1,0 +1,8 @@
+# Per-tenant intent exemplars — the file NAME is the intent, the list is
+# the exemplars the embedding classifier matches against. Author these from
+# the tenant's real historical conversations (the data flywheel).
+- "where is my order"
+- "track my package"
+- "when will my order arrive"
+- "donde esta mi pedido"
+- "quiero rastrear mi paquete"

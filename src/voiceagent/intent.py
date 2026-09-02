@@ -409,9 +409,13 @@ class IntentClassifier:
     server. The matrices themselves are tiny (~350 exemplars x dim)."""
 
     def __init__(self, model_name: str = DEFAULT_EMBEDDER,
-                 latin_model_name: str = SPACE_EMBEDDERS[LATIN_SPACE]):
+                 latin_model_name: str = SPACE_EMBEDDERS[LATIN_SPACE],
+                 exemplars: dict[str, list[str]] | None = None):
         # model_name keeps its historical meaning: the native-script-space
         # encoder (primary). The latin-space encoder is latin_model_name.
+        # exemplars: per-tenant intent exemplars (tenant bundle, M6b);
+        # None -> the built-in INTENT_EXEMPLARS.
+        self._exemplars = exemplars if exemplars is not None else INTENT_EXEMPLARS
         self._native_model = SentenceTransformer(model_name)
         self._latin_model = SentenceTransformer(latin_model_name)
         self._intents: list[str] = []
@@ -422,11 +426,11 @@ class IntentClassifier:
     def _build(self) -> None:
         queries: list[str] = []
         labels: list[str] = []
-        for intent, exs in INTENT_EXEMPLARS.items():
+        for intent, exs in self._exemplars.items():
             for ex in exs:
                 queries.append(ex)
                 labels.append(intent)
-        self._intents = list(INTENT_EXEMPLARS.keys())
+        self._intents = list(self._exemplars.keys())
         for space, model in ((NATIVE_SPACE, self._native_model),
                              (LATIN_SPACE, self._latin_model)):
             emb = np.asarray(model.encode(queries, normalize_embeddings=True),
