@@ -61,3 +61,9 @@ complaint:
   allow: true
   escalate_when:
     frustrated: true
+
+# Sprint A: reschedule is a write action on a live delivery — requires the
+# customer to be authenticated (order id stated = authenticated), and the
+# ToolGateway precondition (status CONFIRMED/SHIPPED) is checked separately.
+reschedule_delivery:
+  require_auth: true

@@ -271,3 +271,93 @@ def extract_entities(text: str, currency: str = "₹",
         amount = _amount_from_bare_hi_phrase(order_text)
 
     return Entities(amount=amount, order_id=order_id)
+
+
+# ---------------------------------------------------------------------------
+# Sprint A / WS1: phonetic & contextual entity snapping. ASR garbles order
+# references ("or D7734", "ORD 7 7 3 4", "order वाली 4808") and pure regex
+# misses them. When the customer's KNOWN candidate orders are available
+# (from phone/account context — the telephony trunk knows who is calling),
+# digit clusters in the text snap to the closest candidate above a
+# confidence threshold; below it we return None rather than guess.
+# ---------------------------------------------------------------------------
+
+def _levenshtein(a: str, b: str) -> int:
+    if a == b:
+        return 0
+    if not a or not b:
+        return max(len(a), len(b))
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1,
+                           prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+_DIGIT_TOKEN_RE = re.compile(r"[A-Za-z\u0900-\u097F0-9]+")
+
+
+def _digit_clusters(text: str) -> list[str]:
+    """Digit material from the text as the caller spoke it: consecutive
+    digit-bearing tokens merge into one cluster ('or D 7 7 3 4' -> '7734',
+    'D7734' -> '7734'), so spaced/punctuated digits reconstruct cleanly.
+    Letter-only and word tokens break the cluster (phone numbers stay
+    separate from order references)."""
+    clusters: list[str] = []
+    cur = ""
+    for tok in _DIGIT_TOKEN_RE.findall(text):
+        digits = "".join(ch for ch in tok if ch.isdigit())
+        if digits:
+            cur += digits
+        elif cur:
+            clusters.append(cur)
+            cur = ""
+    if cur:
+        clusters.append(cur)
+    return clusters
+
+
+SNAP_MIN_CONFIDENCE = 0.8
+
+
+def _snap_order_id(text: str, candidate_orders: list[str],
+                   min_confidence: float = SNAP_MIN_CONFIDENCE) -> str | None:
+    """Snap digit clusters in the text to the closest candidate order
+    (Levenshtein similarity on digit sequences, >= min_confidence). Returns
+    the canonical candidate id, or None when nothing matches confidently —
+    a wrong snap is worse than asking the customer again."""
+    best, best_score = None, 0.0
+    for cand in candidate_orders:
+        cand_digits = "".join(ch for ch in str(cand) if ch.isdigit())
+        if not cand_digits:
+            continue
+        for cluster in _digit_clusters(text):
+            dist = _levenshtein(cluster, cand_digits)
+            score = 1.0 - dist / max(len(cluster), len(cand_digits))
+            if score > best_score:
+                best, best_score = str(cand), score
+    if best is not None and best_score >= min_confidence:
+        return best
+    return None
+
+
+def extract_order_id(text: str,
+                     candidate_orders: list[str] | None = None,
+                     min_confidence: float = SNAP_MIN_CONFIDENCE) -> str | None:
+    """Order-id extraction with contextual snapping.
+
+    1. Exact paths first: clean 'ORD-XXXXX' digits, spaced digits after an
+       ORD marker, and Hindi/English number-words (incl. Devanagari digits).
+    2. If nothing exact and candidates are known, snap garbled digit
+       clusters to the closest candidate above min_confidence.
+    """
+    order_id, _ = _order_id_span(text.translate(_DEVANAGARI_DIGITS))
+    if order_id:
+        return order_id
+    if candidate_orders:
+        return _snap_order_id(text.translate(_DEVANAGARI_DIGITS),
+                              candidate_orders, min_confidence)
+    return None
