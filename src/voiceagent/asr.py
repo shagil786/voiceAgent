@@ -12,7 +12,12 @@ points (get_asr/transcribe_wav stay backward compatible):
   it from known language context (loopback tests, future telephony routing).
 - get_asr_for_language(lang): en/hi/hinglish -> whisper small (proven);
   te/ta/bn/mr/gu/kn/ml/pa -> IndicConformer (all in its model-card language
-  list); None/unknown -> whisper small auto-detect.
+  list); None/unknown -> whisper small auto-detect. For contexts that already
+  know the language (telephony routing, loopback tests).
+- transcribe_wav_auto(path): the blind voice-loop entry (voice_agent) — one
+  whisper-small pass auto-detects the language; detected te/ta/native langs
+  skip whisper's decode (the hallucination part) and re-transcribe with
+  IndicConformer.
 
 Loopback measurement (M5b-1) showed whisper te WER >= 1.0 at every size
 (small hallucination-loops), hence the dedicated Indic engine.
@@ -112,10 +117,25 @@ class WhisperASRHandle:
         """Transcribe a WAV path or 16 kHz mono float array. language=None
         keeps whisper auto-detection; "hinglish" maps to a "hi" hint (the
         audio is Hindi — whisper has no "hinglish" code)."""
+        return self.transcribe_detected(audio, language)[0]
+
+    def transcribe_detected(self, audio, language: str | None = None,
+                            reroute: frozenset = frozenset()):
+        """One whisper pass returning (text, detected_language). With
+        language=None the encoder's language-id result comes back too — and
+        if it is in `reroute`, segments are NOT decoded (auto-detection
+        happens before any decoder pass, so skipping the iteration skips the
+        pathological decode — M5b-1: whisper te hallucination-loops at every
+        size) and text is None. An explicit language hint never reroutes:
+        the caller already knows better."""
         hint = {"hinglish": "hi"}.get(language, language)
         engine = self._ensure_engine()
-        segments, _ = engine.transcribe(audio, language=hint)
-        return " ".join(s.text.strip() for s in segments if s.text.strip()).strip()
+        segments, info = engine.transcribe(audio, language=hint)
+        lang = getattr(info, "language", None)
+        if hint is None and lang in reroute:
+            return None, lang
+        text = " ".join(s.text.strip() for s in segments if s.text.strip()).strip()
+        return text, lang
 
 
 def _real_indic_loader(model_id: str):
@@ -235,3 +255,19 @@ def transcribe_wav_routed(path: str, language: str | None = None) -> str:
     """Transcribe a WAV file through the language router. language=None
     defers to whisper's auto-detection on the small model."""
     return get_asr_for_language(language).transcribe(path, language=language)
+
+
+def transcribe_wav_auto(path: str, whisper: WhisperASRHandle | None = None,
+                        indic: IndicASRHandle | None = None) -> str:
+    """Production voice-loop entry (M5b-2): one whisper-small pass with
+    auto-detection. A detected te/ta/native-Indic language skips whisper's
+    decode (M5b-1: te hallucination-loops at every size) and re-transcribes
+    with IndicConformer; en/hi/hinglish/unknown decode on whisper small —
+    the proven path (en WER 0.038, hi 0.423). Handles are injectable for
+    tests; defaults are the process-wide lazy singletons."""
+    whisper = whisper if whisper is not None else _get_whisper_small()
+    indic = indic if indic is not None else _get_indic_asr()
+    text, lang = whisper.transcribe_detected(path, reroute=INDIC_ROUTE_LANGS)
+    if text is None:
+        return indic.transcribe(path, language=lang)
+    return text

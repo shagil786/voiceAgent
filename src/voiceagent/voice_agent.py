@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from voiceagent.asr import transcribe_wav
+from voiceagent.asr import transcribe_wav_auto
 from voiceagent.chat import run_turn
 from voiceagent.memory import SQLiteMemory
 from voiceagent.tts import speak
@@ -42,7 +42,7 @@ def voice_turn(agent, audio_path: str, out_audio: str | None = None,
     is its own conversation (fresh conv id) recorded in working memory; pass
     memory=None to use the shared data/out/memory.db store."""
     t0 = time.time()
-    transcript = transcribe_wav(audio_path)
+    transcript = transcribe_wav_auto(audio_path)
     conv_id = f"voice-{uuid.uuid4().hex[:12]}"
     out = run_turn(agent, transcript, conv_id=conv_id,
                    memory=memory if memory is not None else _default_memory())
@@ -51,8 +51,9 @@ def voice_turn(agent, audio_path: str, out_audio: str | None = None,
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             out_audio = tmp.name
     # M5b-1: reply TTS is multilingual — speak() auto-detects the reply's
-    # language (langid) and routes to the matching piper voice. The query
-    # side stays as-is (ASR is English for now, see M5b-2).
+    # language (langid) and routes to the matching piper voice. M5b-2: query
+    # ASR is language-routed too — whisper small auto-detects; te/ta/native
+    # Indic langs re-transcribe with IndicConformer (see voiceagent.asr).
     speak(out["reply"], out_path=out_audio)
     return VoiceTurnResult(
         transcript=transcript,

@@ -5,7 +5,6 @@ import time
 from pathlib import Path
 
 _tts = None
-_asr = None
 
 # piper-tts 1.7.0's PiperVoice.load takes a model .onnx path, not a voice
 # name. We download a small English voice once and cache it under data/models/.
@@ -78,14 +77,12 @@ def tts_latency(text: str = "Namaste, aapka order kal deliver ho jayega.") -> fl
 
 
 def asr_latency(audio_path: str | None = None) -> tuple[float, str]:
-    global _asr
-    if _asr is None:
-        from faster_whisper import WhisperModel
-        _asr = WhisperModel("tiny", device="cpu", compute_type="int8")
+    """Production-accurate ASR latency (M5b-2): the language-routed path —
+    whisper small auto-detect, with IndicConformer reroute for te/ta/native."""
+    from voiceagent.asr import transcribe_wav_auto
     t0 = time.time()
     if audio_path and Path(audio_path).exists():
-        segs, _ = _asr.transcribe(audio_path)
-        text = " ".join(s.text for s in segs).strip()
+        text = transcribe_wav_auto(audio_path)
     else:
         text = ""
     return time.time() - t0, text

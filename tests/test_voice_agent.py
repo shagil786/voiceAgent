@@ -2,6 +2,10 @@
 import wave
 import tempfile
 from pathlib import Path
+
+import pytest
+
+import voiceagent.voice_agent as voice_agent_module
 from voiceagent.memory import InMemoryMemory
 from voiceagent.voice_agent import voice_turn
 
@@ -13,6 +17,17 @@ class FakeAgent:
             "action": "order_status",
             "decision": type("D", (), {"verdict": "ALLOW", "reasons": ["ok"]})(),
         })()
+
+@pytest.fixture(autouse=True)
+def _stub_routed_asr(monkeypatch):
+    """M5b-2: voice_turn routes ASR by language (whisper small auto-detect +
+    IndicConformer reroute). These tests cover orchestration, not ASR quality
+    — and a real whisper pass on the 440 Hz tone could auto-detect an Indic
+    language and trigger the 2.4 GB conformer download. Routing itself is
+    stub-covered in test_asr_routing.py; real-inference coverage lives in
+    scripts/measure_asr.py / measure_indic_asr.py."""
+    monkeypatch.setattr(voice_agent_module, "transcribe_wav_auto",
+                        lambda path: "stub transcript")
 
 def _tone_wav(path, sr=16000, dur_s=0.3):
     import math
