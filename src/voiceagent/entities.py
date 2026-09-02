@@ -29,6 +29,42 @@ _NUM_WORDS = {
 }
 _SCALES = {"hundred": 100, "thousand": 1000, "lakh": 100000, "lac": 100000,
            "million": 1000000, "crore": 10000000}
+
+# Hindi (Devanagari) number words 0-99 — irregular compounds, so this is a
+# full table, not composition rules. Scales: सौ/हज़ार(हजार)/लाख/करोड़.
+_HI_NUM_WORDS = {
+    "शून्य": 0, "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पाँच": 5, "पांच": 5,
+    "छह": 6, "छे": 6, "सात": 7, "आठ": 8, "नौ": 9, "दस": 10,
+    "ग्यारह": 11, "बारह": 12, "तेरह": 13, "चौदह": 14, "पंद्रह": 15,
+    "सोलह": 16, "सत्रह": 17, "अठारह": 18, "उन्नीस": 19, "उन्नीस": 19,
+    "बीस": 20, "इक्कीस": 21, "बाईस": 22, "तेईस": 23, "चौबीस": 24,
+    "पच्चीस": 25, "छब्बीस": 26, "सत्ताईस": 27, "अट्ठाईस": 28, "उनतीस": 29,
+    "तीस": 30, "इकतीस": 31, "बत्तीस": 32, "तैंतीस": 33, "चौंतीस": 34,
+    "पैंतीस": 35, "छत्तीस": 36, "सैंतीस": 37, "अड़तीस": 38, "उनतालीस": 39,
+    "चालीस": 40, "इकतालीस": 41, "बयालीस": 42, "तैंतालीस": 43,
+    "चवालीस": 44, "पैंतालीस": 45, "छियालीस": 46, "सैंतालीस": 47,
+    "अड़तालीस": 48, "उनचास": 49, "पचास": 50, "इक्यावन": 51, "बावन": 52,
+    "तिरपन": 53, "चौवन": 54, "पचपन": 55, "छप्पन": 56, "सत्तावन": 57,
+    "अट्ठावन": 58, "उनसठ": 59, "साठ": 60, "इकसठ": 61, "एकसठ": 61,
+    "बासठ": 62, "तिरसठ": 63, "चौंसठ": 64, "पैंसठ": 65, "छियासठ": 66,
+    "सड़सठ": 67, "अड़सठ": 68, "उनहत्तर": 69, "सत्तर": 70, "इकहत्तर": 71,
+    "बहत्तर": 72, "तिहत्तर": 73, "चौहत्तर": 74, "पचहत्तर": 75,
+    "छिहत्तर": 76, "सतहत्तर": 77, "अठहत्तर": 78, "उनासी": 79, "अस्सी": 80,
+    "इक्यासी": 81, "बयासी": 82, "तिरासी": 83, "चौरासी": 84, "पचासी": 85,
+    "छियासी": 86, "सतासी": 87, "अठासी": 88, "नवासी": 89, "नब्बे": 90,
+    "इक्यानवे": 91, "बानवे": 92, "तिरानवे": 93, "चौरानवे": 94,
+    "पचानवे": 95, "छियानवे": 96, "सत्तानवे": 97, "अट्ठानवे": 98,
+    "निन्यानवे": 99,
+}
+_HI_SCALES = {"सौ": 100, "हज़ार": 1000, "हजार": 1000, "लाख": 100000,
+              "करोड़": 10000000}
+
+# Observed ASR garbles of Hindi number words (from real loopback voice
+# transcripts, 2026-09-03): 'एकत्र' is how Qwen3-ASR heard 'इकहत्तर' in
+# "ORD-55671" spoken as "पचपन हजार छह सौ इकहत्तर". Extend as new garbles
+# are observed — each alias cites the transcript it came from.
+_HI_GARBLES = {"एकत्र": "इकहत्तर", "एकतर": "इकहत्तर"}
+
 _NUM_TOKENS = set(_NUM_WORDS) | set(_SCALES) | {"and"}
 
 _AMOUNT_RE = re.compile(
@@ -42,18 +78,42 @@ _ORDER_PREFIX_RE = re.compile(r"\bORD\b[-#\s:]*", re.IGNORECASE)
 _PUNCT = ".,;:!?\"'()[]{}"
 
 
+def _canon_token(tok: str) -> str | None:
+    """Canonical number token (en or hi) from a raw token, else None.
+    Pure digits count too ('6 हजार' = 6000)."""
+    w = tok.strip(_PUNCT).lower()
+    if w in _HI_GARBLES:
+        w = _HI_GARBLES[w]
+    if (w in _NUM_WORDS or w in _SCALES or w in _HI_NUM_WORDS
+            or w in _HI_SCALES or w == "and"):
+        return w
+    if w.isdigit():
+        return w
+    return None
+
+
+def _token_value(w: str) -> int | None:
+    if w in _NUM_WORDS:
+        return _NUM_WORDS[w]
+    if w in _HI_NUM_WORDS:
+        return _HI_NUM_WORDS[w]
+    if w.isdigit():
+        return int(w)
+    return None
+
+
 def _words_after(text: str, prefix_re: re.Pattern) -> list[str]:
-    """Tokens following a prefix match, cut at the first non-number word."""
+    """Canonical number tokens following a prefix match, cut at the first
+    non-number word."""
     m = prefix_re.search(text)
     if not m:
         return []
     out = []
     for tok in text[m.end():].split():
-        w = tok.strip(_PUNCT).lower()
-        if w in _NUM_TOKENS:
-            out.append(w)
-        else:
+        w = _canon_token(tok)
+        if w is None:
             break
+        out.append(w)
     return out
 
 
@@ -64,41 +124,50 @@ class Entities:
 
 
 def words_to_number(tokens: list[str]) -> int | None:
-    """English number-words -> int, scale form or digit-list form.
+    """Bilingual (English + Hindi) number words -> int: scale form, digit-list
+    form, and digit+scale combos ('6 हजार' = 6000).
 
     Scale form:  ["four","thousand","eight","hundred","twenty","one"] -> 4821.
-    Digit-list:  ["four","eight","two","one"] -> 4821 (IDs are spoken
-    digit-by-digit). Returns None unless EVERY token is a number word —
-    a partial match is not a number ("one agent" must not become 1).
+    Digit-list:  ["four","eight","two","one"] -> 4821 (IDs spoken digit-wise).
+    Hindi:       ["पचपन","हजार","छह","सौ","इकहत्तर"] -> 55671.
+    Returns None unless EVERY token is a number word — a partial match is
+    not a number ("one agent" must not become 1).
     """
-    clean = [t.strip(_PUNCT).lower() for t in tokens]
+    clean = []
+    for t in tokens:
+        w = _canon_token(t)
+        if w is None:
+            return None
+        clean.append(w)
     scale_total, current, seen = 0, 0, False
     scale_seen = False
     unit_digits: list[int] = []  # consecutive unit words before any scale
     for w in clean:
-        if w in _NUM_WORDS:
-            v = _NUM_WORDS[w]
-            current += v
-            seen = True
-            if not scale_seen and v < 10:
-                unit_digits.append(v)
-        elif w == "hundred":
-            current = max(current, 1) * 100
+        if w in _SCALES or w in _HI_SCALES:
+            scale = _SCALES.get(w) or _HI_SCALES[w]
+            scale_total += max(current, 1) * scale
+            current = 0
             scale_seen = True
             unit_digits = []
-        elif w in _SCALES:
-            scale_total += max(current, 1) * _SCALES[w]
-            current = 0
+        elif w == "hundred" or w == "सौ":
+            current = max(current, 1) * 100
             scale_seen = True
             unit_digits = []
         elif w == "and":
             continue
         else:
-            return None
+            v = _token_value(w)
+            if v is None:
+                return None
+            current += v
+            seen = True
+            if not scale_seen and 0 <= v < 10:
+                unit_digits.append(v)
     if not seen:
         return None
     # Digit-list reading: every token was a spoken digit ("four eight two one").
-    if not scale_seen and len(unit_digits) == len(clean) and len(clean) >= 2:
+    if (not scale_seen and len(unit_digits) == len(clean)
+            and len(clean) >= 2):
         return int("".join(str(d) for d in unit_digits))
     return scale_total + current
 
@@ -115,16 +184,47 @@ def _order_id_span(text: str) -> tuple[str | None, tuple[int, int] | None]:
     end = pm.end()
     consumed: list[str] = []
     for tok in re.finditer(r"\S+", text[pm.end():]):
-        w = tok.group(0).strip(_PUNCT).lower()
-        if w in _NUM_TOKENS:
-            consumed.append(w)
-            end = pm.end() + tok.end()
-        else:
+        w = _canon_token(tok.group(0))
+        if w is None:
             break
+        consumed.append(w)
+        end = pm.end() + tok.end()
     n = words_to_number(consumed) if consumed else None
     if n is not None and 4 <= len(str(n)) <= 10:  # same shape as _ORDER_RE
         return f"ORD-{n}", (pm.start(), end)
     return None, None
+
+
+def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
+    """Hindi bare scale phrases ('6 हजार', 'पाँच हजार रुपये' without the
+    currency word captured) — in support speech a 'X हजार' phrase is money.
+    Requires हजार/लाख/करोड़ (सौ alone is too ambiguous without currency)."""
+    runs: list[list[str]] = []
+    run: list[str] = []
+    for tok in order_text.split():
+        w = _canon_token(tok)
+        if w is None:
+            if run:
+                runs.append(run)
+                run = []
+        else:
+            run.append(w)
+    if run:
+        runs.append(run)
+    best: float | None = None
+    for run in runs:
+        if not any(w in _HI_SCALES and _HI_SCALES[w] >= 1000 for w in run):
+            continue
+        n = words_to_number(run)
+        if n is None or n < 100:
+            continue
+        # Guard: long multi-part phrases without an explicit digit are
+        # order-id-shaped ('पचपन हजार छह सौ इकहत्तर' = an ORD id, not
+        # ₹55,671). Money shorthand is '6 हजार' (digit present) or a short
+        # phrase ('पाँच हजार').
+        if any(t.isdigit() for t in run) or len(run) <= 2:
+            best = float(n)
+    return best
 
 
 def _amount_from_words(text: str) -> float | None:
@@ -160,5 +260,7 @@ def extract_entities(text: str) -> Entities:
             break
     if amount is None:
         amount = _amount_from_words(order_text)
+    if amount is None:
+        amount = _amount_from_bare_hi_phrase(order_text)
 
     return Entities(amount=amount, order_id=order_id)

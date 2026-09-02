@@ -65,3 +65,43 @@ def test_amount_from_currency_number_words():
 def test_devanagari_digits_normalized():
     e = extract_entities("मेरा ऑर्डर ४८२१ का स्टेटस चेक करो ORD-4821")
     assert e.order_id == "ORD-4821"
+
+
+# --------------------------------------------------------------------------
+# M5b-4b: Hindi number words (0-99 table), digit+scale combos, observed ASR
+# garble aliases — the fresh-caller voice e2e showed hi customers' amounts
+# and order ids unextractable from Devanagari transcripts.
+# --------------------------------------------------------------------------
+
+def test_hindi_scale_order_id():
+    # "ORD-55671" spoken: पचपन हजार छह सौ इकहत्तर
+    e = extract_entities("मेरा ऑर्डर ORD पचपन हजार छह सौ इकहत्तर है")
+    assert e.order_id == "ORD-55671"
+
+def test_hindi_digit_plus_scale_amount():
+    # Observed transcript: "₹6000" spoken as "6 हजार"
+    e = extract_entities("मुझे 6 हजार का रिफंड चाहिए")
+    assert e.amount == 6000.0
+
+def test_hindi_garble_alias_from_observed_transcript():
+    # Real Qwen transcript of the hinglish order query (2026-09-03):
+    # 'पचपन हजार छह सौ एकत्र' — एकत्र is the ASR garble of इकहत्तर.
+    # With an ORD marker the alias recovers the full id:
+    e = extract_entities("मेरा ऑर्डर ORD पचपन हजार छह सौ एकत्र है")
+    assert e.order_id == "ORD-55671"
+    # Without any ORD marker the same run is order-id-SHAPED: it must NOT
+    # read as an amount (₹55,671) and cannot become an order id either.
+    e2 = extract_entities("ओड़ा ऐडी ओ ऐडी पचपन हजार छह सौ एकत्र है")
+    assert e2.order_id is None
+    assert e2.amount is None
+
+def test_hindi_bare_scale_amount_not_too_small():
+    # 'सौ' alone without currency must NOT become an amount (ambiguous),
+    # but '6 हजार' style phrases always qualify.
+    e = extract_entities("मुझे तीन सौ लोग चाहिए")
+    assert e.amount is None
+
+def test_english_path_unchanged_regression():
+    e = extract_entities("Where is my order ORD-55671?")
+    assert e.order_id == "ORD-55671"
+    assert e.amount is None
