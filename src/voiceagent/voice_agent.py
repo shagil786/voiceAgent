@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from voiceagent.asr import transcribe_wav
-from voiceagent.tts import synthesize_to_wav
 from voiceagent.chat import run_turn
 from voiceagent.memory import SQLiteMemory
+from voiceagent.tts import speak
 
 _MEMORY: SQLiteMemory | None = None
 
@@ -50,7 +50,10 @@ def voice_turn(agent, audio_path: str, out_audio: str | None = None,
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             out_audio = tmp.name
-    synthesize_to_wav(out["reply"], out_audio)
+    # M5b-1: reply TTS is multilingual — speak() auto-detects the reply's
+    # language (langid) and routes to the matching piper voice. The query
+    # side stays as-is (ASR is English for now, see M5b-2).
+    speak(out["reply"], out_path=out_audio)
     return VoiceTurnResult(
         transcript=transcript,
         reply=out["reply"],

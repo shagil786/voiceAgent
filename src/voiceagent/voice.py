@@ -15,19 +15,38 @@ PIPER_CONFIG_URL = ("https://huggingface.co/rhasspy/piper-voices/resolve/main/"
                     "en/en_US/lessac/medium/en_US-lessac-medium.onnx.json")
 
 
-def _ensure_piper_model(model_dir: str = "data/models") -> Path:
+def voice_urls(voice_name: str) -> tuple[str, str]:
+    """HF onnx+json URLs for a piper voice name like 'hi_IN-pratham-medium'.
+    Piper names are <lang>_<region>-<speaker>-<quality>, which maps 1:1 onto
+    the rhasspy/piper-voices repo layout."""
+    region_lang, speaker, quality = voice_name.split("-")
+    lang, _ = region_lang.split("_", 1)
+    base = ("https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+            f"{lang}/{region_lang}/{speaker}/{quality}")
+    return f"{base}/{voice_name}.onnx", f"{base}/{voice_name}.onnx.json"
+
+
+def ensure_voice(voice_name: str, model_dir: str = "data/models") -> Path:
+    """Download a piper voice's .onnx + .json into model_dir if missing and
+    return the onnx path. Idempotent: existing files are never re-downloaded."""
     Path(model_dir).mkdir(parents=True, exist_ok=True)
-    onnx = Path(model_dir) / "en_US-lessac-medium.onnx"
-    cfg = Path(model_dir) / "en_US-lessac-medium.onnx.json"
+    onnx = Path(model_dir) / f"{voice_name}.onnx"
+    cfg = Path(model_dir) / f"{voice_name}.onnx.json"
     if not onnx.exists():
+        url, _ = voice_urls(voice_name)
+        print(f"downloading piper voice {url} ...")
         import urllib.request
-        print(f"downloading piper voice {PIPER_VOICE_URL} ...")
-        urllib.request.urlretrieve(PIPER_VOICE_URL, onnx)
+        urllib.request.urlretrieve(url, onnx)
     if not cfg.exists():
+        _, cfg_url = voice_urls(voice_name)
+        print(f"downloading piper config {cfg_url} ...")
         import urllib.request
-        print(f"downloading piper config {PIPER_CONFIG_URL} ...")
-        urllib.request.urlretrieve(PIPER_CONFIG_URL, cfg)
+        urllib.request.urlretrieve(cfg_url, cfg)
     return onnx
+
+
+def _ensure_piper_model(model_dir: str = "data/models") -> Path:
+    return ensure_voice("en_US-lessac-medium", model_dir)
 
 
 def _get_tts():
