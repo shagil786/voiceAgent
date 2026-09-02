@@ -28,8 +28,7 @@ DEFAULT_ACTIONS = [
 
 _DEFAULT_PERSONA = ("customer support assistant for an Indian ecommerce "
                     "company")
-_SYSTEM_PROMPT_TMPL = (
-    "You are a {persona}. "
+_INSTRUCTION_TAIL = (
     "Answer directly and concisely — do NOT use a thinking or reasoning "
     "phase. Answer ONLY from the provided context. "
     "Always address the customer's specific reference (order id, phone, "
@@ -40,16 +39,31 @@ _SYSTEM_PROMPT_TMPL = (
     "If no action is needed, do not emit an ACTION line."
 )
 
-SYSTEM_PROMPT = _SYSTEM_PROMPT_TMPL.format(actions=", ".join(DEFAULT_ACTIONS),
-                                           persona=_DEFAULT_PERSONA)
+SYSTEM_PROMPT = ("You are a " + _DEFAULT_PERSONA + ". " + _INSTRUCTION_TAIL
+                 .format(actions=", ".join(DEFAULT_ACTIONS)))
 
 
-def system_prompt_with_actions(actions: list[str],
-                               persona: str = _DEFAULT_PERSONA) -> str:
-    """SYSTEM_PROMPT with the action list taken from policy-as-code and the
-    persona from the tenant config (M6a de-hardcoding)."""
-    return _SYSTEM_PROMPT_TMPL.format(actions=", ".join(actions),
-                                      persona=persona)
+def system_prompt_with_actions(actions: list[str], persona=None) -> str:
+    """System prompt from the policy's action vocabulary and the tenant's
+    structured persona (M6b): the prompt is COMPILED from reviewable fields
+    — role, tone, promise permissions, forbidden claims — so compliance can
+    assert things like 'the agent never promises guaranteed refunds' in CI.
+    persona=None keeps the historical default, byte-identical."""
+    if persona is None or isinstance(persona, str):
+        head = "You are a " + (persona or _DEFAULT_PERSONA) + "."
+    else:
+        p = persona
+        lines = [f"You are a {p.role}."]
+        if p.tone:
+            lines.append(f"Tone: {p.tone}.")
+        if p.may_promise:
+            lines.append("You may promise exactly: "
+                         + "; ".join(p.may_promise)
+                         + ". Never promise anything else.")
+        if p.never_say:
+            lines.append("Never say or imply: " + "; ".join(p.never_say) + ".")
+        head = " ".join(lines)
+    return head + " " + _INSTRUCTION_TAIL.format(actions=", ".join(actions))
 
 @dataclass
 class AgentResult:
