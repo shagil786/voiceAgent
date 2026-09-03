@@ -18,6 +18,7 @@ class ToolEntry:
     connection_ref: str | None = None
     policy_action: str = ""
     scopes: list[str] = field(default_factory=list)
+    dry_run: dict | None = None
 
 @dataclass
 class EvalCheck:
