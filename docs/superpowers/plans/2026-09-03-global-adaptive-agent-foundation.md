@@ -231,7 +231,7 @@ def write_live(deploy_dir: str | Path, version: str) -> None:
     Path(deploy_dir, LIVE_POINTER).write_text(version + "\n", encoding="utf-8")
 ```
 
-Golden files (write exactly): `bundle.json` `{"schema_version": 1, "deploy_id": "example", "spec": {"role": "example support", "tone": "concise", "patterns": ["answer"], "disclosures": []}}`; `tools.json` one entry `{"name": "fetch_status", "description": "Look up an order", "parameters": {"type": "object", "properties": {"order_id": {"type": "string"}}}, "state": "PROPOSED", "connection_ref": null, "policy_action": "order_status", "scopes": ["read"]}`; `policies.yaml` minimal (`order_status:\n  allow: true\n`); `evals.json` two entries with one turn each.
+Golden files (write exactly): `bundle.json` `{"schema_version": 1, "deploy_id": "example", "spec": {"role": "example support", "tone": "concise", "patterns": ["answer"], "disclosures": []}}`; `tools.json` one entry `{"name": "fetch_status", "description": "Look up an order", "parameters": {"type": "object", "properties": {"order_id": {"type": "string"}}}, "state": "PROPOSED", "connection_ref": null, "policy_action": "order_status", "scopes": ["read"]}`; `policies.yaml` minimal (`order_status:\n  allow: true\n` plus `refund:\n  require_auth: true\n  max_without_approval: 5000\n` — required because the Task 1 test mutates `policies["refund"]["max_without_approval"]`); `evals.json` two entries with one turn each.
 
 - [ ] **Step 4: Run test to verify it passes**
 
