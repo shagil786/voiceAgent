@@ -49,6 +49,13 @@ def _load_policies_yaml(p: Path) -> dict:
         return loaded
     raise ValueError(f"policy file {p} did not load as a non-empty mapping")
 
+def _dump_policies_yaml(policies: dict, p: Path) -> None:
+    """Write policies using the same YAML approach as _load_policies_yaml
+    (yaml.safe_dump, no new dependency)."""
+    import yaml
+    with open(p, "w", encoding="utf-8") as f:
+        yaml.safe_dump(policies, f, default_flow_style=False, sort_keys=False)
+
 def load_bundle(path: str | Path) -> Bundle:
     d = Path(path)
     meta = _read_json(d / "bundle.json")
@@ -81,6 +88,7 @@ def save_bundle(bundle: Bundle, path: str | Path) -> None:
     (d / "evals.json").write_text(json.dumps(
         [{"name": e.name, "turns": e.turns, "assert": e.assert_}
          for e in bundle.evals], indent=2, sort_keys=True), encoding="utf-8")
+    _dump_policies_yaml(bundle.policies, d / "policies.yaml")
     kdir = d / "knowledge"; kdir.mkdir(exist_ok=True)
     for i, ch in enumerate(bundle.knowledge):
         (kdir / f"{i:03d}.json").write_text(

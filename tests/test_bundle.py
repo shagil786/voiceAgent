@@ -36,3 +36,15 @@ def test_live_pointer_roundtrip(tmp_path):
     assert read_live(tmp_path) is None
     write_live(tmp_path, "v2")
     assert read_live(tmp_path) == "v2"
+
+def test_save_load_roundtrip(tmp_path):
+    b = load_bundle(GOLDEN)
+    save_bundle(b, tmp_path / "v1")
+    b2 = load_bundle(tmp_path / "v1")
+    assert b2.schema_version == b.schema_version
+    assert b2.deploy_id == b.deploy_id
+    assert b2.spec == b.spec
+    assert b2.tools == b.tools
+    assert b2.policies == b.policies
+    assert b2.knowledge == b.knowledge
+    assert b2.evals == b.evals
