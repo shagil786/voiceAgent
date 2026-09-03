@@ -5,3 +5,4 @@ data/index/
 data/out/
 data/models/
 :memory:.ses
+.env
