@@ -27,6 +27,7 @@ from typing import Any
 from voiceagent.decisionlog import DecisionEntry, DecisionLog
 from voiceagent.memory import ConversationMemory, InMemoryMemory, Turn, now_ts
 from voiceagent.policy import PolicyContext
+from voiceagent.sentiment import Frustration, detect_frustration
 from voiceagent.swarm.blackboard import BlackboardState, CallerProfile
 from voiceagent.swarm.frontier import (
     FrontierAgentBridge,
@@ -132,6 +133,10 @@ class Orchestrator:
         None defers to the profile's own flag. governs require_auth policies.
         """
         state = self._session_state(session_id, profile, authenticated)
+        # Deterministic sentiment: every governed evaluation this turn sees
+        # the caller's frustration level (policies route on it via
+        # escalate_when — conditions are data, not code).
+        frustration = detect_frustration(user_text)
         messages = self.brain.build_messages(state, user_text)
         if _system_prefix:  # campaign placement prepends its block
             messages[0] = {"role": "system",
@@ -153,7 +158,7 @@ class Orchestrator:
             for call in reply.tool_calls:
                 raw_tool_calls += 1
                 payload, entry, is_escalation = self._dispatch_tool_call(
-                    call, state, session_id)
+                    call, state, session_id, frustration)
                 if entry is not None:
                     actions.append(entry)
                 escalated = escalated or is_escalation
@@ -244,12 +249,14 @@ class Orchestrator:
                                for c in reply.tool_calls]}
 
     def _dispatch_tool_call(self, call: FrontierToolCall, state: BlackboardState,
-                            session_id: str) -> tuple[dict, dict | None, bool]:
+                            session_id: str,
+                            frustration: Frustration) -> tuple[dict, dict | None, bool]:
         """Route one tool call. Returns (tool-result payload fed back to the
         brain, TurnResult.actions entry or None, escalated flag)."""
         gmeta = self._gateway_tools.get(call.name)
         if gmeta is not None:
-            return self._run_governed(call, gmeta, state, session_id)
+            return self._run_governed(call, gmeta, state, session_id,
+                                      frustration)
         # read-only brain tool: explicit handler execution via the bridge
         try:
             value = self.brain.execute_call(call)
@@ -259,8 +266,8 @@ class Orchestrator:
                      "error": f"{type(exc).__name__}: {exc}"}, None, False)
 
     def _run_governed(self, call: FrontierToolCall, gmeta: dict,
-                      state: BlackboardState,
-                      session_id: str) -> tuple[dict, dict | None, bool]:
+                      state: BlackboardState, session_id: str,
+                      frustration: Frustration) -> tuple[dict, dict | None, bool]:
         """Governed gateway tool: policy verdict first, execution ONLY on
         ALLOW (via the runner), verdict + reasons always fed back."""
         action = gmeta.get("action", call.name)
@@ -286,7 +293,9 @@ class Orchestrator:
                     if isinstance(params.get("amount"), (int, float))
                     else None),
             signals={"risk_tier": state.profile.risk_tier,
-                     "session_id": session_id},
+                     "session_id": session_id,
+                     "frustrated": frustration.frustrated,
+                     "frustration_level": frustration.level},
         )
         outcome = self.runner.run(action, ctx, call.name, params,
                                   conv_id=session_id)
@@ -305,5 +314,13 @@ class Orchestrator:
             payload["error"] = result.error
         if outcome.decision_verdict != "ALLOW":
             entry["reasons"] = list(outcome.reasons)
-        escalated = outcome.decision_verdict == "ESCALATE"
+        # Escalation semantics: an ESCALATE verdict is escalation; so is a
+        # SUCCESSFUL governed handoff (the brain proposed escalate_to_human
+        # and policy ALLOWed it — the "I'm connecting you to a human" line
+        # must always have a real, auditable action behind it). A blocked
+        # handoff is not an escalation.
+        escalated = (outcome.decision_verdict == "ESCALATE"
+                     or (action == "escalate_to_human"
+                         and outcome.decision_verdict == "ALLOW"
+                         and bool(outcome.executed)))
         return payload, entry, escalated

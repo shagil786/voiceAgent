@@ -73,3 +73,14 @@ reschedule_delivery:
 # SHIPPED/DELIVERED) is checked separately by the gateway.
 cancel_order:
   require_auth: true
+
+# Handoff to a human is always permitted — auditability is the point: every
+# page lands in the decision log.
+escalate_to_human:
+  allow: true
+
+# A return is a destructive-ish post-sale action — requires the customer to
+# be authenticated; the ToolGateway precondition (status SHIPPED/DELIVERED)
+# is checked separately by the gateway.
+initiate_return:
+  require_auth: true

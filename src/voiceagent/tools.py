@@ -47,6 +47,7 @@ class MockERP:
                          "orders": ["ORD-4821", "ORD-7734"]},
         }
         self.refunds: list[dict] = []
+        self.handoffs: list[dict] = []
         # Failure injection: the next mutating/reading operation raises like
         # a hung backend, so graceful timeout handling is testable offline.
         self.fail_next = False
@@ -88,6 +89,19 @@ class MockERP:
         self.refunds.append(refund)
         return refund
 
+    def mark_return(self, order_id: str, reason: str) -> dict:
+        self._check_live()
+        o = self.orders[order_id]
+        o["status"] = "RETURN_REQUESTED"
+        o["return_reason"] = reason
+        return copy.deepcopy(o)
+
+    def record_handoff(self, reason: str) -> dict:
+        self._check_live()
+        self.handoffs.append({"reason": reason,
+                              "ts": time.strftime("%Y-%m-%dT%H:%M:%S")})
+        return {"handed_off": True, "reason": reason}
+
 
 # ---------------------------------------------------------------------------
 # Tool specs, precondition evaluation, gateway
@@ -120,6 +134,14 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
         preconditions=({"field": "status", "op": "in",
                         "value": ["CONFIRMED", "SHIPPED"]},)),
     "initiate_refund": ToolSpec(params=("order_id", "amount", "reason")),
+    # Escalation is always permitted — no preconditions; the point is that
+    # the handoff becomes a real, auditable governed action.
+    "escalate_to_human": ToolSpec(params=("reason",)),
+    # Only shipped/delivered orders can be returned.
+    "initiate_return": ToolSpec(
+        params=("order_id", "reason"),
+        preconditions=({"field": "status", "op": "in",
+                        "value": ["SHIPPED", "DELIVERED"]},)),
 }
 
 
@@ -182,12 +204,15 @@ class ToolGateway:
             return ToolResult(ok=replay.ok, value=replay.value,
                               error=replay.error, idempotent_replay=True)
 
+        # Order-scoped tools fetch the record for precondition checks; tools
+        # whose spec has no order_id (escalate_to_human) skip the fetch.
         try:
-            order = self.erp.get_order(params["order_id"])
+            order = (self.erp.get_order(params["order_id"])
+                     if "order_id" in spec.params else None)
         except TimeoutError:
             return ToolResult(ok=False,
                               error="backend_timeout (graceful; ticket issued)")
-        if order is None:
+        if "order_id" in spec.params and order is None:
             return ToolResult(ok=False,
                               error=f"order_not_found: {params['order_id']}")
         for cond in spec.preconditions:
@@ -208,6 +233,11 @@ class ToolGateway:
                 value = self.erp.initiate_refund(params["order_id"],
                                                  float(params["amount"]),
                                                  params["reason"])
+            elif tool_name == "escalate_to_human":
+                value = self.erp.record_handoff(params["reason"])
+            elif tool_name == "initiate_return":
+                value = self.erp.mark_return(params["order_id"],
+                                             params["reason"])
             else:  # pragma: no cover — specs and bindings stay in sync
                 return ToolResult(ok=False,
                                   error=f"unbound_tool: {tool_name}")
