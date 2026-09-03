@@ -37,6 +37,12 @@ def test_owner_paste_ranks_first():
     ranked = ingest.rank_chunks(pasted, crawled)
     assert ranked[0]["source"] == "owner_paste:policy-doc"
 
+def test_gaps_capped_at_max_pages():
+    pages = {"https://acme.test/": "".join(
+        f'<a href="/m{i}">x</a>' for i in range(200)) + "<p>home</p>"}
+    chunks = ingest.fetch_site("https://acme.test/", fetcher=_stub_fetcher_factory(pages))
+    assert len(chunks) <= ingest.MAX_PAGES
+
 def test_stub_fetcher_skips_robots_entirely(monkeypatch):
     import urllib.request
     def _boom(*a, **k):

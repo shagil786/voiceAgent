@@ -82,9 +82,13 @@ def fetch_site(seed_url: str, allowlist: list[str] | None = None,
             continue
         if not _allowed(final_url, seed_host, extra):
             continue
-        p = _TextLinks()
-        p.feed(html)
-        text = " ".join(p.text)[:4000]
+        try:
+            p = _TextLinks()
+            p.feed(html)
+            text = " ".join(p.text)[:4000]
+        except Exception as e:  # gap, never half-parse
+            gaps.append(f"{final_url}: parse error: {e}")
+            continue
         if text:
             chunks.append({"text": text, "source": final_url,
                            "crawled_at": datetime.now(timezone.utc).isoformat()})
@@ -96,6 +100,7 @@ def fetch_site(seed_url: str, allowlist: list[str] | None = None,
                 if not _allowed(nxt, seed_host, extra):
                     continue
                 queue.append((nxt, depth + 1))
+    gaps = gaps[:MAX_PAGES - len(chunks)]
     for g in gaps:
         chunks.append({"text": "", "source": f"gap:{g}",
                        "crawled_at": datetime.now(timezone.utc).isoformat()})
