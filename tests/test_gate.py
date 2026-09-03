@@ -38,6 +38,16 @@ def test_scope_widening_resets_to_approved():
     assert gate.tool_state(b2, "fetch_status") == "APPROVED"
     assert gate.get_dry_run(b2, "fetch_status") is None
 
+def test_dry_run_requires_approved_first():
+    b = load_bundle(GOLDEN)
+    probe = {"auth_ok": True,
+             "benign_call": {"request": "r", "response": "s"}}
+    with pytest.raises(ValueError):
+        gate.record_dry_run(b, "fetch_status", probe, confirmed_by="owner")
+    b = gate.approve_tool(b, "fetch_status")
+    b = gate.record_dry_run(b, "fetch_status", probe, confirmed_by="owner")
+    assert gate.tool_state(b, "fetch_status") == "CONNECTED"
+
 def test_runner_blocks_unconnected_tool():
     from voiceagent.tools import GovernedToolRunner, ToolGateway
     from voiceagent.policy import PolicyEngine, PolicyContext

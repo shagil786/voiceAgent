@@ -56,6 +56,10 @@ def get_dry_run(bundle: Bundle, name: str) -> dict | None:
 
 def record_dry_run(bundle: Bundle, name: str, probe: dict,
                    confirmed_by: str) -> Bundle:
+    if _find_tool(bundle, name).state != "APPROVED":
+        raise ValueError(
+            f"tool {name!r} must be APPROVED before dry-run; "
+            "call approve_tool first")
     if not confirmed_by or not confirmed_by.strip():
         raise ValueError("dry-run requires a non-empty confirmed_by (owner)")
     if not isinstance(probe, dict) or probe.get("auth_ok") is not True:
