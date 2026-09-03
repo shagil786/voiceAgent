@@ -1,7 +1,7 @@
 """Runnable self-checks: each bundle eval is real Orchestrator.handle_turn calls.
 
-Default harness is the deterministic ScriptedBrain from tests/test_orchestrator
-(reused via import, never reinvented), wrapped in FrontierAgentBridge with
+Default harness is the deterministic ScriptedClient from voiceagent.deploy.stub
+(shipped with src — never the tests package), wrapped in FrontierAgentBridge with
 runner=None — so no governed tools fire and assertions cover reply content
 (`contains`); `action`/`verdict` assertions resolve against the turn's first
 governed action entry and will fail closed when no action ran.
@@ -33,12 +33,12 @@ def _default_bridge(ev) -> Any:
     a `contains` assertion get a stable placeholder reply.
     """
     from voiceagent.swarm.frontier import FrontierAgentBridge
-    from tests.test_orchestrator import ScriptedBrain, reply
+    from voiceagent.deploy.stub import make_default_client
 
     assertion = ev.assert_ or {}
     turns = ev.turns or [{}]
     seed = assertion.get("contains", f"ok {ev.name}")
-    stub = ScriptedBrain([reply(f"selfcheck {ev.name}: {seed}") for _ in turns])
+    stub = make_default_client([f"selfcheck {ev.name}: {seed}" for _ in turns])
     return FrontierAgentBridge(stub)
 
 
