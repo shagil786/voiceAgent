@@ -455,7 +455,8 @@ def test_compiler_emits_gated_bundle_with_10_evals():
 def test_external_tools_default_require_approval():
     chunks = [ingest_owner_paste("We book site visits.")]
     b = compile_bundle("x", chunks, INTERVIEW)
-    for t in b.tools:
+    # escalate_to_human is always-allowed by design; external tools default gated
+    for t in b.tools[1:]:
         action = t.policy_action or t.name
         assert b.policies.get(action, {}).get("require_approval") is True
 ```
