@@ -16,11 +16,13 @@ _REDACT_KEYS = re.compile(r"key|token|secret|password|auth", re.IGNORECASE)
 
 
 def redact(obj):
-    """Recursively replace values whose key matches key|token|secret|
-    password|auth (case-insensitive) with "[REDACTED]". Lists pass through;
-    non-container values return unchanged."""
+    """Recursively replace STRING values whose key matches key|token|secret|
+    password|auth (case-insensitive) with "[REDACTED]". Non-string values
+    (flags, numbers, nested dicts/lists) pass through or recurse, so record
+    fields like auth_ok: True are never corrupted."""
     if isinstance(obj, dict):
-        return {k: ("[REDACTED]" if _REDACT_KEYS.search(str(k)) else redact(v))
+        return {k: ("[REDACTED]" if isinstance(v, str) and _REDACT_KEYS.search(str(k))
+                else redact(v))
                 for k, v in obj.items()}
     if isinstance(obj, list):
         return [redact(v) for v in obj]
@@ -51,7 +53,7 @@ def tool_state(bundle: Bundle, name: str) -> str:
 
 
 def get_dry_run(bundle: Bundle, name: str) -> dict | None:
-    return _find_tool(bundle, name).dry_run
+    return copy.deepcopy(_find_tool(bundle, name).dry_run)
 
 
 def record_dry_run(bundle: Bundle, name: str, probe: dict,

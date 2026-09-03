@@ -16,6 +16,10 @@ def test_lifecycle_proposed_approved_connected():
     assert gate.tool_state(b, "fetch_status") == "CONNECTED"
     stored = gate.get_dry_run(b, "fetch_status")
     assert stored["api_key"] == "[REDACTED]"
+    assert stored["auth_ok"] is True
+    stored["benign_call"]["request"] = "MUTATED"
+    fresh = gate.get_dry_run(b, "fetch_status")
+    assert fresh["benign_call"]["request"] == "GET /status?limit=1"
 
 def test_dry_run_requires_auth_and_confirmation():
     b = load_bundle(GOLDEN)
@@ -47,6 +51,10 @@ def test_dry_run_requires_approved_first():
     b = gate.approve_tool(b, "fetch_status")
     b = gate.record_dry_run(b, "fetch_status", probe, confirmed_by="owner")
     assert gate.tool_state(b, "fetch_status") == "CONNECTED"
+
+def test_approve_tool_unknown_name_raises():
+    with pytest.raises(ValueError):
+        gate.approve_tool(load_bundle(GOLDEN), "nope")
 
 def test_runner_blocks_unconnected_tool():
     from voiceagent.tools import GovernedToolRunner, ToolGateway
