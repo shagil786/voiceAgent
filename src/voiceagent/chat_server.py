@@ -24,6 +24,7 @@ async function go(){
     body:JSON.stringify({text:q,authenticated:auth})});
   const d=await r.json();
   let t='[agent] '+d.reply+'\n[action] '+(d.action||'none')+'  [policy] '+(d.decision||'n/a');
+  if(d.executed) t+='  [tool: EXECUTED]';
   (d.reasons||[]).forEach(x=>t+='\n   · '+x);
   document.getElementById('out').textContent=t;
 }

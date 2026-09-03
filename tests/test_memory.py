@@ -318,7 +318,8 @@ def test_run_turn_caps_conversation_length():
         "reply": "This conversation has reached its length limit — "
                  "connecting you to a human agent.",
         "action": None, "decision": "ESCALATE",
-        "reasons": ["conversation length cap reached"]}
+        "reasons": ["conversation length cap reached"],
+        "executed": False, "tool_result": None, "directive": None}
     assert len(agent.calls) == 2  # agent NOT called on the capped turn
     assert len(mem.history("c1")) == 4  # capped turn is not recorded
 
@@ -330,5 +331,8 @@ def test_run_turn_without_memory_keeps_legacy_path():
             return type("R", (), {"text": "ok", "action": None,
                                   "decision": None})()
     out = run_turn(LegacyAgent(), "hi")
+    # Sprint A: the turn dict gained stable executed/tool_result/directive
+    # keys (always present, None/False on the legacy one-shot path).
     assert out == {"reply": "ok", "action": None, "decision": None,
-                   "reasons": []}
+                   "reasons": [], "executed": False, "tool_result": None,
+                   "directive": None}

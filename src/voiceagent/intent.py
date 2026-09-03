@@ -393,6 +393,27 @@ INTENT_EXEMPLARS: dict[str, list[str]] = {
         "ఆర్డర్ ఎప్పుడు డెలివరీ అవుతుంది",
         "ఆర్డర్ డెలివరీ తేదీ ఏమిటి",
     ],
+    "reschedule_delivery": [
+        "I want to reschedule my delivery",
+        "reschedule my order delivery",
+        "can I change the delivery date",
+        "deliver on another date",
+        "reschedule my order",
+        "change delivery date",
+        "delivery reschedule karni hai",
+        "order dusre din deliver karo",
+        "delivery date change karni hai",
+        "mera order kal nahi parso deliver karna",
+        "डिलीवरी रिशेड्यूल करनी है",
+        "डिलीवरी की तारीख बदलें",
+        "ऑर्डर दूसरे दिन डिलीवर करें",
+        "டெலிவரி தேதியை மாற்ற வேண்டும்",
+        "எனது ஆர்டரை மற்றொரு நாள் டெலிவரி செய்யவும்",
+        "டெலிவரி தேதியை மாற்றிக் கொள்ளலாமா",
+        "డెలివరీ తేదీ మార్చండి",
+        "నా ఆర్డర్ డెలివరీ మరో రోజుకు కావాలి",
+        "డెలివరీ తేదీ మార్చుకోవచ్చా",
+    ],
 }
 
 

@@ -26,7 +26,12 @@ def build_live_agent():
     clf = IntentClassifier()
     policy = load_policies("data/policies/policies.yaml")
     log = DecisionLog()
-    return build_agent(index, llm, classifier=clf, policy=policy, decision_log=log), log
+    from voiceagent.tools import MockERP, ToolGateway, GovernedToolRunner
+    erp = MockERP()
+    gateway = ToolGateway(erp=erp)
+    runner = GovernedToolRunner(gateway, policy, decision_log=log)
+    return build_agent(index, llm, classifier=clf, policy=policy, decision_log=log,
+                       tool_runner=runner, erp=erp), log
 
 
 if __name__ == "__main__":
@@ -34,6 +39,7 @@ if __name__ == "__main__":
     print("VoiceAgent CLI — type a support query (Ctrl-D to exit)")
     print("  authenticated=on turns on auth for this query\n")
     i = 0
+    conv_id = "cli-session"
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -42,11 +48,11 @@ if __name__ == "__main__":
         if line.startswith("authenticated=on "):
             auth = True
             line = line[len("authenticated=on "):]
-        conv_id = f"demo-{i}"
         out = run_turn(agent, line, authenticated=auth, conv_id=conv_id)
         i += 1
         print(f"\n[agent] {out['reply']}")
-        print(f"[action] {out['action'] or 'none'}  [policy] {out['decision'] or 'n/a'}")
+        exec_tag = " (tool executed)" if out.get("executed") else ""
+        print(f"[action] {out['action'] or 'none'}  [policy] {out['decision'] or 'n/a'}{exec_tag}")
         for r in out["reasons"]:
             print(f"   · {r}")
         print()

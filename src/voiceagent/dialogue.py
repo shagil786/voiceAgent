@@ -89,11 +89,14 @@ def _parse_date_phrase(text: str) -> str | None:
     import datetime
     low = text.lower()
     today = datetime.date.today()
-    if "day after tomorrow" in low:
+    # Sprint A wiring: Hinglish/Hindi relative words. "kal" is
+    # tomorrow-or-yesterday in Hindi; inside a reschedule workflow it is
+    # always read as the future. Longest phrase first.
+    if "day after tomorrow" in low or re.search(r"\bparso(n)?\b", low):
         return (today + datetime.timedelta(days=2)).isoformat()
-    if "tomorrow" in low:
+    if "tomorrow" in low or re.search(r"\bkal\b", low):
         return (today + datetime.timedelta(days=1)).isoformat()
-    if "today" in low:
+    if "today" in low or re.search(r"\baaj\b", low):
         return today.isoformat()
     m = re.search(r"\d{4}-\d{2}-\d{2}", text)
     return m.group(0) if m else None

@@ -72,10 +72,135 @@ class AgentResult:
     retrieved: list[dict]
     latency_s: float
     decision: "Decision | None" = None
+    tool_outcome: "GovernedOutcome | None" = None
+    directive: "Directive | None" = None
+
+
+_SLOT_PROMPTS: dict[str, dict[str, str]] = {
+    "order_id": {
+        "en": "May I have your order ID?",
+        "hi": "कृपया अपना ऑर्डर आईडी बताएं।",
+        "hinglish": "Kripya apna order ID batayein.",
+    },
+    "new_date": {
+        "en": "Which date would you like to reschedule the delivery to?",
+        "hi": "आप डिलीवरी किस तारीख के लिए रिशेड्यूल करना चाहते हैं?",
+        "hinglish": "Aap delivery kis date ke liye reschedule karna chahte hain?",
+    },
+    "reason": {
+        "en": "May I ask the reason for cancellation?",
+        "hi": "रद्द करने का कारण क्या है?",
+        "hinglish": "Cancel karne ka reason kya hai?",
+    },
+    "amount": {
+        "en": "What refund amount are you expecting?",
+        "hi": "आप कितना रिफंड चाहते हैं?",
+        "hinglish": "Aap kitna refund expect kar rahe hain?",
+    },
+    "auth_verified": {
+        "en": "I need to verify your identity first — I've sent an OTP to your registered phone.",
+        "hi": "मुझे पहले आपकी पहचान सत्यापित करनी होगी — मैंने आपके पंजीकृत फोन पर एक ओटीपी भेजा है।",
+        "hinglish": "Mujhe pehle aapki identity verify karni hogi — maine aapke registered phone par OTP bheja hai.",
+    },
+}
+
+
+def _dialogue_ask_slot_reply(slot: str | None, language: str | None) -> str:
+    lang_key = language if language in ("hi", "hinglish") else "en"
+    prompts = _SLOT_PROMPTS.get(slot or "", {})
+    return prompts.get(lang_key) or prompts.get("en") or f"Please provide {slot}."
+
+
+def _dialogue_confirm_reply(tracker, language: str | None) -> str:
+    lang_key = language if language in ("hi", "hinglish") else "en"
+    wf = tracker.workflow
+    oid = tracker.slots.get("order_id") and tracker.slots["order_id"].value or ""
+    if wf == "reschedule_delivery":
+        dt = tracker.slots.get("new_date") and tracker.slots["new_date"].value or ""
+        if lang_key == "hi":
+            return f"कृपया पुष्टि करें: क्या आप ऑर्डर {oid} की डिलीवरी {dt} के लिए रिशेड्यूल करना चाहते हैं?"
+        if lang_key == "hinglish":
+            return f"Kripya confirm karein: kya aap order {oid} ki delivery {dt} ke liye reschedule karna chahte hain?"
+        return f"Please confirm: should I reschedule delivery for order {oid} to {dt}?"
+    if wf == "cancel_order":
+        if lang_key == "hi":
+            return f"कृपया पुष्टि करें: क्या आप ऑर्डर {oid} रद्द करना चाहते हैं?"
+        if lang_key == "hinglish":
+            return f"Kripya confirm karein: kya aap order {oid} cancel karna chahte hain?"
+        return f"Please confirm: do you want to cancel order {oid}?"
+    if wf == "refund":
+        amt = tracker.slots.get("amount") and tracker.slots["amount"].value
+        amt_str = f" of ₹{amt}" if amt else ""
+        if lang_key == "hi":
+            return f"कृपया पुष्टि करें: क्या आप ऑर्डर {oid} के लिए रिफंड शुरू करना चाहते हैं?"
+        if lang_key == "hinglish":
+            return f"Kripya confirm karein: kya aap order {oid} ke liye refund initiate karna chahte hain?"
+        return f"Please confirm: do you want to initiate a refund{amt_str} for order {oid}?"
+    return f"Please confirm: proceed with {wf} for order {oid}?"
+
+
+def _dialogue_execute_reply(workflow: str, outcome, payload: dict, language: str | None) -> str:
+    lang_key = language if language in ("hi", "hinglish") else "en"
+    oid = payload.get("order_id", "")
+    if outcome.executed:
+        val = outcome.result.value if outcome.result and outcome.result.value else {}
+        if workflow == "reschedule_delivery":
+            dt = payload.get("new_date", "")
+            if lang_key == "hi":
+                return f"आपके ऑर्डर {oid} की डिलीवरी {dt} के लिए सफलतापूर्वक रिशेड्यूल कर दी गई है।"
+            if lang_key == "hinglish":
+                return f"Aapke order {oid} ki delivery {dt} ke liye successfully reschedule ho gayi hai."
+            return f"Your delivery for order {oid} has been rescheduled to {dt}."
+        if workflow == "cancel_order":
+            if lang_key == "hi":
+                return f"ऑर्डर {oid} सफलतापूर्वक रद्द कर दिया गया है।"
+            if lang_key == "hinglish":
+                return f"Order {oid} successfully cancel kar diya gaya hai."
+            return f"Order {oid} has been cancelled successfully."
+        if workflow in ("refund", "initiate_refund"):
+            rf_id = val.get("refund_id", "")
+            amt = payload.get("amount", 0)
+            id_str = f" (Refund ID: {rf_id})" if rf_id else ""
+            if lang_key == "hi":
+                return f"ऑर्डर {oid} के लिए ₹{amt} का रिफंड शुरू कर दिया गया है{id_str}।"
+            if lang_key == "hinglish":
+                return f"Order {oid} ke liye ₹{amt} ka refund initiate ho gaya hai{id_str}."
+            return f"Refund of ₹{amt} for order {oid} has been initiated{id_str}."
+        if workflow in ("order_status", "fetch_order_status"):
+            st = val.get("status", "")
+            dd = val.get("delivery_date", "")
+            if lang_key == "hi":
+                return f"ऑर्डर {oid} की स्थिति {st} है। अनुमानित डिलीवरी: {dd}।"
+            if lang_key == "hinglish":
+                return f"Order {oid} ka status {st} hai. Expected delivery: {dd}."
+            return f"Order {oid} is currently {st}. Expected delivery: {dd}."
+        return f"Request for order {oid} has been successfully processed."
+    else:
+        err = outcome.result.error if outcome.result else None
+        if err:
+            if "precondition_failed" in err:
+                if workflow == "cancel_order":
+                    return f"Cannot cancel order {oid} because it has already been shipped or delivered."
+                if workflow == "reschedule_delivery":
+                    return f"Cannot reschedule order {oid} because it cannot be updated in its current status."
+            return f"Unable to complete {workflow}: {err}"
+        if any("blocked by policy" in r for r in outcome.reasons):
+            return f"Your {workflow} request cannot be completed: {', '.join(outcome.reasons)}."
+        return f"Your request could not be processed: {', '.join(outcome.reasons)}"
+
+
+def _dialogue_escalate_reply(language: str | None) -> str:
+    if language == "hi":
+        return "मैं समझता हूँ। आपकी सहायता के लिए मैं आपको किसी सहयोगी से जोड़ रहा हूँ।"
+    if language == "hinglish":
+        return "Main samajhta hoon. Aage ki madad ke liye main aapki call human agent ko transfer kar raha hoon."
+    return "I understand. Connecting you to a human agent to assist you further."
+
 
 class Agent:
     def __init__(self, index, llm, classifier=None, policy=None,
-                 decision_log=None, tenant=None, sentiment_store=None):
+                 decision_log=None, tenant=None, sentiment_store=None,
+                 tool_runner=None, erp=None):
         self._index = index
         self._llm = llm
         self._classifier = classifier
@@ -89,6 +214,9 @@ class Agent:
             from voiceagent.policy import PolicyEngine
             self._policy = PolicyEngine(policy)
         self._decision_log = decision_log
+        self._tool_runner = tool_runner
+        self._erp = erp
+        self._trackers: dict[str, Any] = {}
         # Single-source the action list: a policy that declares its action
         # vocabulary (PolicyEngine.known_actions) drives the system prompt;
         # otherwise the static DEFAULT_ACTIONS list above is kept. The
@@ -102,7 +230,8 @@ class Agent:
     def handle(self, user_text: str, authenticated: bool = False,
                amount: float | None = None, conv_id: str = "",
                *, history: list["Turn"] | None = None,
-               language: str | None = None) -> AgentResult:
+               language: str | None = None,
+               customer_id: str | None = None) -> AgentResult:
         t0 = time.time()
         # M5a: reply-language. Auto-detect when the caller doesn't know;
         # native-script languages get a per-turn directive appended to the
@@ -129,6 +258,79 @@ class Agent:
         # hijack it, only the reply text — which is sanitized and audited.
         inj = detect_injection(user_text)
         prompt_text = sanitize_for_prompt(user_text)
+
+        # Sprint A / WS3: Dialogue Tracker & Governed Tool Execution
+        if self._tool_runner is not None and conv_id:
+            from voiceagent.dialogue import WORKFLOWS, DialogueTracker, Slot
+            from voiceagent.entities import extract_entities, extract_order_id
+            from voiceagent.policy import PolicyContext, Decision
+
+            candidates = None
+            if self._erp is not None:
+                cust = customer_id or "CUST-001"
+                candidates = self._erp.orders_for_customer(cust)
+
+            tracker = self._trackers.get(conv_id)
+            if tracker is None and self._classifier is not None:
+                classified_action, _ = self._classifier.classify(user_text)
+                if classified_action in WORKFLOWS:
+                    tracker = DialogueTracker(workflow=classified_action,
+                                              candidate_orders=candidates)
+                    self._trackers[conv_id] = tracker
+
+            if tracker is not None:
+                ents = extract_entities(user_text)
+                snapped_id = extract_order_id(user_text, candidate_orders=candidates)
+                if snapped_id:
+                    ents.order_id = snapped_id
+
+                tracker.update(user_text, entities=ents, auth_state=authenticated)
+                directive = tracker.next_step()
+
+                if directive.kind == "ASK_SLOT":
+                    reply = _dialogue_ask_slot_reply(directive.slot, language)
+                    return AgentResult(text=reply, action=tracker.workflow,
+                                       retrieved=[], latency_s=time.time() - t0,
+                                       directive=directive)
+                elif directive.kind == "CONFIRM_ACTION":
+                    reply = _dialogue_confirm_reply(tracker, language)
+                    return AgentResult(text=reply, action=tracker.workflow,
+                                       retrieved=[], latency_s=time.time() - t0,
+                                       directive=directive)
+                elif directive.kind == "EXECUTE_READY":
+                    amt_slot = tracker.slots.get("amount")
+                    amt_val = float(amt_slot.value) if amt_slot and amt_slot.value is not None else amount
+                    otp_verified = bool(tracker.slots.get("auth_verified") and tracker.slots["auth_verified"].value) or authenticated
+                    ctx = PolicyContext(amount=amt_val, authenticated=authenticated,
+                                        otp_verified=otp_verified,
+                                        signals={"frustrated": fr.frustrated,
+                                                 "frustration_level": fr.level,
+                                                 "injection_suspected": inj.detected})
+                    wf = WORKFLOWS[tracker.workflow]
+                    outcome = self._tool_runner.run(
+                        action=tracker.workflow,
+                        context=ctx,
+                        tool_name=wf["tool"],
+                        params=directive.payload or {},
+                        idempotency_key=f"{conv_id}:{tracker.workflow}:{directive.payload.get('order_id')}",
+                        conv_id=conv_id,
+                    )
+                    self._trackers.pop(conv_id, None)
+                    reply = _dialogue_execute_reply(tracker.workflow, outcome, directive.payload or {}, language)
+                    if fr.level == "high" and not _already_apologetic(reply):
+                        reply = EMPATHY_PREFIXES.get(language, "") + reply
+                    return AgentResult(text=reply, action=tracker.workflow,
+                                       retrieved=[], latency_s=time.time() - t0,
+                                       decision=Decision(outcome.decision_verdict, outcome.reasons),
+                                       tool_outcome=outcome, directive=directive)
+                elif directive.kind == "ESCALATE_TO_HUMAN":
+                    self._trackers.pop(conv_id, None)
+                    reply = _dialogue_escalate_reply(language)
+                    return AgentResult(text=reply, action=tracker.workflow,
+                                       retrieved=[], latency_s=time.time() - t0,
+                                       decision=Decision("ESCALATE", [directive.reason or "customer_declined"]),
+                                       directive=directive)
+
         retrieved = self._index.search(user_text, k=3)
         context = "\n".join(f"[{r['section']}] {r['text']}" for r in retrieved)
         # Working memory (M4a): replay the last few complete exchanges as a
@@ -462,10 +664,12 @@ def strip_action_lines(text: str) -> str:
 
 
 def build_agent(index, llm, classifier=None, policy=None, decision_log=None,
-                tenant=None, sentiment_store=None) -> Agent:
+                tenant=None, sentiment_store=None, tool_runner=None,
+                erp=None) -> Agent:
     agent = Agent(index, llm, classifier=classifier, policy=policy,
                   decision_log=decision_log, tenant=tenant,
-                  sentiment_store=sentiment_store)
+                  sentiment_store=sentiment_store, tool_runner=tool_runner,
+                  erp=erp)
     # Real LlamaCppLLM has chat_template; FakeLLM (tests) does not.
     agent._use_template = hasattr(llm, "chat_template")
     return agent

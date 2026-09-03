@@ -70,7 +70,12 @@ def _build_live_agent():
     clf = IntentClassifier()
     policy = load_policies("data/policies/policies.yaml")
     log = DecisionLog()
-    return build_agent(index, llm, classifier=clf, policy=policy, decision_log=log)
+    from voiceagent.tools import MockERP, ToolGateway, GovernedToolRunner
+    erp = MockERP()
+    gateway = ToolGateway(erp=erp)
+    runner = GovernedToolRunner(gateway, policy, decision_log=log)
+    return build_agent(index, llm, classifier=clf, policy=policy, decision_log=log,
+                       tool_runner=runner, erp=erp)
 
 
 class Handler(BaseHTTPRequestHandler):

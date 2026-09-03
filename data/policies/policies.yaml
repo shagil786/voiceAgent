@@ -67,3 +67,9 @@ complaint:
 # ToolGateway precondition (status CONFIRMED/SHIPPED) is checked separately.
 reschedule_delivery:
   require_auth: true
+
+# Sprint A: cancel is a destructive write on a live order — requires the
+# customer to be authenticated; the ToolGateway precondition (status not in
+# SHIPPED/DELIVERED) is checked separately by the gateway.
+cancel_order:
+  require_auth: true
