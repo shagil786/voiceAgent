@@ -73,7 +73,7 @@ def build_orchestrator() -> Orchestrator:
             "plainly to the customer. Authenticate context comes from the "
             "session; never invent order details — fetch them."),
         gateway_tools={
-            "fetch_order_status": {"action": "fetch_order_status"},
+            "fetch_order_status": {"action": "order_status"},
             "reschedule_delivery": {"action": "reschedule_delivery"},
             "cancel_order": {"action": "cancel_order"},
         },

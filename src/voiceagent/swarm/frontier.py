@@ -75,10 +75,14 @@ Transport = Callable[[str, dict, dict, float], dict]
 
 def _urllib_transport(url: str, payload: dict, headers: dict,
                       timeout_s: float) -> dict:
+    # A browser-like User-Agent: some frontiers (Groq behind Cloudflare,
+    # error 1010) reject requests from default urllib agents.
     req = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", **headers},
+        headers={"Content-Type": "application/json",
+                 "User-Agent": "voiceagent-swarm/1.0",
+                 **headers},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=timeout_s) as resp:
