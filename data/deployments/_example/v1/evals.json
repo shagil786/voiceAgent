@@ -1,0 +1,1 @@
+[{"assert": {"action": "order_status"}, "name": "order_status_lookup", "turns": [{"user": "Where is my order?"}]}, {"assert": {"contains": "hello"}, "name": "greeting", "turns": [{"user": "Hi"}]}]
