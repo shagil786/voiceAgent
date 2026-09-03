@@ -48,3 +48,17 @@ def test_save_load_roundtrip(tmp_path):
     assert b2.policies == b.policies
     assert b2.knowledge == b.knowledge
     assert b2.evals == b.evals
+
+def test_bad_tool_state_rejected(tmp_path):
+    import json
+    d = tmp_path / "b"
+    d.mkdir()
+    (d / "bundle.json").write_text(json.dumps({"schema_version": 1, "deploy_id": "x"}))
+    (d / "tools.json").write_text(json.dumps([{"name": "t", "description": "d",
+        "parameters": {}, "state": "BOGUS", "connection_ref": None,
+        "policy_action": "x", "scopes": []}]))
+    (d / "policies.yaml").write_text("x:\n  allow: true\n")
+    (d / "evals.json").write_text("[]")
+    import pytest
+    with pytest.raises(ValueError, match="state"):
+        load_bundle(d)
