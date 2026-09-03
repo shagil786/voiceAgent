@@ -52,6 +52,7 @@ def fetch_site(seed_url: str, allowlist: list[str] | None = None,
     queue: list[tuple[str, int]] = [(seed_url, 0)]
     chunks: list[dict] = []
     gaps: list[str] = []
+    rp = None
     if fetcher is None:
         # Best-effort robots.txt check for the seed host (5s timeout).
         # On failure proceed — log a gap chunk. Skipped entirely when a
@@ -65,11 +66,15 @@ def fetch_site(seed_url: str, allowlist: list[str] | None = None,
             rp.parse(body.splitlines())
         except Exception as e:
             gaps.append(f"robots:{robots_url}: {e}")
+            rp = None
     while queue and len(chunks) < MAX_PAGES:
         url, depth = queue.pop(0)
         if url in seen or depth > MAX_DEPTH:
             continue
         seen.add(url)
+        if rp is not None and not rp.can_fetch("VoiceAgent-deploy/1.0", url):
+            gaps.append(f"robots-disallowed:{url}")
+            continue
         try:
             html, final_url = fetch(url)
         except Exception as e:  # gap, never half-parse
