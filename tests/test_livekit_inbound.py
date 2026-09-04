@@ -1,8 +1,11 @@
 # tests/test_livekit_inbound.py
+import asyncio
+import time
 import pytest
 from types import SimpleNamespace
 from voiceagent.telephony.inbound import (
-    ensure_room_sample_rate, make_turn_fn, wait_for_sip_track, webhook_handler,
+    _wait_for_sip_track_async, ensure_room_sample_rate, make_turn_fn,
+    wait_for_sip_track, webhook_handler,
 )
 
 class FakeOrch:
@@ -46,3 +49,11 @@ def test_room_sample_rate_guard():
     ensure_room_sample_rate(48000)
     with pytest.raises(ValueError):
         ensure_room_sample_rate(16000)
+
+def test_async_waiter_track_immediately():
+    assert asyncio.run(_wait_for_sip_track_async(lambda: "track", 15)) == "track"
+
+def test_async_waiter_timeout_returns_none():
+    t0 = time.monotonic()
+    assert asyncio.run(_wait_for_sip_track_async(lambda: None, 0.02)) is None
+    assert time.monotonic() - t0 < 5

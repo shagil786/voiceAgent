@@ -8,6 +8,7 @@ the dep on the cold path.
 """
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import wave
 from pathlib import Path
@@ -236,8 +237,6 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
     Returns True when the call ran, False when no SIP track appeared
     before the timeout (room left, never greeted into the void).
     """
-    import asyncio
-
     from livekit import rtc
 
     from voiceagent.telephony.audio import resample_48k_to_16k
