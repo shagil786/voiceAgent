@@ -85,3 +85,14 @@ def test_diff_policies_single_key_change_lists_only_that_key():
     pol = [x for x in d if x["section"] == "policies"]
     assert len(pol) == 1
     assert pol[0]["detail"] == [key]
+
+
+def test_eval_extra_fields_ignored_forward_compat(tmp_path):
+    import json
+    import shutil
+    shutil.copytree(GOLDEN, tmp_path / "v1")
+    evals = json.loads((tmp_path / "v1" / "evals.json").read_text())
+    evals[0]["source_contact_hash"] = "abc123"  # Plan 3 eval-tagging
+    (tmp_path / "v1" / "evals.json").write_text(json.dumps(evals))
+    b = load_bundle(tmp_path / "v1")  # must not raise on unknown fields
+    assert len(b.evals) == len(evals)

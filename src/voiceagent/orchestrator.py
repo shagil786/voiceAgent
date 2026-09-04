@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from voiceagent.decisionlog import DecisionEntry, DecisionLog
+from voiceagent.learn.corrections import classify_correction
+from voiceagent.learn.profiles import Profile, ProfileStore, contact_key
 from voiceagent.memory import ConversationMemory, InMemoryMemory, Turn, now_ts
 from voiceagent.policy import PolicyContext
 from voiceagent.sentiment import Frustration, detect_frustration
@@ -41,6 +43,9 @@ _FALLBACK_REPLY = (
     "I'm sorry, I wasn't able to complete that here. Let me connect you "
     "with a colleague who can help."
 )
+
+
+MAX_PENDING_GLOBAL = 50
 
 
 # --- deployment descriptor ---------------------------------------------------
@@ -71,6 +76,22 @@ class TurnResult:
     escalated: bool = False
 
 
+# --- contact memory block ----------------------------------------------------
+
+def _contact_memory_block(prof: Profile) -> str:
+    """Render a profile's prefs/corrections/open items as a system block
+    (empty sections omitted; capped at 1500 chars). Empty string when the
+    profile carries nothing worth telling the brain."""
+    lines = [f"- {p}" for p in prof.prefs]
+    lines += [f"- Correction (use instead): "
+              f"{c.get('quote', str(c)) if isinstance(c, dict) else c}"
+              for c in prof.corrections]
+    lines += [f"- Open: {o}" for o in prof.open_items]
+    if not lines:
+        return ""
+    return ("## Contact memory\n" + "\n".join(lines))[:1500]
+
+
 # --- the runtime -------------------------------------------------------------
 
 class Orchestrator:
@@ -81,13 +102,17 @@ class Orchestrator:
                  runner: GovernedToolRunner | None = None,
                  memory: ConversationMemory | None = None,
                  decision_log: DecisionLog | None = None,
-                 max_tool_rounds: int = 3):
+                 max_tool_rounds: int = 3,
+                 profiles: ProfileStore | None = None):
         self.brain = brain
         self.runner = runner
         self.memory: ConversationMemory = memory or InMemoryMemory()
         # Audit seam for the no-runner case (the runner logs its own verdicts).
         self.decision_log = decision_log
         self.max_tool_rounds = max_tool_rounds
+        # Instant-Learn seam: None = pre-learn behavior (byte-identical replies).
+        self.profiles = profiles
+        self._profile_links: dict[str, str] = {}  # session_id -> contact key
         self._gateway_tools: dict[str, dict] = {}
         self._deployment: Deployment | None = None
         self._sessions: dict[str, BlackboardState] = {}
@@ -126,13 +151,42 @@ class Orchestrator:
     def handle_turn(self, session_id: str, user_text: str, *,
                     profile: CallerProfile | None = None,
                     authenticated: bool | None = None,
-                    _system_prefix: str | None = None) -> TurnResult:
+                    _system_prefix: str | None = None,
+                    contact_alias: str | None = None) -> TurnResult:
         """One full agent turn: prompt -> brain -> governed tools -> reply.
 
         `authenticated` is a per-turn OVERRIDE (e.g. OTP verified mid-call);
         None defers to the profile's own flag. governs require_auth policies.
+        `contact_alias` resolves through the ProfileStore alias map; None
+        derives the contact key from the caller profile.
         """
         state = self._session_state(session_id, profile, authenticated)
+        # Instant-Learn contact memory in: resolve the contact, inject its
+        # prefs/corrections/open items ahead of any placement prefix, and
+        # link this session to the contact. profiles=None skips all of this.
+        # Cross-contact separation: anonymous turns (no alias resolving to
+        # an existing profile AND no usable phone) skip the entire profile
+        # seam — never share one `cid:unknown` fallback across callers.
+        contact: str | None = None
+        if self.profiles is not None:
+            key: str | None = None
+            if contact_alias:
+                r = self.profiles.resolve(contact_alias)
+                if self.profiles.get(r) is not None:
+                    key = r
+            if key is None:
+                if (state.profile.phone or "").strip():
+                    key = contact_key(state.profile)
+            if key is not None:
+                contact = key
+                prof = self.profiles.get(contact)
+                if prof is not None:
+                    block = _contact_memory_block(prof)
+                    if block:
+                        _system_prefix = ((block + "\n\n" + (_system_prefix or ""))
+                                          or None)
+                self.profiles.link_session(contact, session_id)
+                self._profile_links[session_id] = contact
         # Deterministic sentiment: every governed evaluation this turn sees
         # the caller's frustration level (policies route on it via
         # escalate_when — conditions are data, not code).
@@ -189,6 +243,23 @@ class Orchestrator:
             action=primary["action"] if primary else None,
             verdict=primary["verdict"] if primary else None))
 
+        # Instant-Learn candidates out: a customer correction never mutates
+        # global state — it lands in pending_global for owner review.
+        if self.profiles is not None and contact is not None:
+            corr = classify_correction(user_text, final_text, is_owner=False)
+            if corr.is_correction:
+                prof = (self.profiles.get(contact)
+                        or Profile(key=contact, alias="", prefs=[],
+                                   corrections=[], open_items=[],
+                                   pending_global=[], consent={},
+                                   updated_at=now_ts()))
+                prof.pending_global.append(
+                    {"quote": corr.quote, "patch_type": corr.patch_type,
+                     "session_id": session_id, "ts": now_ts()})
+                del prof.pending_global[:-MAX_PENDING_GLOBAL]
+                prof.updated_at = now_ts()
+                self.profiles.put(prof)
+
         return TurnResult(reply=final_text, actions=actions,
                           brain_latency_s=latency, session_id=session_id,
                           raw_tool_calls=raw_tool_calls, escalated=escalated)
@@ -209,6 +280,34 @@ class Orchestrator:
                         or "(Call connected — open per the campaign goal.)")
         return self.handle_turn(session_id, user_text, profile=profile,
                                 _system_prefix=prefix)
+
+    # -- contact lifecycle (Instant-Learn) ----------------------------------
+
+    def delete_contact(self, contact_or_alias: str) -> dict:
+        """Delete a contact's profile and cascade to its linked sessions:
+        durable memory cleared and live blackboard state dropped.
+        Owner-only: callers must authenticate + audit-log; never expose as a brain tool without an auth check."""
+        if self.profiles is None:
+            raise RuntimeError("no ProfileStore configured")
+        resolved = self.profiles.resolve(contact_or_alias)
+        if not (resolved or "").strip():
+            return {"sessions": []}
+        out = self.profiles.delete_contact(resolved)
+        for sid in out["sessions"]:
+            self.memory.clear(sid)
+            self._sessions.pop(sid, None)
+            self._profile_links.pop(sid, None)
+        return out
+
+    def export_contact(self, contact_or_alias: str) -> dict:
+        """Export one contact's profile dict (KeyError when unknown).
+        Owner-only: callers must authenticate + audit-log; never expose as a brain tool without an auth check."""
+        if self.profiles is None:
+            raise RuntimeError("no ProfileStore configured")
+        resolved = self.profiles.resolve(contact_or_alias)
+        if not (resolved or "").strip():
+            raise KeyError("unknown contact")
+        return self.profiles.export_contact(resolved)
 
     # -- internals ----------------------------------------------------------
 
