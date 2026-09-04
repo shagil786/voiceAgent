@@ -40,6 +40,8 @@ class BridgeSession:
             self._on_barge_in_external(event)
 
     def feed_pcm16(self, frame_20ms: bytes) -> None:
+        if self._stopped:
+            return
         if len(frame_20ms) != _FRAME_BYTES_16K_20MS:
             raise ValueError(
                 f"feed_pcm16 expects exactly {_FRAME_BYTES_16K_20MS} bytes "
@@ -49,6 +51,8 @@ class BridgeSession:
         audio = events.get("complete_audio")
         if audio is not None:
             _, reply_wav_16k = self._on_utterance(bytes(audio))
+            if len(reply_wav_16k) % 2:
+                raise ValueError("reply wav must be int16-aligned")
             upsampled = resample_16k_to_48k(reply_wav_16k)
             self._play.extend(chunk_frames(upsampled, 10, 48000))
             self._vad.barge_in.start_speaking(f"turn-{next(self._turn_ids)}")
@@ -56,7 +60,10 @@ class BridgeSession:
     def take_playback(self) -> bytes | None:
         if self._stopped or not self._play:
             return None
-        return self._play.popleft()
+        chunk = self._play.popleft()
+        if not self._play:
+            self._vad.barge_in.stop_speaking()
+        return chunk
 
     def barge_in(self) -> None:
         """External trigger (e.g. loud uplink): clears pending playback."""
