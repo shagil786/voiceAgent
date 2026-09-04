@@ -28,6 +28,7 @@ from voiceagent.decisionlog import DecisionEntry, DecisionLog
 from voiceagent.learn.corrections import classify_correction
 from voiceagent.learn.profiles import Profile, ProfileStore, contact_key
 from voiceagent.memory import ConversationMemory, InMemoryMemory, Turn, now_ts
+from voiceagent.metrics import Metrics
 from voiceagent.policy import PolicyContext
 from voiceagent.sentiment import Frustration, detect_frustration
 from voiceagent.swarm.blackboard import BlackboardState, CallerProfile
@@ -103,7 +104,8 @@ class Orchestrator:
                  memory: ConversationMemory | None = None,
                  decision_log: DecisionLog | None = None,
                  max_tool_rounds: int = 3,
-                 profiles: ProfileStore | None = None):
+                 profiles: ProfileStore | None = None,
+                 metrics: Metrics | None = None):
         self.brain = brain
         self.runner = runner
         self.memory: ConversationMemory = memory or InMemoryMemory()
@@ -112,6 +114,8 @@ class Orchestrator:
         self.max_tool_rounds = max_tool_rounds
         # Instant-Learn seam: None = pre-learn behavior (byte-identical replies).
         self.profiles = profiles
+        # Runtime metrics sink: None = no recording (zero behavior change).
+        self.metrics = metrics
         self._profile_links: dict[str, str] = {}  # session_id -> contact key
         self._gateway_tools: dict[str, dict] = {}
         self._deployment: Deployment | None = None
@@ -259,6 +263,12 @@ class Orchestrator:
                 del prof.pending_global[:-MAX_PENDING_GLOBAL]
                 prof.updated_at = now_ts()
                 self.profiles.put(prof)
+
+        # Metrics hook (single site): one sample per turn — latency plus
+        # the primary governed verdict, or "none" for plain chat turns.
+        if self.metrics is not None:
+            self.metrics.record(
+                latency, primary["verdict"] if primary else "none")
 
         return TurnResult(reply=final_text, actions=actions,
                           brain_latency_s=latency, session_id=session_id,
