@@ -42,3 +42,24 @@ def test_ttl_prune(tmp_path):
                   pending_global=[], consent={}, updated_at="2020-01-01T00:00:00"))
     assert s.prune_expired(now="2026-09-04T00:00:00") == 1
     assert s.get("old") is None
+
+def test_expired_get_drops_alias_and_links():
+    s = InMemoryProfiles()
+    s.put(Profile(key="stale", alias="", prefs=[], corrections=[],
+                  open_items=[], pending_global=[], consent={},
+                  updated_at="2020-01-01T00:00:00"))
+    s.set_alias("Stale-fam", "stale")
+    s.link_session("stale", "sess-9")
+    assert s.get("stale") is None
+    assert s.resolve("Stale-fam") == "Stale-fam"
+    assert s.sessions_for("stale") == []
+
+def test_get_put_copy_semantics():
+    s = InMemoryProfiles()
+    s.put(Profile(key="c1", alias="", prefs=["2BHK"], corrections=[],
+                  open_items=[], pending_global=[], consent={},
+                  updated_at="2026-09-01T00:00:00"))
+    p = s.get("c1")
+    assert p is not None
+    p.prefs.append("X")
+    assert s.get("c1").prefs == ["2BHK"]

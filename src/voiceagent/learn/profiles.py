@@ -12,6 +12,7 @@ TTL: profiles older than PROFILE_TTL_DAYS are treated as expired.
 """
 from __future__ import annotations
 
+import copy
 import datetime
 import json
 import sqlite3
@@ -106,14 +107,15 @@ class InMemoryProfiles:
         if p is None:
             return None
         if _expired(p.updated_at):
-            self._drop(key)
+            self.delete_contact(key)
             return None
-        return p
+        return copy.deepcopy(p)
 
     def put(self, profile: Profile) -> None:
-        if not profile.updated_at:
-            profile.updated_at = now_ts()
-        self._profiles[profile.key] = profile
+        stored = copy.deepcopy(profile)
+        if not stored.updated_at:
+            stored.updated_at = now_ts()
+        self._profiles[stored.key] = stored
 
     def set_alias(self, alias: str, key: str) -> None:
         self._aliases[alias] = key
