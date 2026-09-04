@@ -6,6 +6,8 @@
   intent names (lowercase snake_case)
 - policies.yaml (if present) passes the same structural checks as the
   platform policies (scripts/validate_policies.py logic)
+- tools.yaml (if present) declares a valid DEPLOYMENT tool surface: only
+  code-bound tool names, every entry has an action, escalate_to_human present
 
 The tenant bundle is the Control Plane's per-customer artifact: it is
 validated in CI, versioned in git, and deployed atomically. A bundle that
@@ -16,6 +18,10 @@ Usage: .venv/bin/python scripts/validate_tenant.py [data/tenants/example-acme]
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from voiceagent.runtime import gateway_tools_from_yaml  # noqa: E402
 
 INTENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -59,6 +65,15 @@ def validate(root: Path) -> list[str]:
             bad = [x for x in items if not isinstance(x, str) or not x.strip()]
             if bad:
                 errors.append(f"{f}: {len(bad)} non-string/empty exemplars")
+
+    tools_yaml = root / "tools.yaml"
+    if tools_yaml.exists():
+        # Same validation the runtime applies at load time (single source of
+        # truth) — the gate just runs it before deploy instead of at startup.
+        try:
+            gateway_tools_from_yaml(tools_yaml)
+        except ValueError as e:
+            errors.append(f"{tools_yaml}: {e}")
 
     pol = root / "policies.yaml"
     if pol.exists():

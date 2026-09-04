@@ -80,6 +80,25 @@ class TenantConfig:
         )
 
 
+def compile_persona_block(persona: Persona) -> str:
+    """Compile the structured persona for the FRONTIER system prompt: flat,
+    compliance-assertable text (CI can assert e.g. 'never say guaranteed
+    refund' survives compilation). Carries NO ACTION-line tail and no
+    instruction boilerplate — the ACTION tail is the local-LLM platform
+    instruction (agent.py); the frontier path gets its action governance from
+    the runtime's platform prompt base, which is appended around this block."""
+    lines = [f"You are {persona.role}."]
+    if persona.tone:
+        lines.append(f"Tone: {persona.tone}.")
+    if persona.may_promise:
+        lines.append("You may promise exactly: "
+                     + "; ".join(persona.may_promise)
+                     + ". Never promise anything else.")
+    if persona.never_say:
+        lines.append("Never say or imply: " + "; ".join(persona.never_say) + ".")
+    return " ".join(lines)
+
+
 class Tenant:
     """A tenant BUNDLE: one namespace per customer, with typed config
     surfaces, each in its natural format:

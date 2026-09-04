@@ -1,0 +1,23 @@
+# Deployment tool surface for this tenant: the governed actions the brain may
+# PROPOSE. Tool bindings live in code (voiceagent.tools.DEFAULT_TOOL_SPECS) —
+# this file only declares which of them this deployment exposes, so an unknown
+# name here is a validation error, never a silent no-op. escalate_to_human is
+# mandatory in any declared surface: the safety valve must always be
+# proposeable. This is NOT the ToolGateway.from_yaml shape (params/
+# preconditions) — execution bindings are code.
+tools:
+  fetch_order_status:
+    action: order_status
+    description: Look up the current status of a customer's order by id.
+  escalate_to_human:
+    action: escalate_to_human
+    side_effects: true
+    description: Page a human agent to take over this call. Provide a short
+      reason for the handoff.
+    parameters:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
