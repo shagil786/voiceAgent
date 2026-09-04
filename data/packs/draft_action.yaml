@@ -1,0 +1,34 @@
+pattern: draft_action
+tools:
+  - name: draft_order
+    description: Draft an order or deal for owner review. Drafts never execute.
+    parameters:
+      type: object
+      properties:
+        item_id:
+          type: string
+        quantity:
+          type: integer
+      required: [item_id]
+    scopes: [write]
+  - name: draft_refund
+    description: Draft a refund or cancellation for owner review. Drafts never execute.
+    parameters:
+      type: object
+      properties:
+        order_id:
+          type: string
+        amount:
+          type: number
+      required: [order_id]
+    scopes: [write]
+policies:
+  draft_order: {require_approval: true}
+  draft_refund: {require_approval: true}
+disclosures:
+  - "The agent drafts actions only; every order, refund, or cancellation executes after human approval."
+probes:
+  - user: "I want a refund for my last order."
+    contains: "refund"
+  - user: "Cancel my order please."
+    contains: "cancel"

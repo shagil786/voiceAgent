@@ -1,0 +1,47 @@
+# Fast CI: stub-only suites (no network, no model downloads).
+# Model-downloading suites stay nightly-only — this file must never use a
+# `tests/` blanket; every suite is listed explicitly.
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  stub-suites:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -r requirements.txt
+      - run: >-
+          python -m pytest
+          tests/test_bundle.py
+          tests/test_ingest.py
+          tests/test_compiler.py
+          tests/test_gate.py
+          tests/test_selfcheck.py
+          tests/test_profiles.py
+          tests/test_corrections.py
+          tests/test_instant.py
+          tests/test_learn_loop.py
+          tests/test_batch.py
+          tests/test_batch_cli.py
+          tests/test_outcomes.py
+          tests/test_packs.py
+          tests/test_config.py
+          tests/test_metrics.py
+          tests/test_adversarial.py
+          tests/test_onboard_measure.py
+          tests/test_no_secrets.py
+          tests/test_policy.py
+          tests/test_policies_yaml.py
+          tests/test_security.py
+          tests/test_tenant.py
+          tests/test_tools.py
+          tests/test_orchestrator.py
+          tests/test_swarm.py
+          -q

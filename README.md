@@ -44,12 +44,14 @@ LEARNING LOOPS
 | **Voice I/O** (Qwen3-ASR primary + whisper fallback + Indic routing, Piper TTS, barge-in/VAD) | ✅ built, needs fresh e2e latency run |
 | **Outbound** (dialer with DND scrub + window, sub-600ms AMD logic, swarm organs) | ✅ built, synthetic-only validation |
 | **Tests** | ✅ 409 collected, 406 passed / 2 skipped / 1 xfailed |
-| **Batch-learn job, operator packs, adversarial harness** | ⏳ Plans 3–4 |
+| **Batch-learn job** | ✅ on `main` |
+| **Operator packs, adversarial harness, onboarding drill** | ✅ on `feat/operator-packs-harness` |
 | **Telephony limb** (SIP/WebRTC + real number), **real ERP adapter**, **packaging** (Docker/VPS) | ❌ the remaining organs — MockERP, stub sidecars only |
 
 Design: `docs/superpowers/specs/2026-09-03-global-adaptive-agent-design.md`.
 Plans: `docs/superpowers/plans/2026-09-04-instant-learn-profiles.md` (done),
-`2026-09-03-global-adaptive-agent-foundation.md` (done).
+`2026-09-03-global-adaptive-agent-foundation.md` (done),
+`2026-09-04-operator-packs-harness.md` (done).
 
 ## Quickstart
 

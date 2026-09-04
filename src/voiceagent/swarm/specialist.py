@@ -97,70 +97,30 @@ class DomainSpecialist:
 # ---------------------------------------------------------------------------
 
 def create_domain_specialist(domain: str, **custom_overrides) -> DomainSpecialist:
-    """Factory helper to create specialized agents across multiple industries."""
-    if domain == "luxury_automotive":
-        spec = SpecialistSpec(
-            domain_id="luxury_automotive",
-            name="Automotive Concierge",
-            role_description="Assists with test-drive bookings, EV range specs, and financing.",
-            system_prompt="You are a senior product specialist for luxury electric vehicles.",
-            catalog=[
-                {
-                    "id": "EV-SUV-01",
-                    "name": "Apex e-SUV GT",
-                    "keywords": ["suv", "electric", "apex", "test drive", "ev"],
-                    "description": "Features dual-motor all-wheel drive, 620 km WLTP range, and 0-100 in 3.6s.",
-                    "price": "₹78.5 Lakhs",
-                    "sidecar": {"type": "whatsapp_doc", "title": "Apex e-SUV Brochure", "asset": "apex_gt_specsheet.pdf"},
-                }
-            ],
-            statutory_disclosures=["FAME-II subsidy subject to state transport registration terms."],
-        )
-    elif domain == "b2b_saas":
-        spec = SpecialistSpec(
-            domain_id="b2b_saas",
-            name="SaaS Enterprise Account Executive",
-            role_description="Enterprise software qualification, security compliance, and seat licensing.",
-            system_prompt="You are an enterprise account executive for cloud security software.",
-            catalog=[
-                {
-                    "id": "PLAN-ENT",
-                    "name": "Enterprise Shield Plan",
-                    "keywords": ["enterprise", "security", "saml", "sso", "seats", "annual"],
-                    "description": "Includes 24/7 dedicated SOC monitoring, custom SAML/SSO, and SOC2 compliance.",
-                    "price": "₹12,000 per user/year",
-                    "sidecar": {"type": "whatsapp_doc", "title": "SOC2 Security Whitepaper", "asset": "soc2_type2_report.pdf"},
-                }
-            ],
-            statutory_disclosures=["Annual contracts billed annually upfront with 99.95% uptime SLA guarantee."],
-        )
-    elif domain == "insurance":
-        spec = SpecialistSpec(
-            domain_id="insurance",
-            name="Health & Term Insurance Advisor",
-            role_description="Underwrites policy limits, pre-existing condition checks, and premium quotes.",
-            system_prompt="You are a licensed insurance advisory agent.",
-            catalog=[
-                {
-                    "id": "HEALTH-1CR",
-                    "name": "Comprehensive 1 Crore Health Cover",
-                    "keywords": ["health", "medical", "insurance", "hospital", "claim", "cover"],
-                    "description": "Covers zero room rent capping, global emergency coverage, and restore benefits.",
-                    "price": "₹1,450/month",
-                    "sidecar": {"type": "whatsapp_doc", "title": "Policy Benefit Breakdown", "asset": "health_1cr_benefits.pdf"},
-                }
-            ],
-            statutory_disclosures=["Insurance is the subject matter of solicitation. IRDAI Reg No. 129."],
-        )
-    else:
-        # Generic pluggable domain
-        spec = SpecialistSpec(
-            domain_id=domain,
-            name=custom_overrides.get("name", f"{domain.capitalize()} Specialist"),
-            role_description=custom_overrides.get("role", "Domain specialist agent"),
-            system_prompt=custom_overrides.get("prompt", "You are a professional specialist."),
-            catalog=custom_overrides.get("catalog", []),
-            statutory_disclosures=custom_overrides.get("disclosures", []),
-        )
+    """Factory helper to create specialized agents across multiple industries.
+
+    Specs are loaded from the vertical packs on disk via
+    :func:`voiceagent.packs.load_vertical` (imported lazily to avoid a
+    circular import — packs builds the SpecialistSpec objects defined here).
+
+    Packed verticals ignore ``custom_overrides``; overrides apply only to
+    the generic fallback spec built for unknown domain ids.
+    """
+    from voiceagent.packs import load_vertical
+
+    try:
+        return DomainSpecialist(spec=load_vertical(domain))
+    except FileNotFoundError:
+        pass
+
+    # Generic pluggable domain
+    spec = SpecialistSpec(
+        domain_id=domain,
+        name=custom_overrides.get("name", f"{domain.capitalize()} Specialist"),
+        role_description=custom_overrides.get("role", "Domain specialist agent"),
+        system_prompt=custom_overrides.get("prompt", "You are a professional specialist."),
+        catalog=custom_overrides.get("catalog", []),
+        statutory_disclosures=custom_overrides.get("disclosures", []),
+    )
 
     return DomainSpecialist(spec=spec)

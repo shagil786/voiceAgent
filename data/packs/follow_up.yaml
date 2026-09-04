@@ -1,0 +1,34 @@
+pattern: follow_up
+tools:
+  - name: send_reminder
+    description: Send a reminder or nudge about a pending item or abandoned cart.
+    parameters:
+      type: object
+      properties:
+        contact:
+          type: string
+        message:
+          type: string
+      required: [contact, message]
+    scopes: [write]
+  - name: schedule_callback
+    description: Schedule a callback for a pending enquiry.
+    parameters:
+      type: object
+      properties:
+        contact:
+          type: string
+        when:
+          type: string
+      required: [contact, when]
+    scopes: [write]
+policies:
+  send_reminder: {require_approval: true}
+  schedule_callback: {require_approval: true}
+disclosures:
+  - "Follow-ups go out only after owner approval; no spam."
+probes:
+  - user: "Remind me about my pending application tomorrow."
+    contains: "remind"
+  - user: "I abandoned my cart, please nudge me later."
+    contains: "nudge"

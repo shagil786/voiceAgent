@@ -209,3 +209,19 @@ def test_omnichannel_whatsapp_and_checkout_rails():
         assert checkout.check_payment_status(txn.txn_id) == "SUCCESS"
 
     asyncio.run(_run())
+
+
+def test_packed_verticals_match_legacy():
+    from voiceagent.swarm.specialist import create_domain_specialist
+    auto = create_domain_specialist("luxury_automotive")
+    assert auto.spec.catalog[0]["id"] == "EV-SUV-01"
+    assert "FAME-II" in auto.spec.statutory_disclosures[0]
+    saas = create_domain_specialist("b2b_saas")
+    assert saas.spec.catalog[0]["id"] == "PLAN-ENT"
+    assert create_domain_specialist("mystery").spec.domain_id == "mystery"
+
+
+def test_factory_reads_packs():
+    import inspect
+    from voiceagent.swarm import specialist as mod
+    assert "load_vertical" in inspect.getsource(mod.create_domain_specialist)
