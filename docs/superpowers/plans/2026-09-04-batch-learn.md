@@ -390,7 +390,7 @@ Expected: FAIL (no cap → 60 proposals; flood already [] so that half passes �
 
 - [ ] **Step 3: Implement cap + spec note**
 
-Cap in `mine_proposals`: after final sort, `props = props[:50]`. Spec append (§4.6a, ≤6 lines):
+Cap in `mine_proposals`: after group ordering, `props = props[:50]` BEFORE the final `(kind, title)` sort (frequency wins over alphabetical; IDs assigned post-sort stay deterministic). Spec append (§4.6a, ≤6 lines):
 
 ```markdown
 ### 4.6a Batch job scope (v1)
