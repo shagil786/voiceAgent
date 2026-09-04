@@ -62,3 +62,26 @@ def test_bad_tool_state_rejected(tmp_path):
     import pytest
     with pytest.raises(ValueError, match="state"):
         load_bundle(d)
+
+
+def test_diff_eval_only_change_yields_single_evals_entry():
+    import copy
+    old = load_bundle(GOLDEN)
+    new = load_bundle(GOLDEN)
+    assert old.evals, "golden bundle needs at least one eval for this test"
+    new.evals[0] = copy.deepcopy(old.evals[0])
+    new.evals[0].turns = [{"user": "changed turn"}]
+    d = diff_bundles(old, new)
+    assert len(d) == 1
+    assert d[0]["section"] == "evals" and d[0]["kind"] == "changed"
+
+
+def test_diff_policies_single_key_change_lists_only_that_key():
+    old = load_bundle(GOLDEN)
+    new = load_bundle(GOLDEN)
+    key = next(iter(old.policies))
+    new.policies[key] = {"changed_by_test": True}
+    d = diff_bundles(old, new)
+    pol = [x for x in d if x["section"] == "policies"]
+    assert len(pol) == 1
+    assert pol[0]["detail"] == [key]

@@ -98,8 +98,10 @@ def save_bundle(bundle: Bundle, path: str | Path) -> None:
 def diff_bundles(old: Bundle, new: Bundle) -> list[dict]:
     out: list[dict] = []
     if old.spec != new.spec:
+        changed = sorted(k for k in set(old.spec) | set(new.spec)
+                         if old.spec.get(k) != new.spec.get(k))
         out.append({"section": "spec", "kind": "changed",
-                    "detail": sorted(set(new.spec) | set(old.spec))})
+                    "detail": changed})
     old_t, new_t = {t.name: t for t in old.tools}, {t.name: t for t in new.tools}
     for n in new_t.keys() - old_t.keys():
         out.append({"section": "tools", "kind": "added", "detail": n})
@@ -109,8 +111,20 @@ def diff_bundles(old: Bundle, new: Bundle) -> list[dict]:
         if asdict(old_t[n]) != asdict(new_t[n]):
             out.append({"section": "tools", "kind": "changed", "detail": n})
     if old.policies != new.policies:
+        changed = sorted(k for k in set(old.policies) | set(new.policies)
+                         if old.policies.get(k) != new.policies.get(k))
         out.append({"section": "policies", "kind": "changed",
-                    "detail": sorted(set(new.policies) | set(old.policies))})
+                    "detail": changed})
+    old_e = {e.name: e for e in old.evals}
+    new_e = {e.name: e for e in new.evals}
+    for n in new_e.keys() - old_e.keys():
+        out.append({"section": "evals", "kind": "added", "detail": n})
+    for n in old_e.keys() - new_e.keys():
+        out.append({"section": "evals", "kind": "removed", "detail": n})
+    for n in old_e.keys() & new_e.keys():
+        if (old_e[n].turns != new_e[n].turns
+                or old_e[n].assert_ != new_e[n].assert_):
+            out.append({"section": "evals", "kind": "changed", "detail": n})
     if old.knowledge != new.knowledge:
         out.append({"section": "knowledge", "kind": "changed",
                     "detail": f"{len(old.knowledge)}->{len(new.knowledge)} chunks"})

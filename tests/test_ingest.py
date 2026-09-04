@@ -53,3 +53,20 @@ def test_stub_fetcher_skips_robots_entirely(monkeypatch):
     chunks = ingest.fetch_site("https://acme.test/", fetcher=_stub_fetcher_factory(pages))
     assert chunks and chunks[0]["source"] == "https://acme.test/"
     assert not any(c["source"].startswith("gap:robots") for c in chunks)
+
+
+def test_empty_pages_do_not_allow_unbounded_fetching():
+    calls = []
+    pages = {f"https://acme.test/p{i}": "<p>   </p>" for i in range(200)}
+    pages["https://acme.test/"] = "".join(
+        f'<a href="/p{i}">x</a>' for i in range(200)) + "<p>   </p>"
+
+    def fetch(url):
+        calls.append(url)
+        if url not in pages:
+            raise OSError(f"blocked or missing: {url}")
+        return pages[url], url
+
+    chunks = ingest.fetch_site("https://acme.test/", fetcher=fetch)
+    assert len(calls) <= ingest.MAX_PAGES
+    assert len(chunks) <= ingest.MAX_PAGES

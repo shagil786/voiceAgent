@@ -74,3 +74,16 @@ def test_runner_blocks_unconnected_tool():
     assert out.result is None
     assert len(log.entries()) == 1
     assert log.entries()[-1].verdict == "BLOCKED_UNCONNECTED"
+
+
+def test_approve_connected_clears_dry_run():
+    b = load_bundle(GOLDEN)
+    b = gate.approve_tool(b, "fetch_status")
+    b = gate.record_dry_run(b, "fetch_status",
+                            {"auth_ok": True,
+                             "benign_call": {"request": "r", "response": "s"}},
+                            confirmed_by="owner")
+    assert gate.tool_state(b, "fetch_status") == "CONNECTED"
+    b = gate.approve_tool(b, "fetch_status")
+    assert gate.tool_state(b, "fetch_status") == "APPROVED"
+    assert gate.get_dry_run(b, "fetch_status") is None

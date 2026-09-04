@@ -129,3 +129,22 @@ def test_governed_runner_high_value_refund_requires_human():
                      {"order_id": "ORD-7734", "amount": 6500.0, "reason": "x"})
     assert out.decision_verdict == "ESCALATE"
     assert not out.executed
+
+
+def test_governed_runner_blocks_unknown_tool_when_states_passed():
+    from voiceagent.decisionlog import DecisionLog
+    log = DecisionLog()
+    erp = MockERP()
+    runner = GovernedToolRunner(ToolGateway(erp=erp),
+                                PolicyEngine({"cancel_order": {"allow": True}}),
+                                decision_log=log)
+    out = runner.run("cancel_order", PolicyContext(authenticated=True),
+                     "cancel_order",
+                     {"order_id": "ORD-4821", "reason": "x"},
+                     conv_id="conv-unknown-1",
+                     tool_states={"other": "CONNECTED"})
+    assert out.decision_verdict == "BLOCKED_UNCONNECTED"
+    assert not out.executed and out.result is None
+    assert len(log.entries()) == 1
+    assert log.entries()[-1].verdict == "BLOCKED_UNCONNECTED"
+    assert erp.get_order("ORD-4821")["status"] == "CONFIRMED"

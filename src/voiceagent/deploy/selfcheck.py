@@ -1,10 +1,9 @@
-"""Runnable self-checks: each bundle eval is real Orchestrator.handle_turn calls.
-
-Default harness is the deterministic ScriptedClient from voiceagent.deploy.stub
-(shipped with src — never the tests package), wrapped in FrontierAgentBridge with
-runner=None — so no governed tools fire and assertions cover reply content
-(`contains`); `action`/`verdict` assertions resolve against the turn's first
-governed action entry and will fail closed when no action ran.
+"""Self-checks: each bundle eval runs real Orchestrator.handle_turn calls.
+Default stub brain seeds replies from eval expectations, so default 10/10
+proves plumbing (real handle_turn ran + assertions evaluated), NOT model quality.
+Action/verdict branches need a wired runner + real brain via make_brain
+(Plan 4 adversarial harness scope). live_spot is TODO(Plan 4): reserved for
+one live-brain spot-check.
 """
 from __future__ import annotations
 

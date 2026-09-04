@@ -280,23 +280,27 @@ class GovernedToolRunner:
             tool_states: dict[str, str] | None = None) -> GovernedOutcome:
         # Deployment gate (additive): when the caller passes the bundle's
         # tool states, only CONNECTED tools may execute. None means a
-        # pre-gate deployment — enforce policy only, as before.
-        state = tool_states.get(tool_name) if tool_states else None
-        if state is not None and state != "CONNECTED":
-            outcome = GovernedOutcome(
-                decision_verdict="BLOCKED_UNCONNECTED",
-                reasons=[f"tool '{tool_name}' is {state}, "
-                         "owner approval required"])
-            if self.decision_log is not None:
-                from voiceagent.decisionlog import DecisionEntry
-                self.decision_log.record(DecisionEntry(
-                    ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    conv_id=conv_id, action=action,
-                    verdict="BLOCKED_UNCONNECTED",
-                    reasons=list(outcome.reasons),
-                    amount=getattr(context, "amount", None),
-                    authenticated=getattr(context, "authenticated", False)))
-            return outcome
+        # pre-gate deployment — enforce policy only, as before. A passed
+        # dict MISSING the tool name means unknown — never executed
+        # (spec section 6) — blocked exactly like a non-CONNECTED state.
+        if tool_states is not None:
+            state = tool_states.get(tool_name)
+            if state != "CONNECTED":
+                label = state if state is not None else "unknown"
+                outcome = GovernedOutcome(
+                    decision_verdict="BLOCKED_UNCONNECTED",
+                    reasons=[f"tool '{tool_name}' is {label}, "
+                             "owner approval required"])
+                if self.decision_log is not None:
+                    from voiceagent.decisionlog import DecisionEntry
+                    self.decision_log.record(DecisionEntry(
+                        ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        conv_id=conv_id, action=action,
+                        verdict="BLOCKED_UNCONNECTED",
+                        reasons=list(outcome.reasons),
+                        amount=getattr(context, "amount", None),
+                        authenticated=getattr(context, "authenticated", False)))
+                return outcome
         decision = self.policy.evaluate(action, context)
         outcome = GovernedOutcome(decision_verdict=decision.verdict,
                                   reasons=list(decision.reasons))

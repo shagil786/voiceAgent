@@ -43,8 +43,13 @@ def approve_knowledge(bundle: Bundle) -> Bundle:
 
 
 def approve_tool(bundle: Bundle, name: str) -> Bundle:
+    was_connected = _find_tool(bundle, name).state == "CONNECTED"
     out = copy.deepcopy(bundle)
-    _find_tool(out, name).state = "APPROVED"
+    entry = _find_tool(out, name)
+    entry.state = "APPROVED"
+    if was_connected:
+        # Fresh approval needs a fresh dry-run: clear the stale CONNECTED probe.
+        entry.dry_run = None
     return out
 
 
