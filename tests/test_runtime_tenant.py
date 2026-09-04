@@ -235,6 +235,19 @@ def test_voiceagent_tenant_os_environ_seam(monkeypatch):
     assert orch._deployment.name == "example-acme"
 
 
+def test_typoed_tenant_fails_fast_never_silent_fallback():
+    # Tenant.load falls back to platform defaults for a MISSING root, which
+    # here would silently serve default-identity + platform-wide policy — a
+    # typo'd bundle name must raise, on both the env and explicit-arg paths.
+    # (A programmatically-constructed Tenant object keeps the missing-root
+    # fallback doctrine; only operator-supplied NAMES fail fast.)
+    with pytest.raises(ValueError, match="tenant bundle not found"):
+        build_orchestrator(env={**FRONTIER_URL,
+                                "VOICEAGENT_TENANT": "typo-bundle"})
+    with pytest.raises(ValueError, match="tenant bundle not found"):
+        build_orchestrator(env=dict(FRONTIER_URL), tenant="typo-bundle")
+
+
 # --- 8. the CI gate ------------------------------------------------------------
 
 def test_validate_tenant_gate_passes_example_acme():

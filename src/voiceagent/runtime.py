@@ -177,7 +177,15 @@ def _resolve_tenant(tenant: str | None,
     if not value:
         return None
     root = Path(value) if "/" in value else Path("data/tenants") / value
-    return Tenant.load(root)
+    bundle = Tenant.load(root)
+    # Tenant.load falls back to platform defaults for a MISSING root, which
+    # here would silently serve default-identity + platform-wide policy — a
+    # typo'd VOICEAGENT_TENANT must never widen policy, so fail fast instead.
+    if not bundle.exists:
+        raise ValueError(
+            f"tenant bundle not found: {root} — VOICEAGENT_TENANT must name "
+            "a bundle under data/tenants/ or a bundle path")
+    return bundle
 
 
 def make_deployment(
