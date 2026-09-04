@@ -10,6 +10,8 @@ def test_owner_policy_and_tone_types():
     assert classify_correction("Never promise loan approval", is_owner=True).patch_type == "policy"
     assert classify_correction("No, keep it shorter and polite", is_owner=True).patch_type == "tone"
     assert classify_correction("No, say 'site visits 10-6' like this", is_owner=True).patch_type == "exemplar"
+    # precision: type keywords alone never trigger (R2 — correction needs a lead)
+    assert classify_correction("What's the price?", is_owner=True).is_correction is False
 
 def test_customer_correction_never_global():
     c = classify_correction("No, my flat is 3BHK not 2BHK", "Noted 2BHK", is_owner=False)
