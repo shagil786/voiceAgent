@@ -305,12 +305,13 @@ def test_policy_engine_known_actions_accessor():
 
 def test_system_prompt_byte_identical_to_legacy_text():
     # Pin the exact pre-refactor SYSTEM_PROMPT so prompt changes are always
-    # a conscious, reviewed decision. Updated in M5c: the two new
-    # informational actions (refund_info, delivery_eta) were consciously
-    # added to the vocabulary.
+    # a conscious, reviewed decision. Consciously changed: the default
+    # persona is the neutral "customer support assistant" (was "...for an
+    # Indian ecommerce company"); the M5c informational actions
+    # (refund_info, delivery_eta) were added to the vocabulary earlier.
     assert SYSTEM_PROMPT == (
-        "You are a customer support assistant for an Indian ecommerce "
-        "company. Answer directly and concisely — do NOT use a thinking or "
+        "You are a customer support assistant. "
+        "Answer directly and concisely — do NOT use a thinking or "
         "reasoning phase. Answer ONLY from the provided context. "
         "Always address the customer's specific reference (order id, phone, "
         "plan, account) from their message in your reply — echo it verbatim. "

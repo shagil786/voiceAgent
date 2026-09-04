@@ -26,8 +26,10 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-DEFAULT_PERSONA_ROLE = ("customer support assistant for an Indian ecommerce "
-                        "company")
+# Neutral by default: a persona is tenant data. The legacy default ("...for
+# an Indian ecommerce company") claimed a false identity for tenants that
+# did not declare a role.
+DEFAULT_PERSONA_ROLE = "customer support assistant"
 DEFAULT_CURRENCY = "₹"
 TENANT_CONFIG_PATH = "data/tenants/default/tenant.json"
 

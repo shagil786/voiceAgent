@@ -34,10 +34,17 @@ logger = logging.getLogger(__name__)
 
 # Text language -> piper voice name. en: the M3 English voice; hi: pratham
 # medium; te: maya medium (verified on HF te/te_IN, no medium Tamil exists).
+# Global target set verified on HF at authoring time (HEAD 200): es_MX-ald,
+# fr_FR-siwis, de_DE-thorsten, pt_BR-faber — the README's es/fr/de/pt callers
+# must not receive the en voice.
 VOICE_REGISTRY = {
     "en": "en_US-lessac-medium",
     "hi": "hi_IN-pratham-medium",
     "te": "te_IN-maya-medium",
+    "es": "es_MX-ald-medium",
+    "fr": "fr_FR-siwis-medium",
+    "de": "de_DE-thorsten-medium",
+    "pt": "pt_BR-faber-medium",
 }
 
 # Romanized Hindi -> Hindi voice (see module docstring for the quality caveat).

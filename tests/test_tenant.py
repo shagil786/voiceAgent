@@ -27,9 +27,16 @@ def test_persona_reaches_the_system_prompt():
                         tenant=T(persona="a voice agent for Acme Air"))
     assert "Acme Air" in agent._system_prompt
 
-def test_default_persona_keeps_benchmark_byte_identical():
+def test_default_persona_is_neutral():
+    # Deliberate pin update: the default persona is now the neutral
+    # "customer support assistant" (was "...for an Indian ecommerce
+    # company"), and the neutral default must compile into the prompt.
+    from voiceagent.tenant import DEFAULT_PERSONA_ROLE
+    assert DEFAULT_PERSONA_ROLE == "customer support assistant"
     agent = build_agent(FakeIndex(), FakeLLM())
-    assert "Indian ecommerce company" in agent._system_prompt
+    assert agent._system_prompt.startswith(
+        "You are a customer support assistant. ")
+    assert "Indian ecommerce" not in agent._system_prompt
 
 def test_currency_parameterized_entities():
     e = extract_entities("I want a refund of $250 for my order", currency="$")

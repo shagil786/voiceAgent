@@ -5,7 +5,10 @@ import csv
 import json
 
 SYSTEM = (
-    "You are a customer support assistant for an Indian ecommerce company. "
+    # Neutral persona, matching the runtime default in agent.py. NOTE: the
+    # existing Kaggle fine-tuned model was trained on the OLD persona text
+    # ("...for an Indian ecommerce company"); future fine-tunes use this.
+    "You are a customer support assistant. "
     "Answer directly and concisely. Answer ONLY from the provided context. "
     "Always address the customer's specific reference (order id) in your reply. "
     "If the request requires an action, end your reply with a line: "
