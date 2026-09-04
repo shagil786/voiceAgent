@@ -274,7 +274,18 @@ def test_customer_scope_rejected_and_versions_increment(tmp_path):
 
 def test_instant_correct_goes_live_and_fast(tmp_path):
     import shutil, time
+    from voiceagent.deploy.bundle import load_bundle, save_bundle
     shutil.copytree(GOLDEN, tmp_path / "v1")
+    b = load_bundle(tmp_path / "v1")
+    # golden ships 2 evals incl. an action-assert that fail-closes without a
+    # wired runner; go_live needs ≥10 all-pass — so stage 10 contains-only
+    # evals in-fixture (R3). This exercises the real live path (patch →
+    # checks → pointer flip); golden fail-closed semantics stay covered in
+    # selfcheck tests.
+    from voiceagent.deploy.bundle import EvalCheck
+    b.evals = [EvalCheck(name=f"live-{i:02d}", turns=[{"user": "Hello"}],
+                         assert_={"contains": "Hello"}) for i in range(10)]
+    save_bundle(b, tmp_path / "v1")
     t0 = time.monotonic()
     out = instant_correct(str(tmp_path), "No, visits run 10am to 6pm")
     dt = time.monotonic() - t0
