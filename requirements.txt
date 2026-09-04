@@ -13,3 +13,8 @@ llama-cpp-python==0.3.35
 faster-whisper==1.1.1
 piper-tts==1.7.0
 pytest==8.3.4
+# 2026-09-04: LiveKit telephony limb — realtime client SDK (provides
+# `livekit.rtc`; the monorepo source dir is `livekit-rtc/` but no
+# `livekit-rtc` distribution exists on PyPI) + server API SDK.
+livekit==1.1.17
+livekit-api==1.2.1

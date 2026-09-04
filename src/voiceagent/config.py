@@ -61,6 +61,12 @@ class RuntimeConfig:
     frontier_model: str | None = None
     frontier_key: str | None = field(default=None, repr=False)
     hf_token: str | None = field(default=None, repr=False)
+    livekit_url: str | None = None
+    livekit_key: str | None = field(default=None, repr=False)
+    livekit_secret: str | None = field(default=None, repr=False)
+    livekit_number: str | None = None
+    livekit_trunk_id: str | None = None
+    livekit_room_prefix: str = "call-"
 
 
 def _parse_list(raw: str | None) -> list[str] | None:
@@ -149,6 +155,13 @@ def load_config(env: Mapping[str, str] | None = None,
     frontier_key = e.get("VOICEAGENT_FRONTIER_KEY") or None
     hf_token = e.get("VOICEAGENT_HF_TOKEN") or None
 
+    livekit_url = e.get("LIVEKIT_URL") or None
+    livekit_key = e.get("LIVEKIT_KEY") or None
+    livekit_secret = e.get("LIVEKIT_SECRET") or None
+    livekit_number = e.get("LIVEKIT_NUMBER") or None
+    livekit_trunk_id = e.get("LIVEKIT_TRUNK_ID") or None
+    livekit_room_prefix = e.get("LIVEKIT_ROOM_PREFIX") or "call-"
+
     return RuntimeConfig(
         models_dir=models_dir,
         candidate_models=candidate_models,
@@ -158,4 +171,10 @@ def load_config(env: Mapping[str, str] | None = None,
         frontier_model=frontier_model,
         frontier_key=frontier_key,
         hf_token=hf_token,
+        livekit_url=livekit_url,
+        livekit_key=livekit_key,
+        livekit_secret=livekit_secret,
+        livekit_number=livekit_number,
+        livekit_trunk_id=livekit_trunk_id,
+        livekit_room_prefix=livekit_room_prefix,
     )
