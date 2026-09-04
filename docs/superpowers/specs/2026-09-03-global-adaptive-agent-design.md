@@ -68,6 +68,9 @@ Owner correction → patch-type classify (tone/fact/policy/exemplar) → `vN+1` 
 ### 4.5 Per-person memory
 Contact key (decided): phone in E.164 as primary key + owner-aliased override (owner may rename/merge, e.g. "Sharma-family"), TTL + delete-on-request; affects `memory.py` schema, GDPR-style delete path, and dialer lookup. Profile per key: preferences, corrections, open items, consent. Read at turn start; written on correction/resolution. Never crosses contacts; owner-visible + deletable. Only anonymized ≥3-occurrence patterns proposed globally.
 
+### 4.5a Eval-tagging contract (for Plan 3 batch-learn)
+Approved customer-derived evals MUST carry `source_contact_hash` (SHA-256 of the contact key, never the key); `purge_contact(hash)` removes them. Owner-authored instant evals carry `source: owner`. Bundle loader ignores unknown eval fields (forward-compatible).
+
 ### 4.6 Batch-learn
 Nightly job over labeled turns (resolved/escalated/thumbs/human-takeover) → proposals (exemplars, wording, threshold, knowledge gaps). Owner per-item/bulk approve → new versions. Eval set grows from approved outcomes only.
 

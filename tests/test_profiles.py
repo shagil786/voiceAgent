@@ -63,3 +63,43 @@ def test_get_put_copy_semantics():
     assert p is not None
     p.prefs.append("X")
     assert s.get("c1").prefs == ["2BHK"]
+
+def test_sqlite_cascade_and_expiry(tmp_path):
+    from voiceagent.learn.profiles import SQLiteProfiles
+    s = SQLiteProfiles(str(tmp_path / "c.db"))
+    s.put(Profile(key="k9", alias="Fam9", prefs=["x"], corrections=[],
+                  open_items=[], pending_global=[], consent={},
+                  updated_at="2020-01-01T00:00:00"))
+    s.link_session("k9", "sess-9")
+    assert s.get("k9") is None  # TTL prunes on read (2020 vs 365-day TTL)
+    assert s.sessions_for("k9") == []  # links die with the profile
+    with pytest.raises(KeyError):
+        s.export_contact("k9")
+
+def test_put_store_copy_semantics():
+    s = InMemoryProfiles()
+    p2 = Profile(key="k2", alias="", prefs=["2BHK"], corrections=[],
+                 open_items=[], pending_global=[], consent={},
+                 updated_at="2026-09-01T00:00:00")
+    s.put(p2)
+    p2.prefs.append("X")
+    assert s.get("k2").prefs == ["2BHK"]
+
+def test_instant_correct_timing_on_realistic_bundle(tmp_path):
+    import shutil, time
+    from voiceagent.deploy.bundle import EvalCheck, load_bundle, save_bundle
+    from voiceagent.learn.instant import instant_correct
+    shutil.copytree("data/deployments/_example/v1", tmp_path / "v1")
+    b = load_bundle(tmp_path / "v1")
+    # realistic bundle: golden spec/tools/policies + 5 knowledge chunks;
+    # 10 contains-only evals so the real go-live path is exercised (R3).
+    b.knowledge = [{"text": f"Chunk {i}: support hours 9am to 7pm",
+                    "source": "owner_paste",
+                    "crawled_at": "2026-09-04T00:00:00"}
+                   for i in range(5)]
+    b.evals = [EvalCheck(name=f"live-{i:02d}", turns=[{"user": "Hello"}],
+                         assert_={"contains": "Hello"}) for i in range(10)]
+    save_bundle(b, tmp_path / "v1")
+    t0 = time.monotonic()
+    out = instant_correct(str(tmp_path), "No, support hours are 9am to 7pm")
+    assert out["live"] is True and (time.monotonic() - t0) < 60
