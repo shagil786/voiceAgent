@@ -256,9 +256,9 @@ def test_fact_patch_appends_knowledge_with_source():
 
 def test_policy_patch_flags_dsl_review_on_amounts():
     b = load_bundle(GOLDEN)
-    _, log = apply_owner_correction(
+    new, log = apply_owner_correction(
         b, classify_correction("Never promise refunds above 5000", is_owner=True))
-    assert "never promise refunds above 5000" in " ".join(b.spec.get("never_promise", []) + log.get("quote", "") and [log["quote"]])
+    assert "Never promise refunds above 5000" in new.spec.get("never_promise", [])
     assert log["needs_dsl_review"] is True
 
 def test_customer_scope_rejected_and_versions_increment(tmp_path):
