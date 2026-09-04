@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,14 +27,23 @@ logger = logging.getLogger("livekit_worker")
 
 
 def build_deps():
-    """Assemble the orchestrator deps for room sessions.
+    """Assemble the governed Orchestrator for room sessions.
 
-    Deferred import: the deployment wiring is resolved here (not at module
-    import) so `--help` and webhook-only smoke tests stay light.
+    The SAME brain every other entry point uses (see voiceagent.runtime):
+    frontier proposal + governed tool runner + policy engine + Deployment. We do
+    NOT return None — if no frontier brain is configured the worker must refuse
+    to start, because an inbound call with `orchestrator=None` would crash on the
+    first `handle_turn`. `main()` also fails fast before binding the socket.
+
+    `language` is the deployment's known query language (telephony trunk config);
+    None = blind ASR (whisper small) which never auto-routes to the Indic
+    engine. Override per trunk via VOICEAGENT_DEFAULT_LANG.
     """
-    # Placeholder seam: full Orchestrator/Deployment wiring lands with the
-    # production deployment config; the session pattern is already fixed.
-    return {"orchestrator": None, "session_id": None, "language": None}
+    from voiceagent.runtime import build_orchestrator
+
+    orchestrator = build_orchestrator()
+    language = os.environ.get("VOICEAGENT_DEFAULT_LANG") or None
+    return {"orchestrator": orchestrator, "session_id": None, "language": language}
 
 
 def make_server(config, join_room) -> BaseHTTPRequestHandler:
@@ -63,6 +73,11 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     config = load_config()
     deps = build_deps()
+    if deps.get("orchestrator") is None:
+        print("ERROR: VOICEAGENT_FRONTIER_URL not set — the LiveKit worker "
+              "cannot serve calls without a governed brain. See .env.example.",
+              file=sys.stderr)
+        sys.exit(2)
 
     def join_room(room_name: str) -> None:
         session_deps = dict(deps)

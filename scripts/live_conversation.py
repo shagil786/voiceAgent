@@ -22,16 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from voiceagent.decisionlog import DecisionLog
-from voiceagent.memory import InMemoryMemory
-from voiceagent.orchestrator import Deployment, Orchestrator
-from voiceagent.policy import PolicyEngine, load_policies
-from voiceagent.swarm.frontier import (
-    FrontierAgentBridge,
-    FrontierClient,
-    config_from_env,
-)
-from voiceagent.tools import GovernedToolRunner, MockERP, ToolGateway
+from voiceagent.runtime import build_orchestrator as _runtime_build_orchestrator
 
 
 def load_dotenv(path: Path) -> None:
@@ -48,67 +39,15 @@ def load_dotenv(path: Path) -> None:
             os.environ[key] = value
 
 
-def build_orchestrator() -> Orchestrator:
-    cfg = config_from_env()
-    if cfg is None:
+def build_orchestrator():
+    # Single assembly seam: the governed brain lives in voiceagent.runtime so the
+    # LiveKit worker and this REPL share the exact same wiring. Fail fast when
+    # the frontier brain isn't configured.
+    orch = _runtime_build_orchestrator()
+    if orch is None:
         print("ERROR: VOICEAGENT_FRONTIER_URL not set (see .env.example).",
               file=sys.stderr)
         sys.exit(2)
-
-    erp = MockERP()
-    policy = PolicyEngine(load_policies("data/policies/policies.yaml"))
-    log = DecisionLog()
-    runner = GovernedToolRunner(ToolGateway(erp=erp), policy, decision_log=log)
-    brain = FrontierAgentBridge(FrontierClient(cfg))
-    orch = Orchestrator(brain, runner=runner, memory=InMemoryMemory(),
-                        decision_log=log)
-
-    orch.deploy(Deployment(
-        name="acme_support",
-        system_prompt=(
-            "You are Acme's voice support agent. Be concise and warm — your "
-            "replies are spoken aloud. You may propose governed actions "
-            "(fetch_order_status, reschedule_delivery, cancel_order, "
-            "initiate_return, escalate_to_human) — the policy layer decides; "
-            "if a verdict blocks you, explain it plainly to the customer. "
-            "Authenticate context comes from the session; never invent order "
-            "details — fetch them. Never invent URLs, tracking links, or "
-            "reference numbers: if the customer asks for a tracking link, "
-            "offer to send it over WhatsApp instead of reading one out. "
-            "Only promise actions that exist in your tool surface (order "
-            "status, reschedule, cancel, return, refund via human approval, "
-            "human handoff) — never say you are doing something you have no "
-            "tool for. If the customer is upset or asks for a human agent, "
-            "propose escalate_to_human with a short reason."),
-        gateway_tools={
-            "fetch_order_status": {"action": "order_status"},
-            "reschedule_delivery": {"action": "reschedule_delivery"},
-            "cancel_order": {"action": "cancel_order"},
-            "escalate_to_human": {
-                "action": "escalate_to_human",
-                "side_effects": True,
-                "description": "Page a human agent to take over this call. "
-                               "Provide a short reason for the handoff.",
-                "parameters": {"type": "object",
-                               "properties": {"reason": {"type": "string"}},
-                               "required": ["reason"]},
-            },
-            "initiate_return": {
-                "action": "initiate_return",
-                "side_effects": True,
-                "description": "Request a return for a shipped or delivered "
-                               "order (params: order_id, reason).",
-                "parameters": {"type": "object",
-                               "properties": {"order_id": {"type": "string"},
-                                              "reason": {"type": "string"}},
-                               "required": ["order_id", "reason"]},
-            },
-        },
-        knowledge={
-            "eta": "Deliveries occur between 9:00 and 19:00 local time.",
-            "cancel_policy": "Orders that already shipped cannot be cancelled.",
-        },
-    ))
     return orch
 
 
