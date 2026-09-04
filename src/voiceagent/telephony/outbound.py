@@ -14,6 +14,8 @@ the dep on the cold path.
 from __future__ import annotations
 
 import asyncio
+import math
+import sys
 import time
 from typing import Any, Callable, Iterable
 
@@ -26,6 +28,8 @@ TIMEOUT = "timeout"
 _POLL_ACTIVE = "active"
 _POLL_FAILED = "failed"
 _POLL_RINGING = "ringing"
+
+_CADENCE_S = 1.0
 
 _DECIDED = {
     CallParty.HUMAN: "human",
@@ -64,15 +68,21 @@ def _default_create(
     return asyncio.run(api.sip.create_sip_participant(req))
 
 
-def _default_poll(api: Any, room_name: str) -> str:
+def _default_poll(api: Any, room_name: str, seen: list[bool] | None = None) -> str:
     """Map room participants to `active|failed|ringing`.
 
     Verified: `SIPParticipantInfo` carries NO call-status field, so status
     comes from `RoomService.list_participants` instead: any JOINED/ACTIVE
     participant -> `active`; any participant but none live -> `failed` only
-    when a DISCONNECTED participant is present, else `ringing`; empty room
-    -> `ringing`. Transient errors -> `ringing` (keep waiting for timeout).
+    when a DISCONNECTED participant is present, else `ringing`. Empty room
+    -> `ringing` on a fresh dial, but `failed` once `seen` records that
+    participants were present (fast hangup, not another 30s of ringing).
+    `seen` is owned per-`dial_out` call (fresh list each dial); omitting it
+    makes a stateless single-shot. Transient errors print a stderr warning
+    and count as `ringing` for that iteration only.
     """
+    if seen is None:
+        seen = []
     try:
         from livekit.protocol import models, room as room_proto
 
@@ -80,6 +90,9 @@ def _default_poll(api: Any, room_name: str) -> str:
             api.room.list_participants(room_proto.ListParticipantsRequest(room=room_name))
         )
         participants = list(resp.participants)
+        if not participants:
+            return _POLL_FAILED if seen else _POLL_RINGING
+        seen.append(True)
         if any(
             p.state in (models.ParticipantInfo.State.ACTIVE, models.ParticipantInfo.State.JOINED)
             for p in participants
@@ -88,7 +101,8 @@ def _default_poll(api: Any, room_name: str) -> str:
         if any(p.state == models.ParticipantInfo.State.DISCONNECTED for p in participants):
             return _POLL_FAILED
         return _POLL_RINGING
-    except Exception:
+    except Exception as exc:
+        print(f"livekit poll warning: {exc}", file=sys.stderr)
         return _POLL_RINGING
 
 
@@ -107,24 +121,34 @@ def dial_out(
 
     Returns `"connected" | "failed" | "timeout"`. `create`/`poll`/`sleep`
     are injectable (defaults hit the live SDK / `time.sleep`); the poll
-    loop runs at 1s cadence until `active`/`failed` or `timeout_s`.
+    loop runs at 1s cadence until `active`/`failed` or `timeout_s`. Poll
+    exceptions warn on stderr and count as `ringing` for that iteration.
+    The loop is also iteration-capped at `timeout_s` cadences, so a no-op
+    `sleep` fake finishes instantly with the same outcome as wall-clock.
     """
     _create = create if create is not None else _default_create
     _create(api=api, room_name=room_name, to_number=to_number, trunk_id=trunk_id,
             from_number=from_number)
-    _poll = poll if poll is not None else (lambda r: _default_poll(api, r))
+    seen: list[bool] = []
+    _poll = poll if poll is not None else (lambda r: _default_poll(api, r, seen))
     _sleep = sleep if sleep is not None else time.sleep
 
     deadline = time.monotonic() + timeout_s
-    while True:
-        status = _poll(room_name)
+    max_polls = max(1, math.ceil(timeout_s / _CADENCE_S))
+    for _ in range(max_polls):
+        try:
+            status = _poll(room_name)
+        except Exception as exc:
+            print(f"livekit poll warning: {exc}", file=sys.stderr)
+            status = _POLL_RINGING
         if status == _POLL_ACTIVE:
             return CONNECTED
         if status == _POLL_FAILED:
             return FAILED
         if time.monotonic() >= deadline:
             return TIMEOUT
-        _sleep(min(1.0, deadline - time.monotonic()))
+        _sleep(min(_CADENCE_S, deadline - time.monotonic()))
+    return TIMEOUT
 
 
 def classify_early_audio(frames_iter: Iterable[bytes]) -> str:

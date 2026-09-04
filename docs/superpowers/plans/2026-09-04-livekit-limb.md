@@ -267,7 +267,7 @@ def test_dial_outcomes_and_amd_passthrough():
     assert dial_out(object(), "r", "+1", "T", create=fake_create,
                     poll=lambda r: "failed") == "failed"
     assert dial_out(object(), "r", "+1", "T", create=fake_create,
-                    poll=lambda r: "ringing") == "timeout"
+                    poll=lambda r: "ringing", sleep=lambda s: None) == "timeout"
     assert calls["n"] == 3
 
 def test_amd_first_decision_wins():
