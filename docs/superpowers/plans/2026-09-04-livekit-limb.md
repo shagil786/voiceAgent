@@ -6,7 +6,7 @@
 
 **Architecture:** A worker process bridges LiveKit rooms and the existing turn loop: inbound webhook (`room_started` for `call-*`) → mint token → `rtc.Room` join → subscribe the SIP participant's 48kHz audio → numpy-resample to 16kHz → existing `StreamingVAD` turn detection → `Orchestrator.handle_turn` (ASR text in) → chunked Piper reply → upsample → publish via `AudioSource`, with `BargeInController` cancelling playback. Outbound reverses it: our dialer creates the room, the worker joins, `api.sip.create_sip_participant` dials out, existing `Sub600msAMD` classifies the early audio, and `campaign_turn` runs only on human answer. No Agents-framework pipeline, no second brain, no policy bypass: every spoken turn is one governed `handle_turn`.
 
-**Tech Stack:** Python 3.12, `livekit-rtc` + `livekit-api` (new approved deps — first non-stdlib addition since foundation; pin exact versions in `requirements.txt` with a comment recording the resolution date), `numpy` (already a dep — resampling), existing VAD/ASR/TTS/Orchestrator/dialer/AMD untouched.
+**Tech Stack:** Python 3.12, `livekit` (realtime SDK, provides `livekit.rtc`) + `livekit-api` (server SDK) (new approved deps — first non-stdlib addition since foundation; pin exact versions in `requirements.txt` with a comment recording the resolution date), `numpy` (already a dep — resampling), existing VAD/ASR/TTS/Orchestrator/dialer/AMD untouched.
 
 **Spec:** Design spec import path is `Orchestrator.handle_turn` / `campaign_turn` (NOT legacy `voice_agent.voice_turn`, which drives the old `Agent` path and stays for CLI demos). LiveKit primitives per current docs: inbound trunk + dispatch rule (already configured: `voice-agent`, Individual, `call-`, +12402315037) → SIP participant auto-joins room; outbound via `CreateSIPParticipant` (stored trunk or inline); `wait_until_answered` semantics; voicemail answers SIP 200 OK so AMD stays mandatory.
 
@@ -85,7 +85,7 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'voiceagent.telephony.
 
 - [ ] **Step 3: Write minimal implementation**
 
-`audio.py`: numpy linear interp — `np.frombuffer(pcm, dtype=np.int16).astype(np.float32)`, `np.interp(new_idx, old_idx, x)`, clip to int16 range, `.tobytes()`. Ratios exactly 3:1 / 1:3. `chunk_frames`: split into `sample_rate*frame_ms//1000` samples per chunk (drop trailing partial). Config: 5 new fields + env reads in `load_config` (same style as frontier keys); do NOT change existing fields. `requirements.txt`: add `livekit-rtc` + `livekit-api` — resolve latest stable at build time via `pip index versions livekit-rtc livekit-api`, pin `==` exact with comment `# 2026-09-04`; then `.venv/bin/pip install` them for later tasks (network needed once).
+`audio.py`: numpy linear interp — `np.frombuffer(pcm, dtype=np.int16).astype(np.float32)`, `np.interp(new_idx, old_idx, x)`, clip to int16 range, `.tobytes()`. Ratios exactly 3:1 / 1:3. `chunk_frames`: split into `sample_rate*frame_ms//1000` samples per chunk (drop trailing partial). Config: 5 new fields + env reads in `load_config` (same style as frontier keys); do NOT change existing fields. `requirements.txt`: `livekit==1.1.17` + `livekit-api==1.2.1` (resolved 2026-09-04; NOTE: there is no `livekit-rtc` package on PyPI — the realtime SDK is `livekit`, imported as `from livekit import rtc`); then `.venv/bin/pip install` them for later tasks (network needed once).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -226,7 +226,7 @@ Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write minimal implementation**
 
-Per interfaces. `webhook_handler` signature `(config, join_room, validate=None)` — default validate uses livekit `WebhookReceiver(config.key, config.secret)`; injectable for tests. Prefix: `(config.livekit_room_prefix if config is not None else "call-")` (the test passes `config=None`). `run_room_session` imports `livekit.rtc` lazily (function-level, so unit tests never need the dep installed... they will be installed post-Task-1; still lazy-import to keep cold paths light). Greeting: `turn_fn` equivalent with transcript `"(Inbound call connected — greet the caller.)"` spoken once after subscribe. Disconnect: leave room + return (worker loop respawns per webhook; no shared state).
+Per interfaces. `webhook_handler` signature `(config, join_room, validate=None)` — default validate uses livekit `WebhookReceiver(config.key, config.secret)`; injectable for tests. Prefix: `(config.livekit_room_prefix if config is not None else "call-")` (the test passes `config=None`). `run_room_session` imports `from livekit import rtc` lazily (function-level, so unit tests never need the dep installed... they will be installed post-Task-1; still lazy-import to keep cold paths light). Greeting: `turn_fn` equivalent with transcript `"(Inbound call connected — greet the caller.)"` spoken once after subscribe. Disconnect: leave room + return (worker loop respawns per webhook; no shared state).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -284,7 +284,7 @@ Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write minimal implementation**
 
-`dial_out(api, room_name, to_number, trunk_id, timeout_s=30, poll=None, create=None, sleep=None)`: default `create` calls `api.sip.create_sip_participant(room=room_name, to=to_number, trunk=trunk_id)` — verify exact livekit-api method/param names against the installed package FIRST (read `livekit/api` SIP service in `.venv`), wrap differences in one place; default `poll` reads participant status; default `sleep` is `time.sleep` (injectable → timeout test runs instantly). Poll loop: 1s cadence until `active`/`failed` or `timeout_s` → `"timeout"`. `classify_early_audio`: feed frames to `Sub600msAMD` (verify ctor from `outbound/amd.py` first), return on first decisive label else `"timeout"` after iterator exhausts. Regulatory note in docstring: CLI must run `RegulatoryDNDScrubber` before dialing (wire the check into `livekit_dial.py` main, not the library).
+`dial_out(api, room_name, to_number, trunk_id, timeout_s=30, poll=None, create=None, sleep=None)`: default `create` calls `api.sip.create_sip_participant(room=room_name, to=to_number, trunk=trunk_id)` — verify exact livekit-api method/param names against the installed package FIRST (read the SIP service in installed `livekit-api` under `.venv`), wrap differences in one place; default `poll` reads participant status; default `sleep` is `time.sleep` (injectable → timeout test runs instantly). Poll loop: 1s cadence until `active`/`failed` or `timeout_s` → `"timeout"`. `classify_early_audio`: feed frames to `Sub600msAMD` (verify ctor from `outbound/amd.py` first), return on first decisive label else `"timeout"` after iterator exhausts. Regulatory note in docstring: CLI must run `RegulatoryDNDScrubber` before dialing (wire the check into `livekit_dial.py` main, not the library).
 
 - [ ] **Step 4: Run test to verify it passes**
 
