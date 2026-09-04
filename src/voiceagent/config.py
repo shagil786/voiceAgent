@@ -17,7 +17,7 @@ Design notes:
   `tenant` is a TenantConfig the voices live only in the tenant.json file.
   load_config therefore also accepts a Mapping (parsed tenant.json dict) or
   a path to tenant.json and reads its "voices" key. Tenant overrides voices
-  only when non-empty; env always wins per-key (whole-dict replace).
+  only when non-empty; env wins per-key over the merged dict.
 """
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def load_config(env: Mapping[str, str] | None = None,
     models_dir = e.get("VOICEAGENT_MODELS_DIR") or DEFAULT_MODELS_DIR
 
     cand = _parse_list(e.get("VOICEAGENT_CANDIDATE_MODELS"))
-    candidate_models = cand if cand is not None else list(DEFAULT_CANDIDATE_MODELS)
+    candidate_models = cand if cand else list(DEFAULT_CANDIDATE_MODELS)
 
     voices: dict[str, str] = dict(DEFAULT_VOICES)
     t_voices = _tenant_voices(tenant)
