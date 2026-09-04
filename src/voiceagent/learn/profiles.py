@@ -98,45 +98,49 @@ class InMemoryProfiles:
     """dict-backed ProfileStore (profiles + alias map + contact->sessions)."""
 
     def __init__(self) -> None:
+        self._lock = threading.Lock()
         self._profiles: dict[str, Profile] = {}
         self._aliases: dict[str, str] = {}
         self._links: dict[str, set[str]] = {}
 
     def get(self, key: str) -> Profile | None:
-        p = self._profiles.get(key)
-        if p is None:
-            return None
-        if _expired(p.updated_at):
-            self.delete_contact(key)
-            return None
-        return copy.deepcopy(p)
+        with self._lock:
+            p = self._profiles.get(key)
+            if p is None:
+                return None
+            if _expired(p.updated_at):
+                self._delete_locked(key)
+                return None
+            return copy.deepcopy(p)
 
     def put(self, profile: Profile) -> None:
         stored = copy.deepcopy(profile)
         if not stored.updated_at:
             stored.updated_at = now_ts()
-        self._profiles[stored.key] = stored
+        with self._lock:
+            self._profiles[stored.key] = stored
 
     def set_alias(self, alias: str, key: str) -> None:
-        self._aliases[alias] = key
+        with self._lock:
+            self._aliases[alias] = key
 
     def resolve(self, alias_or_key: str) -> str:
-        if alias_or_key in self._aliases:
-            return self._aliases[alias_or_key]
+        with self._lock:
+            if alias_or_key in self._aliases:
+                return self._aliases[alias_or_key]
         return alias_or_key
 
     def link_session(self, key: str, session_id: str) -> None:
-        self._links.setdefault(key, set()).add(session_id)
+        with self._lock:
+            self._links.setdefault(key, set()).add(session_id)
 
     def sessions_for(self, key: str) -> list[str]:
-        return sorted(self._links.get(key, ()))
+        with self._lock:
+            return sorted(self._links.get(key, ()))
 
     def delete_contact(self, key: str) -> dict:
-        sessions = sorted(self._links.pop(key, ()))
-        self._drop(key)
-        for alias, target in [i for i in self._aliases.items()
-                              if i[1] == key]:
-            del self._aliases[alias]
+        with self._lock:
+            sessions = self._delete_locked(key)
         return {"sessions": sessions}
 
     def export_contact(self, key: str) -> dict:
@@ -146,11 +150,20 @@ class InMemoryProfiles:
         return _profile_dict(p)
 
     def prune_expired(self, now: str | None = None) -> int:
-        expired = [k for k, p in self._profiles.items()
-                   if _expired(p.updated_at, now)]
-        for k in expired:
-            self.delete_contact(k)
+        with self._lock:
+            expired = [k for k, p in self._profiles.items()
+                       if _expired(p.updated_at, now)]
+            for k in expired:
+                self._delete_locked(k)
         return len(expired)
+
+    def _delete_locked(self, key: str) -> list[str]:
+        sessions = sorted(self._links.pop(key, ()))
+        self._drop(key)
+        for alias, target in [i for i in self._aliases.items()
+                              if i[1] == key]:
+            del self._aliases[alias]
+        return sessions
 
     def _drop(self, key: str) -> None:
         self._profiles.pop(key, None)
@@ -206,18 +219,19 @@ class SQLiteProfiles:
             return _row_to_profile(row)
 
     def put(self, profile: Profile) -> None:
-        if not profile.updated_at:
-            profile.updated_at = now_ts()
+        stored = copy.deepcopy(profile)
+        if not stored.updated_at:
+            stored.updated_at = now_ts()
         with self._lock:
             self._conn.execute(
                 "INSERT OR REPLACE INTO profiles (key, alias, prefs_json,"
                 " corrections_json, open_items_json, pending_json,"
                 " consent_json, updated_at)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (profile.key, profile.alias, json.dumps(profile.prefs),
-                 json.dumps(profile.corrections), json.dumps(profile.open_items),
-                 json.dumps(profile.pending_global), json.dumps(profile.consent),
-                 profile.updated_at))
+                (stored.key, stored.alias, json.dumps(stored.prefs),
+                 json.dumps(stored.corrections), json.dumps(stored.open_items),
+                 json.dumps(stored.pending_global), json.dumps(stored.consent),
+                 stored.updated_at))
             self._conn.commit()
 
     def set_alias(self, alias: str, key: str) -> None:

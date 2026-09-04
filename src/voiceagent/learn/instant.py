@@ -1,5 +1,7 @@
 """Instant owner-correction patches (§4.4): owner quote → versioned bundle + go-live.
 
+Owner corrections must not contain customer PII — bundle versions are permanent and outside TTL/delete scope.
+
 Self-checks run the stub tier by default (`make_brain=None` → selfcheck
 default brain); any live-brain variance is Plan 4 scope.
 """
@@ -75,6 +77,16 @@ def instant_correct(deploy_dir: str | Path, quote: str, context: str = "",
     flips only when `go_live` approves (≥10 all-pass). Returns `{version,
     passed, checks, changelog, live, reason}` (`reason` is None on success).
     """
+    if actor != "owner":
+        raise ValueError("instant_correct is owner-only")
+    correction = classify_correction(quote, "", is_owner=True)
+    if not correction.is_correction:
+        changelog = {"actor": actor, "quote": correction.quote,
+                     "patch_type": "none", "context": context,
+                     "version": None, "passed": False, "live": False}
+        return {"version": None, "passed": False, "checks": [],
+                "changelog": changelog, "live": False,
+                "reason": "not a correction"}
     d = Path(deploy_dir)
     live = read_live(d)
     if live is not None:
@@ -82,7 +94,6 @@ def instant_correct(deploy_dir: str | Path, quote: str, context: str = "",
     else:
         nums = _version_numbers(d)
         base = f"v{max(nums)}" if nums else "v1"
-    correction = classify_correction(quote, "", is_owner=True)
     new, log = apply_owner_correction(load_bundle(d / base), correction,
                                       context)
     log["actor"] = actor

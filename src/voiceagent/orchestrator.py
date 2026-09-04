@@ -45,6 +45,9 @@ _FALLBACK_REPLY = (
 )
 
 
+MAX_PENDING_GLOBAL = 50
+
+
 # --- deployment descriptor ---------------------------------------------------
 
 @dataclass
@@ -161,18 +164,29 @@ class Orchestrator:
         # Instant-Learn contact memory in: resolve the contact, inject its
         # prefs/corrections/open items ahead of any placement prefix, and
         # link this session to the contact. profiles=None skips all of this.
+        # Cross-contact separation: anonymous turns (no alias resolving to
+        # an existing profile AND no usable phone) skip the entire profile
+        # seam — never share one `cid:unknown` fallback across callers.
         contact: str | None = None
         if self.profiles is not None:
-            contact = (self.profiles.resolve(contact_alias)
-                       if contact_alias else contact_key(state.profile))
-            prof = self.profiles.get(contact)
-            if prof is not None:
-                block = _contact_memory_block(prof)
-                if block:
-                    _system_prefix = ((block + "\n\n" + (_system_prefix or ""))
-                                      or None)
-            self.profiles.link_session(contact, session_id)
-            self._profile_links[session_id] = contact
+            key: str | None = None
+            if contact_alias:
+                r = self.profiles.resolve(contact_alias)
+                if self.profiles.get(r) is not None:
+                    key = r
+            if key is None:
+                if (state.profile.phone or "").strip():
+                    key = contact_key(state.profile)
+            if key is not None:
+                contact = key
+                prof = self.profiles.get(contact)
+                if prof is not None:
+                    block = _contact_memory_block(prof)
+                    if block:
+                        _system_prefix = ((block + "\n\n" + (_system_prefix or ""))
+                                          or None)
+                self.profiles.link_session(contact, session_id)
+                self._profile_links[session_id] = contact
         # Deterministic sentiment: every governed evaluation this turn sees
         # the caller's frustration level (policies route on it via
         # escalate_when — conditions are data, not code).
@@ -242,6 +256,7 @@ class Orchestrator:
                 prof.pending_global.append(
                     {"quote": corr.quote, "patch_type": corr.patch_type,
                      "session_id": session_id, "ts": now_ts()})
+                del prof.pending_global[:-MAX_PENDING_GLOBAL]
                 prof.updated_at = now_ts()
                 self.profiles.put(prof)
 
@@ -270,11 +285,14 @@ class Orchestrator:
 
     def delete_contact(self, contact_or_alias: str) -> dict:
         """Delete a contact's profile and cascade to its linked sessions:
-        durable memory cleared and live blackboard state dropped."""
+        durable memory cleared and live blackboard state dropped.
+        Owner-only: callers must authenticate + audit-log; never expose as a brain tool without an auth check."""
         if self.profiles is None:
             raise RuntimeError("no ProfileStore configured")
-        out = self.profiles.delete_contact(
-            self.profiles.resolve(contact_or_alias))
+        resolved = self.profiles.resolve(contact_or_alias)
+        if not (resolved or "").strip():
+            return {"sessions": []}
+        out = self.profiles.delete_contact(resolved)
         for sid in out["sessions"]:
             self.memory.clear(sid)
             self._sessions.pop(sid, None)
@@ -282,11 +300,14 @@ class Orchestrator:
         return out
 
     def export_contact(self, contact_or_alias: str) -> dict:
-        """Export one contact's profile dict (KeyError when unknown)."""
+        """Export one contact's profile dict (KeyError when unknown).
+        Owner-only: callers must authenticate + audit-log; never expose as a brain tool without an auth check."""
         if self.profiles is None:
             raise RuntimeError("no ProfileStore configured")
-        return self.profiles.export_contact(
-            self.profiles.resolve(contact_or_alias))
+        resolved = self.profiles.resolve(contact_or_alias)
+        if not (resolved or "").strip():
+            raise KeyError("unknown contact")
+        return self.profiles.export_contact(resolved)
 
     # -- internals ----------------------------------------------------------
 
