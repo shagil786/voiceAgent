@@ -67,3 +67,27 @@ def test_apply_and_purge_roundtrip():
     assert n == 1 and not any("batch-exemplar-000" in e.name for e in pruned.evals)
     same, n0 = purge_contact(new, "nope")
     assert n0 == 0 and same is new
+
+def test_flood_single_hash_yields_nothing_and_no_raw_keys():
+    import json
+    from voiceagent.learn.batch import mine_proposals
+    cands = [{"quote": f"No, item {i} broke", "patch_type": "fact",
+              "session_id": "s", "ts": "t", "contact_hash": "solo"} for i in range(100)]
+    assert mine_proposals(cands, []) == []
+    from voiceagent.learn.batch import hash_contact
+    trio = [{"quote": "No, fee is 499", "patch_type": "fact", "session_id": "s",
+             "ts": "t", "contact_hash": h} for h in ("a", "b", "c")]
+    props = mine_proposals(trio, [])
+    blob = json.dumps(props)
+    assert "+911" not in blob and len(props) == 1
+
+def test_proposal_cap_and_deterministic_order():
+    from voiceagent.learn.batch import mine_proposals
+    cands = []
+    for g in range(60):
+        for h in ("h1", "h2", "h3"):
+            cands.append({"quote": f"No, thing{g} failed", "patch_type": "fact",
+                          "session_id": "s", "ts": "t", "contact_hash": f"{h}-{g}"})
+    props = mine_proposals(cands, [])
+    assert len(props) == 50
+    assert [p["id"] for p in props] == sorted(p["id"] for p in props)
