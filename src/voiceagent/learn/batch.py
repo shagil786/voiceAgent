@@ -35,11 +35,17 @@ def _longest_quote(members: list[dict]) -> str:
     return max((str(m.get("quote", "")) for m in members), key=len, default="")
 
 
-def _evidence(members: list[dict], hashes: list[str]) -> dict:
+# Downstream contract (Task 3 / spec §4.5a purge): the applier joins the FULL
+# hash list into spec.eval_sources so purge_contact attributes every
+# contributing contact. `hashes` is display-capped at 25; `all_hashes` is the
+# uncapped sorted full list the applier must join. `distinct_hashes` is always
+# the FULL distinct count, never the truncated-list length.
+def _evidence(members: list[dict], all_hashes: list[str]) -> dict:
     return {
         "count": len(members),
-        "distinct_hashes": len(hashes),
-        "hashes": hashes,
+        "distinct_hashes": len(all_hashes),
+        "hashes": all_hashes[:25],
+        "all_hashes": list(all_hashes),
         "sample_quotes": [str(m.get("quote", ""))[:120] for m in members[:3]],
     }
 
@@ -80,15 +86,16 @@ def _keyword_proposal(outcomes: list) -> dict | None:
     word = sorted(qualified, key=lambda w: (-len(qualified[w]), w))[0]
     matching = [o for o in neg
                 if word in re.findall(r"[a-z0-9]+", o.note.lower())]
-    hashes = sorted({o.contact_hash for o in matching if o.contact_hash})[:25]
+    all_hashes = sorted({o.contact_hash for o in matching if o.contact_hash})
     return {
         "kind": "wording",
         "title": f"Repeated {word} complaints",
         "detail": f"{len(matching)} negative outcomes mention '{word}'",
         "evidence": {
             "count": len(matching),
-            "distinct_hashes": len(hashes),
-            "hashes": hashes,
+            "distinct_hashes": len(all_hashes),
+            "hashes": all_hashes[:25],
+            "all_hashes": list(all_hashes),
             "sample_quotes": [o.note[:120] for o in matching[:3]],
         },
         "patch": {"tone_notes_add": ""},
@@ -102,12 +109,17 @@ def mine_proposals(candidates: list[dict], outcomes: list,
     for c in candidates or []:
         groups.setdefault(normalize_quote(str(c.get("quote", ""))), []).append(c)
 
-    ordered = sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    hashed_by_template = {
+        t: [m for m in members if m.get("contact_hash")]
+        for t, members in groups.items()
+    }
+    ordered = sorted(groups.items(),
+                     key=lambda kv: (-len(hashed_by_template[kv[0]]), kv[0]))
     proposals: list[dict] = []
     for template, members in ordered:
-        hashed = [m for m in members if m.get("contact_hash")]
-        distinct = sorted({m["contact_hash"] for m in hashed})[:25]
-        if len(hashed) < 3 or len(set(m["contact_hash"] for m in hashed)) < 3:
+        hashed = hashed_by_template[template]
+        distinct = sorted({m["contact_hash"] for m in hashed})
+        if len(hashed) < 3 or len(distinct) < 3:
             continue
         ptype = _majority_ptype(hashed)
         kind = _KIND_BY_PTYPE[ptype]

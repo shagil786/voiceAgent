@@ -19,6 +19,24 @@ def test_anonymity_gate_needs_3x3():
     assert props[0]["evidence"]["distinct_hashes"] == 3
     assert props[0]["id"] == "knowledge_gap-000"
 
+def test_full_distinct_count_with_capped_display():
+    cands = [_cand("No, fee is 499", h=f"h{i:02d}") for i in range(30)]
+    props = mine_proposals(cands, [])
+    assert len(props) == 1
+    ev = props[0]["evidence"]
+    assert ev["distinct_hashes"] == 30
+    assert len(ev["hashes"]) == 25
+    assert len(ev["all_hashes"]) == 30
+    assert ev["hashes"] == sorted(ev["all_hashes"])[:25]
+
+def test_mixed_hashless_group_yields_nothing():
+    cands = [_cand("No, fee is 499", h="h1"), _cand("No! fee is 499?", h="h2")]
+    for i in range(5):
+        c = _cand("no fee is 499.", h="hx")
+        del c["contact_hash"]
+        cands.append(c)
+    assert mine_proposals(cands, []) == []  # 2 hashed + 5 hashless → nothing
+
 def test_policy_majority_and_cap():
     cands = [_cand(f"No, never promise X{i%2}", ptype="policy", h=f"h{i}") for i in range(6)]
     props = mine_proposals(cands, [])
