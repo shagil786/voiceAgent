@@ -226,7 +226,7 @@ Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write minimal implementation**
 
-Per interfaces. `webhook_handler` signature `(config, join_room, validate=None)` — default validate uses livekit `WebhookReceiver(config.key, config.secret)`; injectable for tests. Prefix: `(config.livekit_room_prefix if config is not None else "call-")` (the test passes `config=None`). `run_room_session` imports `from livekit import rtc` lazily (function-level, so unit tests never need the dep installed... they will be installed post-Task-1; still lazy-import to keep cold paths light). Greeting: `turn_fn` equivalent with transcript `"(Inbound call connected — greet the caller.)"` spoken once after subscribe. Disconnect: leave room + return (worker loop respawns per webhook; no shared state).
+Per interfaces. `webhook_handler` signature `(config, join_room, validate=None)` — default validate uses livekit `WebhookReceiver(TokenVerifier(config.key, config.secret))` (verified against livekit-api==1.2.1 — NOT `WebhookReceiver(key, secret)`); injectable for tests. Prefix: `(config.livekit_room_prefix if config is not None else "call-")` (the test passes `config=None`). `run_room_session` imports `from livekit import rtc` lazily (function-level, so unit tests never need the dep installed... they will be installed post-Task-1; still lazy-import to keep cold paths light). Greeting: `turn_fn` equivalent with transcript `"(Inbound call connected — greet the caller.)"` spoken once after subscribe. Disconnect: leave room + return (worker loop respawns per webhook; no shared state).
 
 - [ ] **Step 4: Run test to verify it passes**
 
