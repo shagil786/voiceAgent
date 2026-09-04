@@ -1,10 +1,15 @@
 """Batch-learn miner: cluster candidates into anonymized proposals (no LLM)."""
 from __future__ import annotations
 
+import copy
 import hashlib
+import json
 import re
 from collections import Counter
 from datetime import datetime, timezone
+from pathlib import Path
+
+from voiceagent.deploy.bundle import EvalCheck
 
 STOPWORDS = frozenset({
     "the", "and", "for", "with", "this", "that", "have",
@@ -148,3 +153,78 @@ def mine_proposals(candidates: list[dict], outcomes: list,
         p["id"] = f"{p['kind']}-{n:03d}"
         counters[p["kind"]] = n + 1
     return proposals
+
+
+# Rationale: EvalCheck is frozen by the golden schema (evals.json shape is
+# name/turns/assert only), so per-contact hashes cannot live on the eval
+# itself. They live in spec.eval_sources keyed by eval name — a spec sidecar
+# the loader ignores, leaving evals.json shape unchanged.
+def apply_approved(bundle, approvals: list[dict]) -> tuple:
+    new = copy.deepcopy(bundle)
+    changelog: dict = {"applied": [], "skipped": []}
+    for prop in approvals or []:
+        pid = prop.get("id", "")
+        if prop.get("status") != "approved":
+            changelog["skipped"].append({"id": pid, "reason": "not approved"})
+            continue
+        kind = prop.get("kind")
+        patch = prop.get("patch") or {}
+        if kind == "exemplar":
+            eval_name = f"batch-{pid}"
+            new.evals.append(EvalCheck(
+                name=eval_name,
+                turns=[{"user": patch["user"]}],
+                assert_={"contains": patch["assert_contains"]},
+            ))
+            evidence = prop.get("evidence") or {}
+            # Purge completeness depends on the FULL list; `hashes` is
+            # display-only (capped at 25). Fall back to `hashes` only when
+            # `all_hashes` is absent (older/hand-written proposals).
+            full = evidence.get("all_hashes", evidence.get("hashes", []))
+            new.spec.setdefault("eval_sources", {})[eval_name] = "|".join(full)
+            changelog["applied"].append(pid)
+        elif kind == "wording":
+            addition = patch.get("tone_notes_add", "")
+            if not addition:
+                changelog["skipped"].append(
+                    {"id": pid, "reason": "needs owner wording"})
+                continue
+            new.spec.setdefault("tone_notes", []).append(addition)
+            changelog["applied"].append(pid)
+        elif kind == "threshold":
+            new.spec.setdefault("never_promise", []).append(
+                patch["never_promise_add"])
+            changelog["applied"].append(pid)
+            changelog["needs_dsl_review"] = True
+        elif kind == "knowledge_gap":
+            new.knowledge.append({
+                "text": patch["text"],
+                "source": patch["source"],
+                "crawled_at": datetime.now(timezone.utc).isoformat(),
+            })
+            changelog["applied"].append(pid)
+        else:
+            changelog["skipped"].append({"id": pid, "reason": "unknown kind"})
+    return new, changelog
+
+
+def purge_contact(bundle, contact_hash: str) -> tuple:
+    sources = (bundle.spec.get("eval_sources") or {}) if bundle.spec else {}
+    doomed = {e.name for e in bundle.evals
+              if contact_hash in sources.get(e.name, "").split("|")}
+    if not doomed:
+        return bundle, 0
+    new = copy.deepcopy(bundle)
+    new.evals = [e for e in new.evals if e.name not in doomed]
+    eval_sources = new.spec.get("eval_sources", {})
+    for name in doomed:
+        eval_sources.pop(name, None)
+    return new, len(doomed)
+
+
+def read_proposals(path) -> list[dict]:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def write_proposals(path, props: list[dict]) -> None:
+    Path(path).write_text(json.dumps(props, indent=2), encoding="utf-8")

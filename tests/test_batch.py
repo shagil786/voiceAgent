@@ -42,3 +42,28 @@ def test_policy_majority_and_cap():
     props = mine_proposals(cands, [])
     assert props and all(p["kind"] == "threshold" for p in props)
     assert all(p["patch"]["needs_dsl_review"] is True for p in props)
+
+def test_apply_and_purge_roundtrip():
+    from voiceagent.deploy.bundle import load_bundle
+    from voiceagent.learn.batch import apply_approved, purge_contact
+    b = load_bundle("data/deployments/_example/v1")
+    approvals = [
+        {"id": "exemplar-000", "kind": "exemplar", "title": "t", "detail": "d",
+         "evidence": {"count": 3, "distinct_hashes": 3, "hashes": ["abc"],
+                      "sample_quotes": []},
+         "patch": {"user": "2BHK price?", "assert_contains": "2BHK price?"},
+         "status": "approved"},
+        {"id": "wording-000", "kind": "wording", "title": "t", "detail": "d",
+         "evidence": {"count": 1, "distinct_hashes": 1, "hashes": [],
+                      "sample_quotes": []},
+         "patch": {"tone_notes_add": ""}, "status": "approved"},
+    ]
+    new, log = apply_approved(b, approvals)
+    assert [a for a in log["applied"]] == ["exemplar-000"]
+    assert log["skipped"][0]["id"] == "wording-000"
+    assert new.spec["eval_sources"]["batch-exemplar-000"] == "abc"
+    assert len(b.evals) == len(load_bundle("data/deployments/_example/v1").evals)
+    pruned, n = purge_contact(new, "abc")
+    assert n == 1 and not any("batch-exemplar-000" in e.name for e in pruned.evals)
+    same, n0 = purge_contact(new, "nope")
+    assert n0 == 0 and same is new
