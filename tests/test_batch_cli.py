@@ -30,3 +30,33 @@ def test_mine_approve_end_to_end(tmp_path):
     assert len(props) == 1 and props[0]["kind"] == "knowledge_gap"
     out = approve(str(tmp_path), ids=[props[0]["id"]])
     assert out["live"] is True and out["applied"] == [props[0]["id"]]
+
+def test_approve_same_id_twice_skips_second(tmp_path):
+    import shutil
+    from voiceagent.deploy.bundle import load_bundle, read_live, save_bundle
+    from voiceagent.learn.batch import EvalCheck
+    shutil.copytree("data/deployments/_example/v1", tmp_path / "v1")
+    b = load_bundle(tmp_path / "v1")
+    b.evals = [EvalCheck(name=f"e{i:02d}", turns=[{"user": "Hi"}],
+                         assert_={"contains": "Hi"}) for i in range(10)]
+    save_bundle(b, tmp_path / "v1")
+    db = SQLiteProfiles(str(tmp_path / "p.db"))
+    for i in range(3):
+        key = f"+910000000{i}"
+        db.put(Profile(key=key, alias="", prefs=[], corrections=[], open_items=[],
+                       pending_global=[{"quote": "No, fee is 499", "patch_type": "fact",
+                                        "session_id": "s", "ts": "t"}],
+                       consent={}, updated_at="2026-09-04T00:00:00"))
+    keys = [f"+910000000{i}" for i in range(3)]
+    path = mine(str(tmp_path), "nope.jsonl", str(tmp_path / "p.db"), keys=keys)
+    import json
+    pid = json.loads(__import__("pathlib").Path(path).read_text())[0]["id"]
+    first = approve(str(tmp_path), ids=[pid])
+    assert first["applied"] == [pid] and first["live"] is True
+    n_chunks = len(load_bundle(tmp_path / read_live(tmp_path)).knowledge)
+    second = approve(str(tmp_path), ids=[pid, "bogus-999"])
+    assert second["applied"] == []
+    assert {s["id"]: s["reason"] for s in second["skipped"]} == \
+        {pid: "already decided", "bogus-999": "unknown id"}
+    assert second["live"] is True
+    assert len(load_bundle(tmp_path / read_live(tmp_path)).knowledge) == n_chunks

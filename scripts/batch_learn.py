@@ -122,16 +122,24 @@ def approve(deploy_dir, ids=None, approve_all=False, make_brain=None) -> dict:
     proposals = read_proposals(str(proposals_path))
     if ids == "all":
         approve_all = True
-    wanted = None if approve_all else set(ids or [])
     approvals: list[dict] = []
-    for prop in proposals:
-        if approve_all:
+    cli_skipped: list[dict] = []
+    if approve_all:
+        for prop in proposals:
             if prop.get("status") == "proposed":
                 prop["status"] = "approved"
                 approvals.append(prop)
-        elif wanted is not None and prop.get("id") in wanted:
-            prop["status"] = "approved"
-            approvals.append(prop)
+    else:
+        by_id = {p.get("id"): p for p in proposals}
+        for pid in ids or []:
+            prop = by_id.get(pid)
+            if prop is None:
+                cli_skipped.append({"id": pid, "reason": "unknown id"})
+            elif prop.get("status") != "proposed":
+                cli_skipped.append({"id": pid, "reason": "already decided"})
+            else:
+                prop["status"] = "approved"
+                approvals.append(prop)
     base = _base_version(deploy)
     new, changelog = apply_approved(load_bundle(deploy / base), approvals)
     version = next_version(deploy)
@@ -140,7 +148,7 @@ def approve(deploy_dir, ids=None, approve_all=False, make_brain=None) -> dict:
     live = go_live(str(deploy), version, results)
     write_proposals(str(proposals_path), proposals)
     return {"version": version, "applied": changelog.get("applied", []),
-            "skipped": changelog.get("skipped", []), "live": live}
+            "skipped": cli_skipped + changelog.get("skipped", []), "live": live}
 
 
 def purge(deploy_dir, contact_hash, make_brain=None) -> dict:
