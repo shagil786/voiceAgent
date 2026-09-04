@@ -74,6 +74,9 @@ Approved customer-derived evals MUST carry `source_contact_hash` (SHA-256 of the
 ### 4.6 Batch-learn
 Nightly job over labeled turns (resolved/escalated/thumbs/human-takeover) → proposals (exemplars, wording, threshold, knowledge gaps). Owner per-item/bulk approve → new versions. Eval set grows from approved outcomes only.
 
+### 4.6a Batch job scope (v1)
+Mine/approve is an on-demand CLI (`scripts/batch_learn.py`); scheduling is ops (cron/systemd), not code. Candidate enumeration uses explicit `--keys` (store protocol has no key listing by design). Proposal output capped at 50, deterministic order. Eval-source hashes enable `purge_contact`; bundle knowledge from batch carries `source: batch:<date>`. Purge covers bundle evals only; proposals/*.json history is retained in the owner-only deploy dir and scrubbed separately. Re-mining the same day overwrites today's proposals file — approve before re-mining. Purge --hash expects the SHA-256 of the stored (E.164-normalized) contact key.
+
 ## 5. Data flow (turn)
 `contact key → profile + session → bundle knowledge → brain proposes → policy/tool-state check → gateway or escalate → reply → append session + profile deltas → (owner correction? instant patch) → (nightly? batch proposals)`.
 
