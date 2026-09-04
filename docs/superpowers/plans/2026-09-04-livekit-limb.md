@@ -26,7 +26,7 @@
 |---|---|
 | `src/voiceagent/config.py` (extend) | `livekit_url/key/secret/number/trunk_id/room_prefix` fields + `LIVEKIT_*` env reads |
 | `src/voiceagent/telephony/audio.py` | numpy 48k↔16k resample + 10ms/20ms chunking helpers (pure functions) |
-| `src/voiceagent/telephony/livekit_bridge.py` | `BridgeSession`: subscribe→VAD→`TurnFn`→publish loop with barge-in cancellation; `TurnFn` protocol `(transcript: str) -> tuple[str, bytes]` (reply text + reply WAV bytes) |
+| `src/voiceagent/telephony/livekit_bridge.py` | `BridgeSession`: subscribe→VAD→`on_utterance`→publish loop with barge-in cancellation; `on_utterance` callback `(pcm16: bytes) -> (reply_text, reply_wav16)` |
 | `src/voiceagent/telephony/inbound.py` | Webhook receiver (stdlib `http.server`, livekit `WebhookReceiver` validation) → token mint (`AccessToken`) → join → greet via `handle_turn("(Inbound call connected — greet the caller.)")` → bridge loop → leave on disconnect |
 | `src/voiceagent/telephony/outbound.py` | `dial_out(api, room_name, to_number, trunk_id, timeout_s) -> str` (`connected|failed|timeout`) via `create_sip_participant` + participant-join wait; AMD handoff point documented for `campaign_turn` |
 | `scripts/livekit_worker.py` | Worker entrypoint: serves webhook, spawns per-room sessions, graceful shutdown |
@@ -108,7 +108,7 @@ git commit -m "feat: livekit config, pinned deps, PCM resample helpers"
 - Test: `tests/test_bridge.py`
 
 **Interfaces:**
-- Consumes: `StreamingVAD/BargeInController` (`telephony/stream.py:85-156`), `TurnFn` (defined here).
+- Consumes: `StreamingVAD/BargeInController` (`telephony/stream.py:85-156`); defines its own `on_utterance` callback contract (see Produces).
 - Produces: `BridgeSession(on_utterance, on_barge_in=None)` with `feed_pcm16(frame_20ms: bytes) -> None` (raises `ValueError` on non-640-byte frames), `take_playback() -> bytes | None` (960-byte 48k chunks), `barge_in() -> None`, `stop() -> None`; `on_utterance: Callable[[bytes], tuple[str, bytes]]` (16k PCM in → `(reply_text, reply_wav_16k)` out).
 
 Contract (exact, keeps the room out of this file for offline tests): the session owns VAD + playback queue. `feed_pcm16` accumulates; when VAD emits `complete_audio`, session calls `asr_stub(audio)` — NO: ASR belongs to wiring (Task 4), not the session. Instead session emits completed utterances via callback: constructor takes `on_utterance: Callable[[bytes], tuple[str, bytes]]` receiving 16k PCM, returning `(reply_text, reply_wav_16k)`. Session upsamples WAV to 48k, splits into 10ms chunks, queues; `take_playback` pops one chunk (returns None when idle/after `stop`). Barge-in: VAD's controller is constructed with `on_barge_in` that clears the playback queue (`stop audition, keep session`). STT/TTS/Orchestrator wiring lives in Task 4's `scripts/livekit_worker.py` + `telephony/inbound.py`, NOT here — this task is pure pump mechanics.
