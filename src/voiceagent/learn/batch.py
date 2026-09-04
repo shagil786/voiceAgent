@@ -92,6 +92,8 @@ def _keyword_proposal(outcomes: list) -> dict | None:
     matching = [o for o in neg
                 if word in re.findall(r"[a-z0-9]+", o.note.lower())]
     all_hashes = sorted({o.contact_hash for o in matching if o.contact_hash})
+    if len(matching) < 3 or len(all_hashes) < 3:
+        return None
     return {
         "kind": "wording",
         "title": f"Repeated {word} complaints",
@@ -170,20 +172,33 @@ def apply_approved(bundle, approvals: list[dict]) -> tuple:
         kind = prop.get("kind")
         patch = prop.get("patch") or {}
         if kind == "exemplar":
+            if not patch.get("user") or not patch.get("assert_contains"):
+                changelog["skipped"].append(
+                    {"id": pid, "reason": "malformed patch"})
+                continue
+            evidence = prop.get("evidence") or {}
+            # Purge completeness depends on the FULL list; `hashes` is
+            # display-only (capped at 25). Fall back to `hashes` only when
+            # `all_hashes` is absent (older/hand-written proposals).
+            full = evidence.get("all_hashes") or evidence.get("hashes") or []
+            if (not isinstance(full, list)
+                    or not all(isinstance(h, str) for h in full)):
+                changelog["skipped"].append(
+                    {"id": pid, "reason": "malformed patch"})
+                continue
             eval_name = f"batch-{pid}"
             new.evals.append(EvalCheck(
                 name=eval_name,
                 turns=[{"user": patch["user"]}],
                 assert_={"contains": patch["assert_contains"]},
             ))
-            evidence = prop.get("evidence") or {}
-            # Purge completeness depends on the FULL list; `hashes` is
-            # display-only (capped at 25). Fall back to `hashes` only when
-            # `all_hashes` is absent (older/hand-written proposals).
-            full = evidence.get("all_hashes", evidence.get("hashes", []))
             new.spec.setdefault("eval_sources", {})[eval_name] = "|".join(full)
             changelog["applied"].append(pid)
         elif kind == "wording":
+            if "tone_notes_add" not in patch:
+                changelog["skipped"].append(
+                    {"id": pid, "reason": "malformed patch"})
+                continue
             addition = patch.get("tone_notes_add", "")
             if not addition:
                 changelog["skipped"].append(
@@ -192,11 +207,19 @@ def apply_approved(bundle, approvals: list[dict]) -> tuple:
             new.spec.setdefault("tone_notes", []).append(addition)
             changelog["applied"].append(pid)
         elif kind == "threshold":
+            if not patch.get("never_promise_add"):
+                changelog["skipped"].append(
+                    {"id": pid, "reason": "malformed patch"})
+                continue
             new.spec.setdefault("never_promise", []).append(
                 patch["never_promise_add"])
             changelog["applied"].append(pid)
             changelog["needs_dsl_review"] = True
         elif kind == "knowledge_gap":
+            if not patch.get("text") or not patch.get("source"):
+                changelog["skipped"].append(
+                    {"id": pid, "reason": "malformed patch"})
+                continue
             new.knowledge.append({
                 "text": patch["text"],
                 "source": patch["source"],
@@ -209,6 +232,8 @@ def apply_approved(bundle, approvals: list[dict]) -> tuple:
 
 
 def purge_contact(bundle, contact_hash: str) -> tuple:
+    if not contact_hash or "|" in contact_hash:
+        return bundle, 0
     sources = (bundle.spec.get("eval_sources") or {}) if bundle.spec else {}
     doomed = {e.name for e in bundle.evals
               if contact_hash in sources.get(e.name, "").split("|")}

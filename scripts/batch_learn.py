@@ -171,7 +171,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Batch-learn: mine/approve/purge")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_mine = sub.add_parser("mine", help="mine proposals from outcomes + profiles")
+    p_mine = sub.add_parser("mine", help="mine proposals from outcomes + profiles (re-mining today overwrites today's file)")
     p_mine.add_argument("--deploy", required=True)
     p_mine.add_argument("--outcomes", required=True)
     p_mine.add_argument("--profiles-db", default=None)
@@ -187,7 +187,7 @@ def main(argv=None) -> int:
 
     p_purge = sub.add_parser("purge", help="purge a contact's evals by hash")
     p_purge.add_argument("--deploy", required=True)
-    p_purge.add_argument("--hash", required=True)
+    p_purge.add_argument("--hash", required=True, help="contact hash to purge (SHA-256 of the stored E.164 contact key)")
 
     args = parser.parse_args(argv)
     if args.cmd == "mine":
