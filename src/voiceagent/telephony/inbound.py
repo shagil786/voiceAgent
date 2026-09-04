@@ -96,13 +96,20 @@ def _default_validate(config: Any) -> Callable[[str, str], Any]:
     (verified against installed `livekit-api==1.2.1` source) — NOT
     `(key, secret)` positionally.
     """
-    from livekit.api import WebhookReceiver
-    from livekit.api.access_token import TokenVerifier
-
-    receiver = WebhookReceiver(TokenVerifier(config.livekit_key, config.livekit_secret))
-
     def validate(body: str, sig: str) -> Any:
-        return receiver.receive(body, sig)
+        # Constructed per request (fail closed): missing key/secret or a
+        # bad signature raises here, and the handler maps any error to
+        # False — a bad config never crashes worker startup or serving.
+        try:
+            from livekit.api import WebhookReceiver
+            from livekit.api.access_token import TokenVerifier
+
+            receiver = WebhookReceiver(
+                TokenVerifier(config.livekit_key, config.livekit_secret)
+            )
+            return receiver.receive(body, sig)
+        except Exception as exc:
+            raise ValueError(f"webhook validation failed: {exc}") from exc
 
     return validate
 
@@ -169,13 +176,71 @@ def _mint_worker_token(config: Any, room_name: str, identity: str) -> str:
     return token.to_jwt()
 
 
-async def _run_room_async(room_name: str, config: Any, deps: Any) -> None:
-    """Join, greet via the governed turn, pump audio, leave on disconnect."""
+def wait_for_sip_track(
+    get_tracks: Callable[[], Any],
+    timeout_s: float = 15,
+    sleep: Callable[[float], None] | None = None,
+) -> Any | None:
+    """Poll `get_tracks()` until the first SIP audio track appears.
+
+    Returns the track, or `None` if `timeout_s` elapses first. `sleep` is
+    injectable (default: real `time.sleep`) so tests run instantly.
+    """
+    import time
+
+    _sleep = sleep if sleep is not None else time.sleep
+    deadline = time.monotonic() + timeout_s
+    while True:
+        track = get_tracks()
+        if track is not None:
+            return track
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        _sleep(min(0.5, remaining))
+
+
+def ensure_room_sample_rate(sample_rate: int) -> None:
+    """Fail fast when room audio is not the 48kHz mono contract."""
+    if sample_rate != _ROOM_SAMPLE_RATE:
+        raise ValueError(
+            f"room audio must be {_ROOM_SAMPLE_RATE}Hz, got {sample_rate}"
+        )
+
+
+async def _wait_for_sip_track_async(
+    get_tracks: Callable[[], Any], timeout_s: float
+) -> Any | None:
+    """Async mirror of `wait_for_sip_track` (awaits `asyncio.sleep`).
+
+    The sync helper must not block the room's event loop — stalled loops
+    stop processing the very subscription events the poll waits for — so
+    the live path polls here while tests cover the sync twin.
+    """
+    import time
+
+    deadline = time.monotonic() + timeout_s
+    while True:
+        track = get_tracks()
+        if track is not None:
+            return track
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        await asyncio.sleep(min(0.5, remaining))
+
+
+async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
+    """Join, greet via the governed turn, pump audio, leave on disconnect.
+
+    Returns True when the call ran, False when no SIP track appeared
+    before the timeout (room left, never greeted into the void).
+    """
     import asyncio
 
     from livekit import rtc
 
-    from voiceagent.telephony.audio import chunk_frames, resample_48k_to_16k
+    from voiceagent.telephony.audio import resample_48k_to_16k
     from voiceagent.telephony.livekit_bridge import BridgeSession
 
     orchestrator = _deps_get(deps, "orchestrator")
@@ -201,18 +266,19 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> None:
     await room.connect(config.livekit_url, token)
 
     try:
-        # Subscribe: first remote SIP audio track (dispatch rule auto-joins
-        # the SIP participant to the room ahead of us).
-        track = None
-        for _p, pub in list(room.remote_participants.items()):
-            for _tid, tpub in list(pub.track_publications.items()):
-                if tpub.kind == rtc.TrackKind.KIND_AUDIO and tpub.track is not None:
-                    track = tpub.track
-                    break
-            if track is not None:
-                break
+        # Subscribe: first remote SIP audio track. The SIP participant may
+        # join after us, so wait (bounded) instead of dropping dead calls.
+        def get_tracks() -> Any | None:
+            for _p, pub in list(room.remote_participants.items()):
+                for _tid, tpub in list(pub.track_publications.items()):
+                    if tpub.kind == rtc.TrackKind.KIND_AUDIO and tpub.track is not None:
+                        return tpub.track
+            return None
+
+        timeout_s = _deps_get(deps, "sip_track_timeout_s", 15)
+        track = await _wait_for_sip_track_async(get_tracks, timeout_s)
         if track is None:
-            return
+            return False
 
         source = rtc.AudioSource(_ROOM_SAMPLE_RATE, 1)
         audio_track = rtc.LocalAudioTrack.create_audio_track("worker-reply", source)
@@ -231,9 +297,7 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> None:
         pending = b""
         async for frame_event in stream:
             frame = frame_event.frame
-            assert frame.sample_rate == _ROOM_SAMPLE_RATE, (
-                f"room audio must be {_ROOM_SAMPLE_RATE}Hz, got {frame.sample_rate}"
-            )
+            ensure_room_sample_rate(frame.sample_rate)
             pcm16 = resample_48k_to_16k(bytes(frame.data))
             pending += pcm16
             while len(pending) >= 640:
@@ -247,6 +311,7 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> None:
                     chunk = session.take_playback()
             if disconnected.is_set():
                 break
+        return True
     finally:
         session.stop()
         await room.disconnect()
@@ -263,13 +328,15 @@ def _publish_pcm16(source: Any, reply_wav_16k: bytes) -> None:
         source.capture_frame(rtc.AudioFrame(chunk, _ROOM_SAMPLE_RATE, 1, len(chunk) // 2))
 
 
-def run_room_session(room_name: str, config: Any, deps: Any = None) -> None:
+def run_room_session(room_name: str, config: Any, deps: Any = None) -> bool:
     """Join `room_name`, run the greet→loop→hangup session, then return.
 
-    Synchronous wrapper (one worker thread per room runs its own event
-    loop); the async body above holds the only `from livekit import rtc`
-    import, keeping unit-test cold paths dependency-free.
+    Returns True when the call ran, False when no SIP track appeared
+    before the timeout. Synchronous wrapper (one worker thread per room
+    runs its own event loop); the async body above holds the only
+    `from livekit import rtc` import, keeping unit-test cold paths
+    dependency-free.
     """
     import asyncio
 
-    asyncio.run(_run_room_async(room_name, config, deps))
+    return asyncio.run(_run_room_async(room_name, config, deps))
