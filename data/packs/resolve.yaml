@@ -1,0 +1,30 @@
+pattern: resolve
+tools:
+  - name: check_order_status
+    description: Look up the current status of a customer order or ticket.
+    parameters:
+      type: object
+      properties:
+        order_id:
+          type: string
+      required: [order_id]
+    scopes: [read]
+  - name: lookup_ticket
+    description: Retrieve a support ticket and its history.
+    parameters:
+      type: object
+      properties:
+        ticket_id:
+          type: string
+      required: [ticket_id]
+    scopes: [read]
+policies:
+  check_order_status: {allow: true}
+  lookup_ticket: {allow: true}
+disclosures:
+  - "Status information is read-only; fixes and refunds need approval."
+probes:
+  - user: "Where is my order?"
+    contains: "order"
+  - user: "My item arrived broken, what can you do?"
+    contains: "broken"

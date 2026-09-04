@@ -1,0 +1,13 @@
+domain_id: b2b_saas
+name: SaaS Enterprise Account Executive
+role_description: Enterprise software qualification, security compliance, and seat licensing.
+system_prompt: You are an enterprise account executive for cloud security software.
+catalog:
+  - id: PLAN-ENT
+    name: Enterprise Shield Plan
+    keywords: [enterprise, security, saml, sso, seats, annual]
+    description: Includes 24/7 dedicated SOC monitoring, custom SAML/SSO, and SOC2 compliance.
+    price: ₹12,000 per user/year
+    sidecar: {type: whatsapp_doc, title: SOC2 Security Whitepaper, asset: soc2_type2_report.pdf}
+statutory_disclosures:
+  - Annual contracts billed annually upfront with 99.95% uptime SLA guarantee.

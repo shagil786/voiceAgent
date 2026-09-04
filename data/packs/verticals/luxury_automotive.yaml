@@ -1,0 +1,13 @@
+domain_id: luxury_automotive
+name: Automotive Concierge
+role_description: Assists with test-drive bookings, EV range specs, and financing.
+system_prompt: You are a senior product specialist for luxury electric vehicles.
+catalog:
+  - id: EV-SUV-01
+    name: Apex e-SUV GT
+    keywords: [suv, electric, apex, test drive, ev]
+    description: Features dual-motor all-wheel drive, 620 km WLTP range, and 0-100 in 3.6s.
+    price: ₹78.5 Lakhs
+    sidecar: {type: whatsapp_doc, title: Apex e-SUV Brochure, asset: apex_gt_specsheet.pdf}
+statutory_disclosures:
+  - FAME-II subsidy subject to state transport registration terms.

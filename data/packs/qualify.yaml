@@ -1,0 +1,22 @@
+pattern: qualify
+tools:
+  - name: book_slot
+    description: Book a site visit, demo, or trial slot for a qualified lead.
+    parameters:
+      type: object
+      properties:
+        slot:
+          type: string
+        contact:
+          type: string
+      required: [slot]
+    scopes: [write]
+policies:
+  book_slot: {require_approval: true}
+disclosures:
+  - "Slots are confirmed only after owner approval; nothing is booked silently."
+probes:
+  - user: "I want a site visit slot this weekend."
+    contains: "visit"
+  - user: "Book me a demo of the enterprise plan."
+    contains: "demo"

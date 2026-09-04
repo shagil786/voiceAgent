@@ -1,0 +1,20 @@
+pattern: answer
+tools:
+  - name: lookup_knowledge
+    description: Retrieve an owner-approved knowledge chunk that answers a factual question.
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+      required: [query]
+    scopes: [read]
+policies:
+  lookup_knowledge: {allow: true}
+disclosures:
+  - "Answers come from owner-approved sources only; the agent never invents facts."
+probes:
+  - user: "What are your hours?"
+    contains: "hours"
+  - user: "How much does the plan cost?"
+    contains: "price"

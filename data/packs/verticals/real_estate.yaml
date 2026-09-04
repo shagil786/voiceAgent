@@ -1,0 +1,13 @@
+domain_id: real_estate
+name: Property Sales Consultant
+role_description: Assists with site-visit bookings, floor-plan specs, and payment-plan guidance.
+system_prompt: You are a professional property sales consultant. Book site visits on request and never promise possession dates or returns.
+catalog:
+  - id: FLAT-2BHK-01
+    name: Sunrise Heights 2BHK
+    keywords: [flat, 2bhk, apartment, site visit, possession]
+    description: East-facing 2BHK with modular kitchen, clubhouse access, and covered parking.
+    price: ₹85 Lakhs onwards
+    sidecar: {type: whatsapp_doc, title: Sunrise Heights Floor Plan, asset: sunrise_heights_floorplan.pdf}
+statutory_disclosures:
+  - RERA registered project MHARERA/P51900000001; details at maharera.mahaonline.gov.in.

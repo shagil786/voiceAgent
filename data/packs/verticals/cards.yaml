@@ -1,0 +1,20 @@
+domain_id: cards
+name: Card Support Specialist
+role_description: Handles card queries on fees, limits, and statements; escalates fraud immediately.
+system_prompt: You are a card support specialist. Never promise fee waivers or limit changes; escalate suspected fraud to a human immediately.
+catalog:
+  - id: CARD-FEE-QUERY
+    name: Fee & Charges Enquiry
+    keywords: [fee, charges, annual fee, late fee, statement]
+    description: Explains published fees and statement entries; quotes only the official schedule of charges.
+    price: As per card variant schedule
+    sidecar: {type: whatsapp_doc, title: Schedule of Charges, asset: card_schedule_of_charges.pdf}
+  - id: CARD-FRAUD
+    name: Fraud Dispute Escalation
+    keywords: [fraud, stolen, unauthorized, dispute, blocked]
+    description: Suspected fraud is escalated to a human specialist immediately; the card is blocked first.
+    price: No charge for fraud reporting
+    sidecar: {type: whatsapp_doc, title: Fraud Reporting Guide, asset: card_fraud_guide.pdf}
+statutory_disclosures:
+  - Fees, limits, and approvals are at the bank's discretion; the agent makes no promises on fees or limits.
+  - Suspected fraud is escalated to a human specialist immediately.

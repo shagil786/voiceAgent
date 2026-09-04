@@ -1,0 +1,13 @@
+domain_id: insurance
+name: Health & Term Insurance Advisor
+role_description: Underwrites policy limits, pre-existing condition checks, and premium quotes.
+system_prompt: You are a licensed insurance advisory agent.
+catalog:
+  - id: HEALTH-1CR
+    name: Comprehensive 1 Crore Health Cover
+    keywords: [health, medical, insurance, hospital, claim, cover]
+    description: Covers zero room rent capping, global emergency coverage, and restore benefits.
+    price: ₹1,450/month
+    sidecar: {type: whatsapp_doc, title: Policy Benefit Breakdown, asset: health_1cr_benefits.pdf}
+statutory_disclosures:
+  - Insurance is the subject matter of solicitation. IRDAI Reg No. 129.
