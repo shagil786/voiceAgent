@@ -28,3 +28,9 @@ def test_tenant_mapping_voices_env_wins_per_key():
     assert c.voices["hi"] == "/t/hi.onnx"
     c2 = load_config(env={"VOICEAGENT_VOICES": "hi:/v/hi.onnx"}, tenant=tenant)
     assert c2.voices["hi"] == "/v/hi.onnx"
+
+def test_secrets_not_in_repr():
+    c = load_config(env={"VOICEAGENT_HF_TOKEN": "hf_x",
+                          "VOICEAGENT_FRONTIER_KEY": "sk-abc"})
+    assert "hf_x" not in repr(c)
+    assert "sk-abc" not in repr(c)

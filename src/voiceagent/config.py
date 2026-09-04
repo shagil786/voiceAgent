@@ -59,8 +59,8 @@ class RuntimeConfig:
     embedding_space: str = DEFAULT_EMBEDDING_SPACE
     frontier_url: str | None = None
     frontier_model: str | None = None
-    frontier_key: str | None = None
-    hf_token: str | None = None
+    frontier_key: str | None = field(default=None, repr=False)
+    hf_token: str | None = field(default=None, repr=False)
 
 
 def _parse_list(raw: str | None) -> list[str] | None:
@@ -121,7 +121,12 @@ def _tenant_voices(tenant) -> dict[str, str] | None:
 def load_config(env: Mapping[str, str] | None = None,
                 tenant=None) -> RuntimeConfig:
     """Resolve a RuntimeConfig: env vars override tenant JSON voices, which
-    override code defaults. `env=None` reads os.environ."""
+    override code defaults. `env=None` reads os.environ.
+
+    Tenant-voices contract: a `TenantConfig` object cannot carry voices
+    (tenant.py ignores unknown keys) — tenant voices arrive via a Mapping
+    (parsed tenant.json dict) or a path-string tenant pointing at
+    tenant.json; a TenantConfig object contributes no voices."""
     e = os.environ if env is None else env
 
     models_dir = e.get("VOICEAGENT_MODELS_DIR") or DEFAULT_MODELS_DIR
