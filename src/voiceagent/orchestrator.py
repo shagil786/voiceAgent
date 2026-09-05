@@ -152,13 +152,19 @@ class Orchestrator:
         for spec in deployment.specs:
             self.brain.register_specialist(DomainSpecialist(spec=spec))
         for tool_name, meta in deployment.gateway_tools.items():
+            # description precedence: tenant tools.yaml > the binding's own
+            # ToolSpec.description > generic wording.
+            from voiceagent.tools import DEFAULT_TOOL_SPECS
+            fallback = DEFAULT_TOOL_SPECS.get(tool_name)
+            generic = (f"Governed action '{meta.get('action', tool_name)}' — "
+                       "proposals only; executed through the policy-governed "
+                       "runner.")
             self.brain.register_tool(
                 name=tool_name,
                 description=meta.get(
                     "description",
-                    f"Governed action '{meta.get('action', tool_name)}' — "
-                    "proposals only; executed through the policy-governed "
-                    "runner."),
+                    (fallback.description if fallback and fallback.description
+                     else generic)),
                 parameters=meta.get("parameters"),
                 handler=None,  # governed tools are NEVER brain-executed
             )

@@ -62,33 +62,38 @@ PLATFORM_PROMPT_BASE = (
     "propose escalate_to_human with a short reason.")
 _BUILTIN_IDENTITY = "You are Acme's voice support agent."
 
-# The built-in tool surface and knowledge: what a deployment gets when no
-# tenant bundle overrides them. Keys are code bindings (DEFAULT_TOOL_SPECS);
-# this dict only decides what the brain may PROPOSE.
-BUILTIN_GATEWAY_TOOLS: dict[str, dict] = {
-    "fetch_order_status": {"action": "order_status"},
-    "reschedule_delivery": {"action": "reschedule_delivery"},
-    "cancel_order": {"action": "cancel_order"},
-    "escalate_to_human": {
-        "action": "escalate_to_human",
-        "side_effects": True,
-        "description": "Page a human agent to take over this call. "
-                       "Provide a short reason for the handoff.",
-        "parameters": {"type": "object",
-                       "properties": {"reason": {"type": "string"}},
-                       "required": ["reason"]},
-    },
-    "initiate_return": {
-        "action": "initiate_return",
-        "side_effects": True,
-        "description": "Request a return for a shipped or delivered "
-                       "order (params: order_id, reason).",
-        "parameters": {"type": "object",
-                       "properties": {"order_id": {"type": "string"},
-                                      "reason": {"type": "string"}},
-                       "required": ["order_id", "reason"]},
-    },
-}
+# The built-in tool surface: DERIVED from DEFAULT_TOOL_SPECS so a new tool
+# binding is automatically proposeable by the brain — the proposal surface can
+# never drift from the execution bindings again (order_lookup was invisible
+# for a day because this used to be a hand-maintained dict). Crafted
+# descriptions below override the generic wording where the action needs one.
+
+def _auto_gateway_tools() -> dict[str, dict]:
+    """Pure derivation: every DEFAULT_TOOL_SPECS binding becomes a brain-
+    proposeable tool. ALL metadata (action, side_effects, description,
+    parameters) comes from the ToolSpec declared next to the binding — zero
+    hand-maintained entries here, so adding a tool anywhere never requires
+    touching runtime.py. Tenant tools.yaml may still override descriptions
+    (data beats defaults)."""
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+    out: dict[str, dict] = {}
+    for name, spec in DEFAULT_TOOL_SPECS.items():
+        meta: dict = {
+            "action": spec.action or name,
+            "side_effects": spec.side_effects,
+            "parameters": {
+                "type": "object",
+                "properties": {p: {"type": "string"} for p in spec.params},
+                "required": list(spec.params),
+            },
+        }
+        if spec.description:
+            meta["description"] = spec.description
+        out[name] = meta
+    return out
+
+
+BUILTIN_GATEWAY_TOOLS: dict[str, dict] = _auto_gateway_tools()
 BUILTIN_KNOWLEDGE: dict[str, str] = {
     "eta": "Deliveries occur between 9:00 and 19:00 local time.",
     "cancel_policy": "Orders that already shipped cannot be cancelled.",

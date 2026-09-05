@@ -50,6 +50,12 @@ class SupportBackend(Protocol):
     def record_handoff(self, reason: str) -> dict: ...
 
 
+def _id_shape(order_id: str) -> str:
+    """Comparison shape for order IDs: alphanumeric uppercase, so 'ORD4821',
+    'ord-4821' and 'ORD-4821' all match."""
+    return "".join(ch for ch in str(order_id) if ch.isalnum()).upper()
+
+
 class MockERP:
     """In-memory ERP with the demo customer's orders and failure injection."""
 
@@ -86,6 +92,15 @@ class MockERP:
     def get_order(self, order_id: str) -> dict | None:
         self._check_live()
         o = self.orders.get(order_id)
+        if o is None:
+            # Callers and brains spell IDs loosely ('ORD4821' vs the stored
+            # 'ORD-4821') — match on the alphanumeric-uppercase shape, the
+            # same normalization idea as phone lookup. Exact key always wins.
+            want = _id_shape(order_id)
+            for k, v in self.orders.items():
+                if _id_shape(k) == want:
+                    return copy.deepcopy(v)
+            return None
         return copy.deepcopy(o) if o else None
 
     def lookup_orders_by_phone(self, phone: str) -> list[dict]:
@@ -165,6 +180,16 @@ class ToolSpec:
     # declared here per tool (code defaults, tools.yaml overrides), never
     # hardcoded in the guard.
     facts: tuple[str, ...] = ()
+    # Tool metadata the brain's proposal surface needs — declared HERE, next
+    # to the binding, so adding a tool never requires touching runtime.py:
+    # side_effects (mutating? default True = safest assumption) drives the
+    # confirmation/governance hints; description is what the frontier sees.
+    side_effects: bool = True
+    description: str = ""
+    # The POLICY/intent action name this tool is governed under (policies.yaml
+    # rules are written against actions, e.g. 'order_status', 'refund').
+    # Default: the tool name itself.
+    action: str = ""
 
 
 def parse_facts(value, where: str = "tools.yaml") -> tuple[str, ...]:
@@ -206,10 +231,17 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
     # split across specs that can both match the same turn — e.g. "delivery"
     # deliberately stays inside the demo delivery_eta group ("order",
     # "delivery") instead of becoming reschedule_delivery's own fact.
-    "fetch_order_status": ToolSpec(params=("order_id",), facts=("order",)),
+    "fetch_order_status": ToolSpec(
+        params=("order_id",), facts=("order",), side_effects=False,
+        action="order_status",
+        description="Fetch the current status of an order by its order ID "
+                    "(e.g. ORD-4821)."),
     # Caller without an order ID: the agent asks for the phone number and the
     # BACKEND returns the matching orders — order IDs are never agent data.
-    "order_lookup": ToolSpec(params=("phone",), facts=("order",)),
+    "order_lookup": ToolSpec(
+        params=("phone",), facts=("order",), side_effects=False,
+        description="Find a caller's orders by the phone number they ordered "
+                    "with — use when the caller does not know their order ID."),
     "cancel_order": ToolSpec(
         params=("order_id", "reason"),
         preconditions=({"field": "status", "op": "not_in",
@@ -219,15 +251,21 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
         preconditions=({"field": "status", "op": "in",
                         "value": ["CONFIRMED", "SHIPPED"]},)),
     "initiate_refund": ToolSpec(params=("order_id", "amount", "reason"),
-                                facts=("refund",)),
+                                facts=("refund",), action="refund"),
     # Escalation is always permitted — no preconditions; the point is that
     # the handoff becomes a real, auditable governed action.
-    "escalate_to_human": ToolSpec(params=("reason",)),
+    "escalate_to_human": ToolSpec(
+        params=("reason",),
+        description="Page a human agent to take over this call. Provide a "
+                    "short reason for the handoff."),
     # Only shipped/delivered orders can be returned.
     "initiate_return": ToolSpec(
         params=("order_id", "reason"),
         preconditions=({"field": "status", "op": "in",
-                        "value": ["SHIPPED", "DELIVERED"]},)),
+                        "value": ["SHIPPED", "DELIVERED"]},),
+        action="return",
+        description="Request a return for a shipped or delivered order "
+                    "(params: order_id, reason)."),
 }
 
 

@@ -93,7 +93,10 @@ def make_turn_fn(
         # background noise ('的。'). Such a transcript is NO speech — skip the
         # whole governed turn (no brain call, no reply) instead of answering
         # nobody. Real words (any script) always pass.
-        if len(user_text.strip()) <= 2 and _re_nonspeech.match(user_text.strip()):
+        stripped = user_text.strip()
+        cjk_only = (stripped and re.search(r"[一-鿿ぁ-ゟァ-ヿ]", stripped)
+                    and not re.search(r"[A-Za-z0-9\u0900-\u097F]", stripped))
+        if (len(stripped) <= 2 and _re_nonspeech.match(stripped)) or cjk_only:
             logger.info("turn: skipped non-speech ASR output %r", user_text[:40])
             return "", b""
         t_asr = time.monotonic()

@@ -256,3 +256,22 @@ def test_order_lookup_spec_declares_facts_and_params():
     spec = DEFAULT_TOOL_SPECS["order_lookup"]
     assert spec.params == ("phone",)
     assert spec.facts == ("order",)
+
+
+def test_get_order_matches_loose_id_shapes():
+    erp = MockERP()
+    assert erp.get_order("ORD4821")["order_id"] == "ORD-4821"
+    assert erp.get_order("ord-4821")["order_id"] == "ORD-4821"
+    assert erp.get_order("ORD-4821")["order_id"] == "ORD-4821"
+    assert erp.get_order("ORD9999") is None
+
+
+def test_tool_metadata_lives_on_spec_not_runtime():
+    """Adding a tool = binding + spec in ONE place. runtime.py's brain surface
+    is a pure derivation — no per-tool edits in runtime, ever."""
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+
+    assert DEFAULT_TOOL_SPECS["order_lookup"].side_effects is False
+    assert DEFAULT_TOOL_SPECS["escalate_to_human"].side_effects is True
+    assert "phone number" in DEFAULT_TOOL_SPECS["order_lookup"].description
+    assert DEFAULT_TOOL_SPECS["cancel_order"].description == ""  # generic ok
