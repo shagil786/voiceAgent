@@ -10,10 +10,17 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import re
 import tempfile
+import time
 import wave
 from pathlib import Path
 from typing import Any, Callable
+
+from voiceagent.langid import detect_language
+
+logger = logging.getLogger(__name__)
 
 # Greeting goes through the governed turn, never a canned audio file.
 GREETING_TRANSCRIPT = "(Inbound call connected — greet the caller.)"
@@ -77,14 +84,35 @@ def make_turn_fn(
     asr_fn = asr if asr is not None else (lambda pcm: _default_asr(pcm, language))
     tts_fn = tts if tts is not None else (lambda text: _default_tts(text, language))
 
+    _re_nonspeech = re.compile(r"^[\W一-鿿ぁ-ゟァ-ヿ]+$")
+
     def turn_fn(pcm16: bytes) -> tuple[str, bytes]:
+        t0 = time.monotonic()
         user_text = asr_fn(pcm16)
+        # ASR silence gate: Qwen hallucinates lone CJK glyphs / punctuation on
+        # background noise ('的。'). Such a transcript is NO speech — skip the
+        # whole governed turn (no brain call, no reply) instead of answering
+        # nobody. Real words (any script) always pass.
+        if len(user_text.strip()) <= 2 and _re_nonspeech.match(user_text.strip()):
+            logger.info("turn: skipped non-speech ASR output %r", user_text[:40])
+            return "", b""
+        t_asr = time.monotonic()
         result = orchestrator.handle_turn(session_id, user_text)
+        t_brain = time.monotonic()
         reply = result.reply
         wav_out = tts_fn(reply)
         if isinstance(wav_out, (tuple, list)):
             wav_out = wav_out[1]
-        return reply, bytes(wav_out)
+        wav_out = bytes(wav_out)
+        t_tts = time.monotonic()
+        # Turn evidence: transcript -> reply -> per-stage timing. This is how
+        # a silent/garbled/late turn gets diagnosed after the fact.
+        logger.info(
+            "turn: asr=%.2fs brain=%.2fs tts=%.2fs | caller=%r | reply[%s]=%r",
+            t_asr - t0, t_brain - t_asr, t_tts - t_brain,
+            user_text[:120], detect_language(reply), reply[:120],
+        )
+        return reply, wav_out
 
     return turn_fn
 

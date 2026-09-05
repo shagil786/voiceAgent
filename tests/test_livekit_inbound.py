@@ -117,3 +117,41 @@ def test_playback_pump_polls_session_and_stops():
 
     asyncio.run(run())
     assert source.awaited == 1  # one chunk played, then stop -> no hang, no drain-after-barge-in
+
+
+def test_turn_fn_gates_nonspeech_asr():
+    """Lone CJK glyphs / punctuation from the ASR on noise = no speech:
+    no brain call, no playback (empty reply, empty wav)."""
+    calls = []
+
+    def fake_asr(pcm):
+        return "的。"
+
+    def fake_tts(text):
+        calls.append(text)
+        return b"wav"
+
+    orch = SimpleNamespace(handle_turn=lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("brain must not be called for non-speech")))
+    turn = make_turn_fn(orch, "s1", asr=fake_asr, tts=fake_tts)
+    reply, wav = turn(b"\x00" * 640)
+    assert reply == "" and wav == b"" and calls == []
+
+
+def test_turn_fn_passes_real_words():
+    seen = {}
+
+    def fake_asr(pcm):
+        return "where is my pizza"
+
+    def fake_tts(text):
+        seen["text"] = text
+        return b"wav"
+
+    class R:
+        reply = "checking now"
+
+    orch = SimpleNamespace(handle_turn=lambda sid, text: seen.update(asked=text) or R())
+    turn = make_turn_fn(orch, "s1", asr=fake_asr, tts=fake_tts)
+    reply, wav = turn(b"\x00" * 640)
+    assert seen["asked"] == "where is my pizza" and reply == "checking now"

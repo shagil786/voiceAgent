@@ -42,3 +42,24 @@ def test_handle_voice_for_routes_global_languages():
     h = TTSHandle(model_dir="/nonexistent", voice_loader=lambda *a: None)
     for lang in ("es", "fr", "de", "pt"):
         assert h.voice_for(lang, "") == (lang, VOICE_REGISTRY[lang])
+
+
+def test_speech_text_spells_long_digit_runs():
+    from voiceagent.tts import speech_text
+
+    out = speech_text("Your number 9828379313 is confirmed")
+    assert out == "Your number 9 8 2 8 3 7 9 3 1 3 is confirmed"
+
+
+def test_speech_text_strips_emoji_keeps_money():
+    from voiceagent.tts import speech_text
+
+    out = speech_text("Refund of ₹200 approved 😊🌟")
+    assert "₹200" in out
+    assert "😊" not in out and "🌟" not in out
+
+
+def test_speech_text_leaves_short_numbers_alone():
+    from voiceagent.tts import speech_text
+
+    assert speech_text("Order 7734 is ready") == "Order 7734 is ready"

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
@@ -52,6 +53,22 @@ VOICE_REGISTRY = {
 # perceived pace without code changes (1.0 = the voice's native rate).
 DEFAULT_LENGTH_SCALE = 1.0
 
+
+def voice_overrides_from_env(env: dict[str, str] | None = None) -> dict[str, str]:
+    """Per-language voice overrides from VOICEAGENT_TTS_VOICES, formatted
+    'en=en_US-amy-medium,hi=hi_IN-priyamvada-medium'. Deployment config, not
+    code: switching voices never touches the registry default."""
+    import os as _os
+    e = _os.environ if env is None else env
+    raw = e.get("VOICEAGENT_TTS_VOICES") or ""
+    out: dict[str, str] = {}
+    for pair in raw.split(","):
+        if "=" in pair:
+            lang, voice = pair.split("=", 1)
+            if lang.strip() and voice.strip():
+                out[lang.strip()] = voice.strip()
+    return out
+
 # Romanized Hindi -> Hindi voice (see module docstring for the quality caveat).
 HINGLISH_VOICE_LANG = "hi"
 
@@ -65,6 +82,25 @@ def _real_voice_loader(voice_name: str, model_dir: str):
     with _VOICE_LOCK:
         onnx = ensure_voice(voice_name, model_dir)
         return PiperVoice.load(onnx)
+
+
+
+_RE_DIGIT_RUN = re.compile(r"\d{8,}")
+_RE_NONSPEECH = __import__("re").compile(
+    "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\u2190-\u21FF\u2B00-\u2BFF]")
+
+
+def speech_text(text: str) -> str:
+    """Make model text speakable: long digit runs (phone/order numbers) are
+    read digit-by-digit — never as magnitudes ("9 billion") — and emoji /
+    symbol codepoints (which the phonemizer gurgles on) are dropped. This is
+    a UNIVERSAL reading rule (like pluralization), not per-number data:
+    domain specifics still arrive via memory/knowledge."""
+    def _spell(m: "re.Match[str]") -> str:
+        return " ".join(m.group(0))
+    out = _RE_NONSPEECH.sub(" ", text)
+    out = _RE_DIGIT_RUN.sub(_spell, out)
+    return out
 
 
 class TTSHandle:
@@ -82,6 +118,7 @@ class TTSHandle:
                  warn: Callable[[str], None] | None = None):
         self._model_dir = model_dir
         self._registry = dict(registry if registry is not None else VOICE_REGISTRY)
+        self._registry.update(voice_overrides_from_env())
         self._fallback_voice = fallback_voice
         if length_scale is None:
             length_scale = float(os.environ.get("VOICEAGENT_TTS_LENGTH_SCALE",
@@ -119,6 +156,7 @@ class TTSHandle:
         if out_path is None:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 out_path = tmp.name
+        text = speech_text(text)
         _, voice_name = self.voice_for(language, text)
         voice = self._get_voice(voice_name)
         with wave.open(out_path, "wb") as w:
