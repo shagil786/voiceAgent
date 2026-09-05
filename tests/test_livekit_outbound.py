@@ -47,3 +47,42 @@ def test_default_poll_empty_after_seen_fails():
     assert ob._default_poll(api, "r", seen) == "ringing"
     assert ob._default_poll(api, "r", seen) == "active"
     assert ob._default_poll(api, "r", seen) == "failed"
+
+
+def test_factory_api_constructed_inside_loop_and_closed():
+    # Regression (first live PSTN drill): a real LiveKitAPI binds its aiohttp
+    # session to the constructing loop, so dial_out MUST build it inside each
+    # asyncio.run. A zero-arg factory => the default create constructs, uses,
+    # and closes the client inside its own loop; an eager object (legacy test
+    # fakes) is used as-is and never touches a loop.
+    from types import SimpleNamespace
+
+    events: list = []
+
+    class FakeClient:
+        def __init__(self):
+            events.append("constructed")
+
+        @property
+        def sip(self):
+            async def create(req):
+                events.append("created")
+                return SimpleNamespace(participant_identity="p")
+            return SimpleNamespace(create_sip_participant=create)
+
+        async def aclose(self):
+            events.append("closed")
+
+    # Factory path: the DEFAULT create runs (no create injection).
+    outcome = dial_out(lambda: FakeClient(), "r", "+91", "T",
+                       poll=lambda r: "active")
+    assert outcome == "connected"
+    assert events == ["constructed", "created", "closed"]
+
+    # Eager-object path (legacy fakes) still works untouched via injection.
+    created = []
+    outcome = dial_out(object(), "r", "+91", "T",
+                       create=lambda **kw: created.append(kw) or object(),
+                       poll=lambda r: "active")
+    assert outcome == "connected"
+    assert created and events == ["constructed", "created", "closed"]

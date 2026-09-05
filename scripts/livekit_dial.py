@@ -33,9 +33,12 @@ logger = logging.getLogger("livekit_dial")
 
 
 def _api(config):
+    """Zero-arg FACTORY for the LiveKit client: dial_out constructs it inside
+    each call's event loop, because a LiveKitAPI's aiohttp session is bound
+    to the loop it was built under and cannot cross asyncio.run boundaries."""
     from livekit.api import LiveKitAPI
 
-    return LiveKitAPI(
+    return lambda: LiveKitAPI(
         url=config.livekit_url, api_key=config.livekit_key, api_secret=config.livekit_secret
     )
 
@@ -63,7 +66,7 @@ def main() -> int:
     async def _create_room() -> None:
         from livekit.protocol import room as room_proto
 
-        api = _api(config)
+        api = _api(config)()
         try:
             await api.room.create_room(room_proto.CreateRoomRequest(name=args.room))
         finally:

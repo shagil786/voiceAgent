@@ -38,6 +38,21 @@ _DECIDED = {
 }
 
 
+def _acquire_client(api: Any):
+    """Yield (client, owns) for an API handle.
+
+    A real `LiveKitAPI` binds its aiohttp session to the event loop it was
+    constructed under, and `asyncio.run` creates a fresh loop per call — so
+    an eagerly-constructed client CANNOT survive a sync dial. Real callers
+    therefore pass a zero-arg FACTORY; the client is then built inside the
+    running loop (per create/poll call — short-lived sessions, acceptable at
+    a 1s poll cadence for a CLI dial) and closed here. An eager object is
+    still accepted for injected test fakes, which never touch the loop."""
+    if callable(api) and not hasattr(api, "sip"):
+        return api(), True
+    return api, False
+
+
 def _default_create(
     *,
     api: Any,
@@ -58,14 +73,22 @@ def _default_create(
     """
     from livekit.protocol import sip as sip_proto
 
-    req = sip_proto.CreateSIPParticipantRequest(
-        room_name=room_name,
-        sip_call_to=to_number,
-        sip_trunk_id=trunk_id,
-    )
-    if from_number:
-        req.sip_number = from_number
-    return asyncio.run(api.sip.create_sip_participant(req))
+    async def _go():
+        client, owns = _acquire_client(api)
+        try:
+            req = sip_proto.CreateSIPParticipantRequest(
+                room_name=room_name,
+                sip_call_to=to_number,
+                sip_trunk_id=trunk_id,
+            )
+            if from_number:
+                req.sip_number = from_number
+            return await client.sip.create_sip_participant(req)
+        finally:
+            if owns:
+                await client.aclose()
+
+    return asyncio.run(_go())
 
 
 def _default_poll(api: Any, room_name: str, seen: list[bool] | None = None) -> str:
@@ -86,9 +109,16 @@ def _default_poll(api: Any, room_name: str, seen: list[bool] | None = None) -> s
     try:
         from livekit.protocol import models, room as room_proto
 
-        resp = asyncio.run(
-            api.room.list_participants(room_proto.ListParticipantsRequest(room=room_name))
-        )
+        async def _go():
+            client, owns = _acquire_client(api)
+            try:
+                return await client.room.list_participants(
+                    room_proto.ListParticipantsRequest(room=room_name))
+            finally:
+                if owns:
+                    await client.aclose()
+
+        resp = asyncio.run(_go())
         participants = list(resp.participants)
         if not participants:
             return _POLL_FAILED if seen else _POLL_RINGING
