@@ -89,9 +89,11 @@ def test_scrub_when_reply_starts_with_action_line():
 # ---------------------------------------------------------------------------
 
 def test_informational_actions_in_default_action_list():
-    from voiceagent.agent import DEFAULT_ACTIONS
-    assert "refund_info" in DEFAULT_ACTIONS
-    assert "delivery_eta" in DEFAULT_ACTIONS
+    # Sprint A1: the vocabulary is demo tenant data now; the informational
+    # actions stay in it so the demo path keeps serving them.
+    from voiceagent.demo_data import DEMO_TENANT_ACTIONS
+    assert "refund_info" in DEMO_TENANT_ACTIONS
+    assert "delivery_eta" in DEMO_TENANT_ACTIONS
 
 
 # ---------------------------------------------------------------------------
@@ -389,3 +391,239 @@ def test_empathy_prefix_for_pt():
     res = agent.handle("ONDE ESTÁ MEU PEDIDO ORD-77812???", language="pt")
     assert res.text.startswith(EMPATHY_PREFIXES["pt"])
     assert "ORD-77812" in res.text
+
+
+# ---------------------------------------------------------------------------
+# Sprint A1: the action vocabulary is TENANT DATA, not core code. The
+# e-commerce list moves to the demo tenant data module (voiceagent.demo_data);
+# a tenant bundle's declared vocabulary flows into the Agent prompt via the
+# runtime assembly; the no-tenant path keeps serving the demo vocabulary.
+# ---------------------------------------------------------------------------
+
+def test_core_no_longer_ships_the_demo_action_list():
+    import voiceagent.agent as agent_mod
+    from voiceagent.demo_data import DEMO_TENANT_ACTIONS
+    # The demo list exists, clearly labeled as demo tenant data...
+    assert "order_status" in DEMO_TENANT_ACTIONS and "refund" in DEMO_TENANT_ACTIONS
+    # ...and agent.py no longer carries it as core code.
+    assert not hasattr(agent_mod, "DEFAULT_ACTIONS")
+
+
+def test_no_tenant_agent_prompt_keeps_demo_vocabulary():
+    # The built-in demo path is unchanged: the fallback vocabulary is the
+    # demo tenant data, byte-identical prompts for existing tests.
+    from voiceagent.demo_data import DEMO_TENANT_ACTIONS
+    llm = PromptCaptureLLM()
+    build_agent(FakeIndex(), llm).handle("hello")
+    assert ", ".join(DEMO_TENANT_ACTIONS) in llm.prompts[0]
+
+
+def test_declared_actions_drive_the_agent_prompt():
+    # The assembly seam (runtime/deployment resolves the bundle vocabulary)
+    # passes the declared actions into the Agent; demo actions disappear.
+    agent = build_agent(FakeIndex(), PromptCaptureLLM(),
+                        actions=["check_balance", "block_card"])
+    prompt = agent._system_prompt
+    assert "one of: check_balance, block_card" in prompt
+    assert "cancel_order" not in prompt  # a demo-only action is gone
+
+
+def test_policy_declared_actions_still_win_over_passed_actions():
+    agent = build_agent(FakeIndex(), PromptCaptureLLM(),
+                        actions=["check_balance"],
+                        policy={"actions": ["kyc_reset"],
+                                "kyc_reset": {"allow": True}})
+    assert "one of: kyc_reset" in agent._system_prompt
+
+
+# ---------------------------------------------------------------------------
+# Sprint A2: the high_value_refund THRESHOLD is policy data (policies.yaml),
+# read through the PolicyEngine (tenant currency wired), never an inline
+# literal in the decision. Undeclared -> the platform default (5000).
+# ---------------------------------------------------------------------------
+
+class RefundClassifier:
+    def classify(self, text):
+        return ("refund", 1.0)
+
+
+def test_high_value_refund_threshold_comes_from_policy():
+    agent = build_agent(FakeIndex(), FakeLLM(), classifier=RefundClassifier(),
+                        policy={"high_value_refund_threshold": 200,
+                                "refund": {"allow": True}})
+    assert agent.handle("refund please", amount=200).action == \
+        "high_value_refund"          # the threshold itself is high-value
+    assert agent.handle("small refund", amount=199).action == "refund"
+
+
+def test_high_value_refund_threshold_default_preserved():
+    # No policy declares a threshold -> the historical 5000 value, but the
+    # value comes from the policy config object, not an inline literal.
+    agent = build_agent(FakeIndex(), FakeLLM(), classifier=RefundClassifier())
+    assert agent.handle("refund please", amount=4999.99).action == "refund"
+    assert agent.handle("refund please", amount=5000).action == \
+        "high_value_refund"
+
+
+def test_high_value_refund_threshold_currency_is_tenant_data():
+    # The threshold is evaluated through the PolicyEngine, which carries the
+    # tenant's currency — the policy reason strings use it.
+    from voiceagent.tenant import TenantConfig
+    agent = build_agent(FakeIndex(), FakeLLM(), classifier=RefundClassifier(),
+                        policy={"high_value_refund_threshold": 200,
+                                "refund": {"allow": True}},
+                        tenant=TenantConfig(currency="₹"))
+    assert agent._policy.currency == "₹"
+    assert agent._policy.high_value_refund_threshold() == 200
+    res = agent.handle("refund please", amount=250)
+    assert res.action == "high_value_refund"
+
+
+def test_policy_engine_threshold_accessor_validates():
+    from voiceagent.policy import (DEFAULT_HIGH_VALUE_REFUND_THRESHOLD,
+                                   PolicyEngine)
+    assert PolicyEngine({}).high_value_refund_threshold() == \
+        DEFAULT_HIGH_VALUE_REFUND_THRESHOLD == 5000
+    assert PolicyEngine(
+        {"high_value_refund_threshold": 200}).high_value_refund_threshold() \
+        == 200
+    # Bad declarations fall back to the platform default, never crash.
+    assert PolicyEngine(
+        {"high_value_refund_threshold": "lots"}).high_value_refund_threshold() \
+        == 5000
+    assert PolicyEngine(
+        {"high_value_refund_threshold": -1}).high_value_refund_threshold() \
+        == 5000
+
+
+# ---------------------------------------------------------------------------
+# Sprint A3: the echo guardrail's required facts are TOOL-CONTRACT data
+# (ToolSpec.facts), derived from the deployment's declared specs — not a
+# hardcoded keyword dict in agent.py.
+# ---------------------------------------------------------------------------
+
+def test_echo_guard_facts_come_from_tool_spec():
+    from voiceagent.policy import PolicyEngine
+    from voiceagent.tools import (GovernedToolRunner, ToolGateway, ToolSpec)
+    specs = {"check_balance": ToolSpec(params=(), facts=("balance",))}
+    runner = GovernedToolRunner(ToolGateway(specs=specs), PolicyEngine({}))
+    llm = PromptCaptureLLM(reply="All done.")
+    agent = build_agent(FakeIndex(), llm, classifier=RefundClassifier(),
+                        tool_runner=runner)
+
+    class BalanceClassifier:
+        def classify(self, text):
+            return ("check_balance", 1.0)
+
+    agent._classifier = BalanceClassifier()
+    res = agent.handle("my balance is wrong", amount=None)
+    assert "balance" in res.text  # spec fact forced into the reply
+
+
+def test_spec_facts_change_reflected_by_guard():
+    from voiceagent.policy import PolicyEngine
+    from voiceagent.tools import (GovernedToolRunner, ToolGateway, ToolSpec)
+
+    class BalanceClassifier:
+        def classify(self, text):
+            return ("check_balance", 1.0)
+
+    def agent_with(spec):
+        runner = GovernedToolRunner(
+            ToolGateway(specs={"check_balance": spec}), PolicyEngine({}))
+        agent = build_agent(FakeIndex(), PromptCaptureLLM(reply="All done."),
+                            classifier=BalanceClassifier(),
+                            tool_runner=runner)
+        return agent
+
+    with_facts = agent_with(
+        ToolSpec(params=(), facts=("ledger",))).handle("fix my ledger")
+    assert "ledger" in with_facts.text
+    # Same spec without the fact -> the guard forces nothing.
+    bare = agent_with(ToolSpec(params=())).handle("fix my ledger")
+    assert bare.text == "All done."
+
+
+def test_demo_echo_guard_facts_unchanged():
+    # The no-spec (demo) path preserves the historical keyword behavior.
+    from voiceagent.agent import extract_required_references
+    refs = extract_required_references("my otp never came and recharge fail")
+    assert "otp" in refs and "fail" in refs
+    assert extract_required_references("hello") == []
+
+
+def test_keyword_facts_dict_gone_from_core():
+    import voiceagent.agent as agent_mod
+    assert not hasattr(agent_mod, "KEYWORD_FACTS")
+
+
+# ---------------------------------------------------------------------------
+# Review fixes: (MAJOR 2) the echo guard's scan is FIRST-MATCH-PER-GROUP —
+# exact-equality pins against the historical KEYWORD_FACTS behavior;
+# (MAJOR 1) a wired bare code-default ToolGateway (scripts/chat.py wiring)
+# must still enforce the demo keyword facts, while a declared tenant bundle
+# suppresses them.
+# ---------------------------------------------------------------------------
+
+def test_echo_guard_first_match_per_group_pinned():
+    # Exact equality with the pre-refactor KEYWORD_FACTS scan: at most ONE
+    # keyword per fact group reaches the required refs.
+    from voiceagent.agent import extract_required_references
+    assert extract_required_references("my recharge failed") == ["fail"]
+    assert extract_required_references(
+        "when will my order delivery happen") == ["order"]
+    assert extract_required_references("block my card, fraud") == ["block"]
+    assert extract_required_references(
+        "my otp never came and recharge fail") == ["otp", "fail"]
+
+
+def test_chat_style_wired_gateway_enforces_demo_facts():
+    # scripts/chat.py wiring: classifier + ToolGateway(erp=...) with bare
+    # DEFAULT_TOOL_SPECS (facts = order/refund only). Demo mode (no tenant
+    # bundle) must MERGE the demo contracts back in — the historical
+    # otp/bill/block/declined/fail/recharge guarantees survive.
+    from voiceagent.policy import PolicyEngine
+    from voiceagent.tools import GovernedToolRunner, MockERP, ToolGateway
+
+    runner = GovernedToolRunner(ToolGateway(erp=MockERP()),
+                                PolicyEngine({}))
+    cases = [("my otp never came", "otp"), ("check my bill", "bill"),
+             ("block my card", "block"),
+             ("my payment was declined", "declined"),
+             ("my recharge failed", "fail"),
+             ("recharge did not go through", "recharge"),
+             ("where is my refund", "refund")]
+    for text, keyword in cases:
+        class _Cls:
+            def classify(self, t):
+                return ("whatever", 1.0)
+
+        agent = build_agent(FakeIndex(), PromptCaptureLLM(reply="Noted."),
+                            classifier=_Cls(), tool_runner=runner)
+        res = agent.handle(text)
+        assert keyword in res.text, (text, keyword, res.text)
+
+
+def test_declared_tenant_bundle_suppresses_demo_facts(tmp_path):
+    # With a REAL tenant bundle declared, only the bundle's declared specs
+    # apply — the demo otp/bill/block contracts must NOT leak in.
+    import json as _json
+    from voiceagent.policy import PolicyEngine
+    from voiceagent.tenant import Tenant
+    from voiceagent.tools import GovernedToolRunner, ToolGateway
+
+    root = tmp_path / "acme-live"
+    root.mkdir()
+    (root / "tenant.json").write_text(_json.dumps({"name": "acme-live"}))
+    bundle = Tenant.load(root)
+    assert bundle.exists
+
+    class _Cls:
+        def classify(self, t):
+            return ("whatever", 1.0)
+
+    runner = GovernedToolRunner(ToolGateway(), PolicyEngine({}))
+    agent = build_agent(FakeIndex(), PromptCaptureLLM(reply="Noted."),
+                        classifier=_Cls(), tool_runner=runner, tenant=bundle)
+    res = agent.handle("my otp never came")
+    assert res.text == "Noted."  # no demo fact forced into the reply

@@ -154,3 +154,85 @@ def test_governed_runner_blocks_unknown_tool_when_states_passed():
     assert len(log.entries()) == 1
     assert log.entries()[-1].verdict == "BLOCKED_UNCONNECTED"
     assert erp.get_order("ORD-4821")["status"] == "CONFIRMED"
+
+
+# ---------------------------------------------------------------------------
+# Sprint A3: ToolSpec carries its reply CONTRACT as data (`facts`) — the
+# customer-visible guarantees the echo guardrail enforces — declared in code
+# defaults and overridable from a tenant bundle's tools.yaml.
+# ---------------------------------------------------------------------------
+
+def test_toolspec_has_facts_field():
+    from voiceagent.tools import ToolSpec
+    assert ToolSpec(params=()).facts == ()
+    assert ToolSpec(params=(), facts=("order",)).facts == ("order",)
+
+
+def test_default_tool_specs_declare_contract_facts():
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+    assert DEFAULT_TOOL_SPECS["fetch_order_status"].facts == ("order",)
+    # "delivery" deliberately is NOT a standalone spec fact: the historical
+    # echo-guard group is ["order", "delivery"] under first-match-per-group
+    # semantics (it lives in the demo delivery_eta contract spec), and a
+    # second "delivery" group would double-force the keyword.
+    assert DEFAULT_TOOL_SPECS["reschedule_delivery"].facts == ()
+    assert DEFAULT_TOOL_SPECS["initiate_refund"].facts == ("refund",)
+    assert DEFAULT_TOOL_SPECS["escalate_to_human"].facts == ()
+
+
+def test_yaml_loader_accepts_facts():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "cancel_order": {"facts": ["cancel", "cancellation"]}}}))
+        gw = ToolGateway.from_yaml(f)
+        assert gw.specs["cancel_order"].facts == ("cancel", "cancellation")
+
+
+def test_yaml_loader_rejects_bad_facts_type():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "cancel_order": {"facts": "cancel"}}}))
+        with pytest.raises(ValueError, match="facts"):
+            ToolGateway.from_yaml(f)
+
+
+def test_specs_with_yaml_facts_merges_without_touching_other_specs():
+    import tempfile, yaml
+    from pathlib import Path as P
+    from voiceagent.tools import DEFAULT_TOOL_SPECS, specs_with_yaml_facts
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "fetch_order_status": {"facts": ["account"]}}}))
+        specs = specs_with_yaml_facts(f)
+        # Declared facts override; everything else keeps its base spec
+        # (params AND preconditions intact).
+        assert specs["fetch_order_status"].facts == ("account",)
+        assert specs["fetch_order_status"].params == \
+            DEFAULT_TOOL_SPECS["fetch_order_status"].params
+        assert specs["cancel_order"] == DEFAULT_TOOL_SPECS["cancel_order"]
+
+
+def test_specs_with_yaml_facts_rejects_unknown_tool():
+    import tempfile, yaml
+    from pathlib import Path as P
+    from voiceagent.tools import specs_with_yaml_facts
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "not_a_tool": {"facts": ["x"]}}}))
+        with pytest.raises(ValueError, match="unknown tool"):
+            specs_with_yaml_facts(f)
+
+
+def test_spec_facts_union_helper():
+    from voiceagent.tools import ToolSpec, spec_facts
+    specs = {"a": ToolSpec(params=(), facts=("x", "y")),
+             "b": ToolSpec(params=(), facts=("y", "z"))}
+    assert spec_facts(specs) == ["x", "y", "z"]  # declaration order, deduped

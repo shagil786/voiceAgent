@@ -64,6 +64,12 @@ class Deployment:
     # through GovernedToolRunner.
     gateway_tools: dict[str, dict] = field(default_factory=dict)
     knowledge: dict[str, str] = field(default_factory=dict)  # id -> text
+    # The deployment's declared action vocabulary (Sprint A1): resolved from
+    # the tenant bundle (intents/ + tools.yaml `action:` + tenant.json
+    # extras) by the runtime assembly. None = nothing declared — consumers
+    # keep their existing (demo-fallback) behavior. Core ships no business
+    # action list.
+    actions: list[str] | None = None
     metadata: dict = field(default_factory=dict)
 
 
@@ -105,7 +111,8 @@ class Orchestrator:
                  decision_log: DecisionLog | None = None,
                  max_tool_rounds: int = 3,
                  profiles: ProfileStore | None = None,
-                 metrics: Metrics | None = None):
+                 metrics: Metrics | None = None,
+                 actions: list[str] | None = None):
         self.brain = brain
         self.runner = runner
         self.memory: ConversationMemory = memory or InMemoryMemory()
@@ -116,6 +123,13 @@ class Orchestrator:
         self.profiles = profiles
         # Runtime metrics sink: None = no recording (zero behavior change).
         self.metrics = metrics
+        # The resolved action vocabulary (Sprint A1): declared tenant data
+        # passed in by the assembly seam (build_orchestrator / deploy());
+        # None = nothing declared, existing behavior. The frontier brain's
+        # proposal surface stays tool-schema-driven — this seam exists so the
+        # vocabulary is available to placements/prompt builders without
+        # re-deriving it from the bundle.
+        self.actions: list[str] | None = list(actions) if actions else None
         self._profile_links: dict[str, str] = {}  # session_id -> contact key
         self._gateway_tools: dict[str, dict] = {}
         self._deployment: Deployment | None = None
@@ -128,6 +142,8 @@ class Orchestrator:
         brain's tool surface; prompt + knowledge become the system message."""
         self._deployment = deployment
         self._gateway_tools = dict(deployment.gateway_tools)
+        if deployment.actions:  # declared vocabulary wins; None keeps existing
+            self.actions = list(deployment.actions)
         for spec in deployment.specs:
             self.brain.register_specialist(DomainSpecialist(spec=spec))
         for tool_name, meta in deployment.gateway_tools.items():

@@ -9,6 +9,12 @@ tools:
   fetch_order_status:
     action: order_status
     description: Look up the current status of a customer's order by id.
+    # Sprint A3: the tool's reply CONTRACT as data — the customer-visible
+    # guarantee the echo guardrail enforces when the customer states it
+    # (validated by scripts/validate_tenant.py, merged into the gateway's
+    # ToolSpec by the runtime assembly).
+    facts:
+      - order
   escalate_to_human:
     action: escalate_to_human
     side_effects: true

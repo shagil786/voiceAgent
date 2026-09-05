@@ -25,6 +25,12 @@ DEFAULT_POLICIES = {
     "otp": {"require_auth": True},
 }
 
+# Platform-default high-value-refund threshold, used ONLY when no policy file
+# declares the top-level `high_value_refund_threshold` key. A tenant declares
+# its own value in policies.yaml (validated by scripts/validate_tenant.py);
+# business thresholds are data, never inline literals in agent code.
+DEFAULT_HIGH_VALUE_REFUND_THRESHOLD = 5000
+
 
 def load_policies(path: str) -> dict:
     """Load a YAML policy file. Falls back to DEFAULT_POLICIES on error so
@@ -75,6 +81,19 @@ class PolicyEngine:
         if not isinstance(acts, list):
             return []
         return [a for a in acts if isinstance(a, str)]
+
+    def high_value_refund_threshold(self) -> float:
+        """The amount at/above which a refund IS a high_value_refund —
+        declared per tenant as the top-level `high_value_refund_threshold`
+        key in policies.yaml (business thresholds are policy data, evaluated
+        through this engine so the tenant's currency is wired). A malformed
+        or undeclared value falls back to the platform default, never
+        crashes the turn."""
+        v = self.policies.get("high_value_refund_threshold")
+        if (isinstance(v, (int, float)) and not isinstance(v, bool)
+                and v > 0):
+            return v
+        return DEFAULT_HIGH_VALUE_REFUND_THRESHOLD
 
     def evaluate(self, action: str, ctx: PolicyContext | None = None) -> Decision:
         ctx = ctx or PolicyContext()

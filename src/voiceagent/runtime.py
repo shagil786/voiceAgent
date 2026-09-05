@@ -32,6 +32,7 @@ from voiceagent.tools import (
     GovernedToolRunner,
     MockERP,
     ToolGateway,
+    specs_with_yaml_facts,
 )
 from voiceagent.tenant import DEFAULT_CURRENCY, Tenant, compile_persona_block
 
@@ -128,6 +129,13 @@ def gateway_tools_from_yaml(path: str | Path) -> dict[str, dict]:
     for name, meta in tools.items():
         if not isinstance(meta, dict) or not meta.get("action"):
             raise ValueError(f"tools.yaml: '{name}' must declare an 'action'")
+        # Sprint A3: optional per-tool reply contract (`facts:`) — validated
+        # here AND in ToolGateway (voiceagent.tools.parse_facts) so the CI
+        # gate and both loaders share one type contract.
+        if "facts" in meta:
+            from voiceagent.tools import parse_facts
+            meta["facts"] = list(parse_facts(meta["facts"],
+                                             f"tools.yaml '{name}'"))
         surface[name] = dict(meta)
     return surface
 
@@ -211,6 +219,10 @@ def make_deployment(
                       + compile_persona_block(tenant.config.persona),
         gateway_tools=_bundle_gateway_tools(tenant),
         knowledge=_bundle_knowledge(tenant),
+        # Sprint A1: the bundle DECLARES its action vocabulary (intents/ +
+        # tools.yaml + optional tenant.json extras); None when it declares
+        # nothing. No business list ships in core.
+        actions=tenant.action_vocabulary(),
         metadata={"languages": tenant.language_set(),
                   "tenant": tenant.config.name},
     )
@@ -252,12 +264,22 @@ def build_orchestrator(
     # covers a no-tenant deployment. Feeds the policy reason strings.
     currency = bundle.config.currency if bundle else DEFAULT_CURRENCY
     policy = PolicyEngine(load_policies(policy_src), currency=currency)
+    # Sprint A3: a bundle may declare per-tool reply contracts (`facts:` in
+    # tools.yaml) — merge them into the gateway specs so the EXECUTED tool's
+    # spec carries the deployment's contract data. No tools.yaml -> the code
+    # defaults (DEFAULT_TOOL_SPECS) apply unchanged.
+    specs = None
+    if bundle is not None and (bundle.root / "tools.yaml").exists():
+        specs = specs_with_yaml_facts(bundle.root / "tools.yaml")
     runner = GovernedToolRunner(
-        ToolGateway(erp=erp or MockERP()), policy, decision_log=log)
+        ToolGateway(erp=erp or MockERP(), specs=specs), policy,
+        decision_log=log)
     brain = FrontierAgentBridge(FrontierClient(cfg))
+    dep = deployment or make_deployment(tenant=bundle,
+                                        policy_path=policy_path)
     orch = Orchestrator(
         brain, runner=runner, memory=memory or InMemoryMemory(),
-        decision_log=log, max_tool_rounds=max_tool_rounds)
-    orch.deploy(deployment or make_deployment(tenant=bundle,
-                                              policy_path=policy_path))
+        decision_log=log, max_tool_rounds=max_tool_rounds,
+        actions=dep.actions)  # Sprint A1: resolved vocabulary into the brain
+    orch.deploy(dep)
     return orch

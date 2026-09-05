@@ -10,22 +10,21 @@ from voiceagent.langid import NATIVE_SCRIPT_LANGS, detect_language
 from voiceagent.sentiment import (candidate_phrases_from,
                                   detect_frustration)
 from voiceagent.security import detect_injection, sanitize_for_prompt
-from voiceagent.tenant import DEFAULT_CURRENCY
+from voiceagent.tenant import DEFAULT_CURRENCY, Tenant
 
 if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
     from voiceagent.memory import Turn
 
-# Fallback action vocabulary for the system prompt. Used when the loaded
-# policy does not declare its own action set — policy rule keys are NOT the
-# vocabulary (partial coverage, differing names like order_cancellation vs
-# cancel_order): see PolicyEngine.known_actions.
-DEFAULT_ACTIONS = [
-    "order_status", "refund", "cancel_order", "address_change",
-    "payment_declined", "recharge", "billing", "return", "replacement",
-    "otp", "fraud", "account_closure", "delivery_delay", "product_info",
-    "invoice", "plan_change", "roaming", "network_issue", "complaint",
-    "high_value_refund", "refund_info", "delivery_eta",
-]
+# The demo deployment's action vocabulary is DEMO TENANT DATA
+# (voiceagent.demo_data), not core: orchestration core ships no e-commerce
+# list. Precedence for the system prompt's vocabulary: a policy that declares
+# its action set (PolicyEngine.known_actions) wins, then the action vocabulary
+# the assembly seam resolved from the tenant bundle (build_agent(actions=...)),
+# then the demo tenant data — so the no-tenant demo path keeps working
+# byte-identically. Policy rule keys are NOT the vocabulary (partial coverage,
+# differing names like order_cancellation vs cancel_order): see
+# PolicyEngine.known_actions.
+from voiceagent.demo_data import DEMO_TENANT_ACTIONS
 
 # Neutral by default: a persona is tenant data (M6a). The legacy default
 # ("...for an Indian ecommerce company") claimed a false identity for every
@@ -43,7 +42,7 @@ _INSTRUCTION_TAIL = (
 )
 
 SYSTEM_PROMPT = ("You are a " + _DEFAULT_PERSONA + ". " + _INSTRUCTION_TAIL
-                 .format(actions=", ".join(DEFAULT_ACTIONS)))
+                 .format(actions=", ".join(DEMO_TENANT_ACTIONS)))
 
 
 def system_prompt_with_actions(actions: list[str], persona=None) -> str:
@@ -81,7 +80,8 @@ class AgentResult:
 class Agent:
     def __init__(self, index, llm, classifier=None, policy=None,
                  decision_log=None, tenant=None, sentiment_store=None,
-                 tool_runner=None, erp=None):
+                 tool_runner=None, erp=None,
+                 actions: list[str] | None = None):
         self._index = index
         self._llm = llm
         self._classifier = classifier
@@ -97,19 +97,42 @@ class Agent:
             # tenant's symbol; no tenant -> the platform default.
             currency = getattr(tenant, "currency", None) or DEFAULT_CURRENCY
             self._policy = PolicyEngine(policy, currency=currency)
+        # The high-value-refund threshold (Sprint A2) is policy data: the
+        # promotion decision reads the VALUE through a PolicyEngine — the
+        # wired one when present, else the platform-default policy config —
+        # never an inline literal. (self._policy stays None without a wired
+        # policy: the governance gate keeps its historical semantics.)
+        if self._policy is not None:
+            self._threshold_policy = self._policy
+        else:
+            from voiceagent.policy import PolicyEngine as _DefaultPolicy
+            self._threshold_policy = _DefaultPolicy()
         self._decision_log = decision_log
         self._tool_runner = tool_runner
         self._erp = erp
         self._trackers: dict[str, Any] = {}
         # Single-source the action list: a policy that declares its action
         # vocabulary (PolicyEngine.known_actions) drives the system prompt;
-        # otherwise the static DEFAULT_ACTIONS list above is kept. The
-        # persona comes from the tenant config (M6a); no tenant -> the
-        # historical default, byte-identical prompts for the benchmark.
+        # then the vocabulary the assembly seam resolved from the tenant
+        # bundle; otherwise the demo tenant data keeps the no-tenant path
+        # byte-identical. The persona comes from the tenant config (M6a).
         persona = getattr(tenant, "persona", None) or _DEFAULT_PERSONA
         declared = self._policy.known_actions() if self._policy else []
         self._system_prompt = system_prompt_with_actions(
-            declared or DEFAULT_ACTIONS, persona)
+            declared or actions or DEMO_TENANT_ACTIONS, persona)
+        # Echo-guardrail facts (Sprint A3) are TOOL-CONTRACT data. ONE shared
+        # resolution (echo_spec_registry, below) for both here and the
+        # extract_required_references default: when a governed tool surface is
+        # wired, its specs are the base — and in DEMO mode (no real tenant
+        # bundle declared) the demo tenant contracts are merged in, so the
+        # historical keyword guarantees survive a bare code-default
+        # ToolGateway. With a real tenant bundle declared, ONLY the bundle's
+        # declared specs apply (no demo leakage).
+        gateway = getattr(self._tool_runner, "gateway", None)
+        specs = getattr(gateway, "specs", None)
+        bundle_declared = isinstance(tenant, Tenant) and tenant.exists
+        self._echo_specs = specs
+        self._echo_demo = not bundle_declared
 
     def handle(self, user_text: str, authenticated: bool = False,
                amount: float | None = None, conv_id: str = "",
@@ -180,10 +203,15 @@ class Agent:
         # was provided — e.g. unit tests — from the LLM's ACTION line).
         if self._classifier is not None:
             action, _ = self._classifier.classify(user_text)
-            # Deterministic promotion: a refund with an extracted amount above
-            # the policy threshold IS a high-value refund — don't leave that
-            # call to embedding similarity (which can't use the number).
-            if action == "refund" and amount is not None and amount > 5000:
+            # Deterministic promotion: a refund with an extracted amount at or
+            # above the policy threshold IS a high-value refund — don't leave
+            # that call to embedding similarity (which can't use the number).
+            # The threshold is POLICY DATA (policies.yaml
+            # `high_value_refund_threshold`, evaluated through the PolicyEngine
+            # with the tenant's currency wired), never an inline literal.
+            if (action == "refund" and amount is not None
+                    and amount >= self._threshold_policy
+                    .high_value_refund_threshold()):
                 action = "high_value_refund"
         else:
             action = extract_action(clean)
@@ -201,8 +229,12 @@ class Agent:
             # LLM often answers generically — or its reply was scaffolding
             # only — so patch any missing reference with a deterministic
             # confirmation. This is the product's "the AI cannot drift from
-            # your order/account" guarantee.
-            required = extract_required_references(user_text)
+            # your order/account" guarantee. The keyword facts are TOOL
+            # CONTRACT data (the registry resolved in __init__ via
+            # echo_spec_registry: wired gateway specs + demo contracts in
+            # demo mode) — never a hardcoded dict.
+            required = extract_required_references(
+                user_text, specs=self._echo_specs, demo=self._echo_demo)
             # Reference inheritance: a follow-up like "and when will it
             # arrive?" states no order id — inherit the most recent one from
             # the conversation so the guardrail keeps the reply pinned to the
@@ -420,40 +452,59 @@ ORDER_ID_RE = re.compile(
     r"\b(?:ORD[-#]?\s*)?(\d{4,10})\b", re.IGNORECASE
 )
 
-# Intent keywords that must appear in the reply for non-entity intents
-# (fraud, otp, billing). These are the eval set's key_facts for those rows.
-KEYWORD_FACTS = {
-    "fraud": ["block"],
-    "otp": ["otp"],
-    "billing": ["bill"],
-    "payment_declined": ["declined"],
-    "recharge": ["fail", "recharge"],
-    # M5c informational intents: eval rows carry the topic keyword as
-    # key_facts, so the echo guardrail pins it into the reply too.
-    "refund_info": ["refund"],
-    "delivery_eta": ["order", "delivery"],
-}
+# Intent keywords that must appear in the reply when the customer states them
+# are TOOL-CONTRACT data now (Sprint A3): ToolSpec.facts on the deployment's
+# declared specs (DEFAULT_TOOL_SPECS + tenant tools.yaml overrides), with the
+# demo tenant contracts (voiceagent.demo_data.DEMO_TENANT_CONTRACT_SPECS) as
+# the no-bundle fallback.
+def echo_spec_registry(specs: "dict | None", demo: bool = True) -> dict:
+    """ONE shared resolution of the echo guardrail's fact groups, used by
+    Agent.__init__ and extract_required_references (single source, no
+    copy-paste). `specs` is the wired tool surface (gateway.specs) or None;
+    `demo` is True whenever no real tenant bundle is declared — the demo
+    tenant contracts are then merged in (over the code defaults, under the
+    wired specs) so the historical keyword guarantees are enforced on every
+    demo wiring. A declared tenant bundle suppresses the demo contracts
+    entirely: only the bundle's own specs apply."""
+    from voiceagent.demo_data import DEMO_TENANT_CONTRACT_SPECS
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+    registry: dict = {}
+    if demo:
+        registry.update(DEFAULT_TOOL_SPECS)
+        registry.update(DEMO_TENANT_CONTRACT_SPECS)
+    if specs:
+        registry.update(specs)
+    return registry
+
+
+def extract_required_references(user_text: str,
+                                specs: "dict | None" = None,
+                                demo: bool = True) -> list[str]:
+    """References the reply must contain: the customer's stated order id(s)
+    and any declared tool-contract fact the customer stated. Shared with
+    chat.py (turn records) and the echo guardrail. The scan is
+    FIRST-MATCH-PER-SPEC (one fact per spec, then move on) — exactly the
+    historical KEYWORD_FACTS group semantics: e.g. "my recharge failed" pins
+    only 'fail' (recharge's first fact), never both 'fail' and 'recharge'.
+    specs=None resolves the demo registry (the historical default for callers
+    with no tool surface)."""
+    registry = echo_spec_registry(specs, demo)
+    refs: list[str] = []
+    for m in ORDER_ID_RE.finditer(user_text):
+        refs.append(m.group(0))
+    lower = user_text.lower()
+    for spec in registry.values():
+        for f in spec.facts:
+            if f in lower:
+                if f not in refs:  # cross-spec duplicates stay single
+                    refs.append(f)
+                break  # first match per spec — historical group semantics
+    return refs
 
 
 def extract_action(text: str) -> str | None:
     m = ACTION_RE.search(text)
     return m.group(1).lower() if m else None
-
-
-def extract_required_references(user_text: str) -> list[str]:
-    """References the reply must contain: the customer's stated order id(s)
-    and any intent keyword that is a ground-truth fact. Shared with chat.py
-    (turn records) and the echo guardrail."""
-    refs: list[str] = []
-    for m in ORDER_ID_RE.finditer(user_text):
-        refs.append(m.group(0))
-    lower = user_text.lower()
-    for kw in KEYWORD_FACTS.values():
-        for k in kw:
-            if k in lower:
-                refs.append(k)
-                break
-    return refs
 
 
 def find_order_id(text: str) -> str | None:
@@ -538,11 +589,11 @@ def strip_action_lines(text: str) -> str:
 
 def build_agent(index, llm, classifier=None, policy=None, decision_log=None,
                 tenant=None, sentiment_store=None, tool_runner=None,
-                erp=None) -> Agent:
+                erp=None, actions: list[str] | None = None) -> Agent:
     agent = Agent(index, llm, classifier=classifier, policy=policy,
                   decision_log=decision_log, tenant=tenant,
                   sentiment_store=sentiment_store, tool_runner=tool_runner,
-                  erp=erp)
+                  erp=erp, actions=actions)
     # Real LlamaCppLLM has chat_template; FakeLLM (tests) does not.
     agent._use_template = hasattr(llm, "chat_template")
     return agent

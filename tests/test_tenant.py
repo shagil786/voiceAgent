@@ -154,3 +154,46 @@ def test_bundle_knowledge_dir(tmp_path):
     t = Tenant.load(root)
     assert t.knowledge_dir() is not None
     assert "Return in 30 days" in (Path(t.knowledge_dir()) / "faq.md").read_text()
+
+
+# ---------------------------------------------------------------------------
+# Sprint A1: the tenant bundle DECLARES its action vocabulary, derived from
+# the surfaces it already owns — intents/*.yaml file names (the classifier
+# taxonomy IS the action vocabulary) + the governed `action` declarations in
+# tools.yaml — with optional info-only extras in tenant.json `actions`.
+# One source per concept; no second list to keep in sync.
+# ---------------------------------------------------------------------------
+
+def test_action_vocabulary_derived_from_intents_and_tools_yaml(tmp_path):
+    root = _make_bundle(tmp_path / "acme", exemplar=["what do I owe"])
+    (root / "intents" / "check_balance.yaml").write_text(
+        yaml.safe_dump(["what is my balance"]))
+    (root / "tools.yaml").write_text(
+        "tools:\n  escalate_to_human:\n    action: escalate_to_human\n"
+        "  fetch_order_status:\n    action: order_status\n")
+    t = Tenant.load(root)
+    assert t.action_vocabulary() == ["check_balance", "escalate_to_human",
+                                     "order_status", "track_order"]
+
+
+def test_action_vocabulary_tenant_json_info_only_extras(tmp_path):
+    root = _make_bundle(tmp_path / "acme")
+    (root / "tenant.json").write_text(json.dumps({
+        "name": "acme", "actions": ["check_balance"]}))
+    t = Tenant.load(root)
+    assert t.action_vocabulary() == ["check_balance"]
+
+
+def test_action_vocabulary_none_when_bundle_declares_nothing(tmp_path):
+    root = _make_bundle(tmp_path / "acme")  # no intents files, no tools.yaml
+    assert Tenant.load(root).action_vocabulary() is None
+    assert Tenant.load(tmp_path / "nope").action_vocabulary() is None
+
+
+def test_example_acme_declares_its_vocabulary():
+    acme = Tenant.load(Path(__file__).resolve().parents[1]
+                       / "data" / "tenants" / "example-acme")
+    vocab = acme.action_vocabulary()
+    assert "order_status" in vocab and "escalate_to_human" in vocab
+    # Derived from bundle data, NOT the demo e-commerce list.
+    assert "recharge" not in vocab and "roaming" not in vocab

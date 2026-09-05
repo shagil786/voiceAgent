@@ -4,6 +4,12 @@
 escalate:
   - fraud
 
+# Sprint A2: business thresholds are POLICY DATA. The amount at/above which a
+# refund IS a high_value_refund — previously hardcoded in agent.py, now
+# declared here and evaluated through the PolicyEngine (tenant currency
+# wired). Undeclared -> the platform default (5000).
+high_value_refund_threshold: 5000
+
 order_status:
   allow: true
 

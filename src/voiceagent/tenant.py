@@ -57,6 +57,11 @@ class TenantConfig:
     name: str = "default"
     persona: Persona = field(default_factory=Persona)
     currency: str = DEFAULT_CURRENCY
+    # Optional info-only action extras: actions that are neither an intent
+    # file nor a governed tool action but belong in the declared vocabulary.
+    # The vocabulary itself is DERIVED (see Tenant.action_vocabulary) — this
+    # only adds.
+    actions: list[str] | None = None
 
     @classmethod
     def load(cls, path: str | Path = TENANT_CONFIG_PATH) -> "TenantConfig":
@@ -82,7 +87,18 @@ class TenantConfig:
             name=data.get("name", "default"),
             persona=persona,
             currency=data.get("currency", DEFAULT_CURRENCY),
+            actions=_str_list_or_none(data.get("actions")),
         )
+
+
+def _str_list_or_none(value) -> list[str] | None:
+    """Tenant.json list-of-strings normalization: None passes through, a list
+    is coerced to strings, anything else is ignored (defaults apply)."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [str(x) for x in value]
+    return None
 
 
 def compile_persona_block(persona: Persona) -> str:
@@ -156,6 +172,37 @@ class Tenant:
     def policy_file(self) -> str | None:
         p = self.root / "policies.yaml"
         return str(p) if p.exists() else None
+
+    def action_vocabulary(self) -> list[str] | None:
+        """The action vocabulary this bundle DECLARES, derived from the
+        surfaces it already owns so there is ONE source per concept:
+
+        - intents/*.yaml file names — the classifier taxonomy IS the action
+          vocabulary (the classifier's intent label is the action name);
+        - tools.yaml `action:` declarations — the governed actions the
+          deployment's tools map to;
+        - tenant.json `actions:` — optional info-only extras.
+
+        Returns None when the bundle declares nothing, so callers fall back
+        to their own vocabulary (the demo tenant data for the built-in
+        deployment). Sorted for stable prompts and CI diffs."""
+        acts: set[str] = set()
+        d = self.root / "intents"
+        if d.is_dir():
+            acts.update(f.stem for f in d.glob("*.yaml"))
+        p = self.root / "tools.yaml"
+        if p.exists():
+            import yaml
+            raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            tools = raw.get("tools")
+            if isinstance(tools, dict):
+                for meta in tools.values():
+                    if isinstance(meta, dict) and isinstance(
+                            meta.get("action"), str) and meta["action"]:
+                        acts.add(meta["action"])
+        if self.config.actions:
+            acts.update(self.config.actions)
+        return sorted(acts) or None
 
     def knowledge_dir(self) -> str | None:
         d = self.root / "knowledge"

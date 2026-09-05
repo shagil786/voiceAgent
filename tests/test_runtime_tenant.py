@@ -277,3 +277,94 @@ def test_validate_tenant_gate_rejects_unknown_tool(tmp_path):
                        capture_output=True, text=True, cwd=ROOT)
     assert r.returncode == 1
     assert "unknown tool" in r.stdout
+
+
+# --- 9. the action vocabulary is bundle data (Sprint A1) ----------------------
+
+def test_no_tenant_deployment_declares_no_vocabulary():
+    # The built-in deployment carries no vocabulary field value: its prompt is
+    # the platform base (pinned byte-identical above), not a core action list.
+    assert make_deployment().actions is None
+
+
+def test_example_acme_vocabulary_is_bundle_data():
+    dep = make_deployment(tenant=Tenant.load(ACME))
+    # Derived from the bundle (intents/ + tools.yaml), not the demo list.
+    assert dep.actions == ["escalate_to_human", "order_status"]
+    assert "recharge" not in dep.actions and "roaming" not in dep.actions
+
+
+def test_build_orchestrator_passes_vocabulary_into_the_orchestrator(monkeypatch):
+    monkeypatch.chdir(ROOT)
+    orch = build_orchestrator(env=dict(FRONTIER_URL), tenant="example-acme")
+    assert orch.actions == ["escalate_to_human", "order_status"]
+    # No tenant -> the Orchestrator keeps its existing (undeclared) behavior.
+    orch = build_orchestrator(env=dict(FRONTIER_URL))
+    assert orch.actions is None
+
+
+def test_custom_bundle_intents_drive_the_orchestrator_vocabulary(tmp_path):
+    root = tmp_path / "bank"
+    root.mkdir()
+    (root / "tenant.json").write_text(json.dumps({"name": "bank"}))
+    (root / "intents").mkdir()
+    (root / "intents" / "check_balance.yaml").write_text(
+        "- what is my balance\n")
+    orch = build_orchestrator(env=dict(FRONTIER_URL), tenant=str(root))
+    assert "check_balance" in orch.actions
+    assert "refund" not in orch.actions and "order_status" not in orch.actions
+
+
+# --- 10. the CI gate covers the new schema fields (Sprint A2/A3) --------------
+
+def test_validate_tenant_gate_rejects_bad_facts_type(tmp_path):
+    root = _bundle_with_tools_yaml(
+        tmp_path / "badfacts",
+        "tools:\n  escalate_to_human:\n    action: escalate_to_human\n"
+        "    facts: order\n")  # a bare string, not a list
+    r = subprocess.run([sys.executable, str(VALIDATOR), str(root)],
+                       capture_output=True, text=True, cwd=ROOT)
+    assert r.returncode == 1
+    assert "facts" in r.stdout
+
+
+def test_validate_tenant_gate_rejects_bad_threshold(tmp_path):
+    root = tmp_path / "badthresh"
+    root.mkdir()
+    (root / "tenant.json").write_text(json.dumps({"name": "badthresh"}))
+    (root / "policies.yaml").write_text(
+        "high_value_refund_threshold: lots\nrefund:\n  allow: true\n")
+    r = subprocess.run([sys.executable, str(VALIDATOR), str(root)],
+                       capture_output=True, text=True, cwd=ROOT)
+    assert r.returncode == 1
+    assert "high_value_refund_threshold" in r.stdout
+
+
+def test_validate_tenant_gate_accepts_threshold_and_facts(tmp_path):
+    root = tmp_path / "good"
+    root.mkdir()
+    (root / "tenant.json").write_text(json.dumps({"name": "good"}))
+    (root / "policies.yaml").write_text(
+        "high_value_refund_threshold: 200\nrefund:\n  allow: true\n")
+    (root / "tools.yaml").write_text(
+        "tools:\n  escalate_to_human:\n    action: escalate_to_human\n"
+        "    facts:\n      - human\n")
+    r = subprocess.run([sys.executable, str(VALIDATOR), str(root)],
+                       capture_output=True, text=True, cwd=ROOT)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_bundle_threshold_reaches_the_policy_engine(monkeypatch, tmp_path):
+    # A bundle's high_value_refund_threshold drives the PolicyEngine the
+    # orchestrator is governed by (currency stays tenant data).
+    monkeypatch.chdir(ROOT)
+    root = tmp_path / "thresh"
+    root.mkdir()
+    (root / "tenant.json").write_text(
+        json.dumps({"name": "thresh", "currency": "₹"}))
+    (root / "policies.yaml").write_text(
+        "high_value_refund_threshold: 200\nrefund:\n  allow: true\n"
+        "high_value_refund:\n  escalate: true\n")
+    orch = build_orchestrator(env=dict(FRONTIER_URL), tenant=str(root))
+    assert orch.runner.policy.high_value_refund_threshold() == 200
+    assert orch.runner.policy.currency == "₹"
