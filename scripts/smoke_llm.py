@@ -8,6 +8,11 @@ if __name__ == "__main__":
     for cand in CANDIDATE_MODELS:
         if cand["name"] not in targets:
             continue
+        if not cand.get("url"):
+            print(f"[{cand['name']}] local-only registry entry — no "
+                  "auto-download; build it via scripts/kaggle/ and place "
+                  "the GGUF in data/models/")
+            continue
         path = download_model(cand["url"])
         llm = load_llm(path, params=cand["params"], size_mb=cand["size_mb"])
         t0 = time.time()

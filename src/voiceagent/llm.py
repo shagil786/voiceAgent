@@ -11,12 +11,11 @@ from pathlib import Path
 from llama_cpp import Llama
 
 # The model registry is DATA (data/models/registry.yaml, one source shared
-# with config.default_candidate_models). The built-in list below is the
-# fallback when the YAML is missing/broken — same three entries. Local
-# fine-tuned artifacts (e.g. qwen2.5-0.5b-hinglish-q4_k_m.gguf) are
-# discovered by filename in the models dir; producing them is a
-# Kaggle-notebook workflow, not an auto-download, so no registry entry
-# ships an external URL for them.
+# with config.default_candidate_models). `models` entries are auto-download
+# URLs; `local_models` entries are local-only artifacts (name + filename,
+# url=None) produced by the Kaggle workflow — listed when the file exists
+# in the models dir, never auto-downloaded. The built-in list below is the
+# fallback when the YAML is missing/broken.
 _BUILTIN_CANDIDATE_MODELS = [
     {
         "name": "qwen3-0.6b-q4",
@@ -39,6 +38,11 @@ _BUILTIN_CANDIDATE_MODELS = [
         "size_mb": 1100,
         "params": "1.5B",
     },
+    {
+        "name": "qwen2.5-0.5b-hinglish-q4",
+        "url": None,
+        "filename": "qwen2.5-0.5b-hinglish-q4_k_m.gguf",
+    },
 ]
 
 # Anchored to the repo root so the registry resolves from any CWD (tests,
@@ -47,21 +51,24 @@ REGISTRY_PATH = Path(__file__).resolve().parents[2] / "data" / "models" / "regis
 
 
 def load_model_registry(path: str | Path | None = None) -> list[dict]:
-    """Model registry entries (name/url/size_mb/params) from
-    data/models/registry.yaml; a missing/broken file falls back to the
+    """Model registry entries from data/models/registry.yaml — `models`
+    (name/url/size_mb/params, auto-downloadable) plus `local_models`
+    (name/filename, url=None). A missing/broken file falls back to the
     built-in list so model discovery never crashes offline."""
     p = Path(path) if path is not None else REGISTRY_PATH
     try:
         import yaml
         raw = yaml.safe_load(p.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, UnicodeDecodeError, yaml.YAMLError):
         raw = None
-    entries = raw.get("models") if isinstance(raw, dict) else None
-    if isinstance(entries, list):
-        clean = [dict(e) for e in entries
-                 if isinstance(e, dict) and e.get("name") and e.get("url")]
-        if clean:
-            return clean
+    if isinstance(raw, dict) and (raw.get("models") or raw.get("local_models")):
+        entries = [dict(e) for e in (raw.get("models") or [])
+                   if isinstance(e, dict) and e.get("name") and e.get("url")]
+        entries += [dict(e, url=None)
+                    for e in (raw.get("local_models") or [])
+                    if isinstance(e, dict) and e.get("name") and e.get("filename")]
+        if entries:
+            return entries
     return [dict(m) for m in _BUILTIN_CANDIDATE_MODELS]
 
 
@@ -316,6 +323,10 @@ def build_llm_from_env() -> OpenAICompatLLM | None:
 
 def download_model(url: str, model_dir: str = "data/models") -> str:
     """Download a GGUF into model_dir (idempotent) and return local path."""
+    if not url:
+        raise ValueError(
+            "download_model needs a URL — local_models registry entries "
+            "carry a filename only and are never auto-downloaded")
     Path(model_dir).mkdir(parents=True, exist_ok=True)
     path = Path(model_dir) / url.rsplit("/", 1)[1]
     if not path.exists():
@@ -326,14 +337,22 @@ def download_model(url: str, model_dir: str = "data/models") -> str:
 
 
 def list_available_models(model_dir: str = "data/models") -> list[dict]:
-    """Specs of candidate models already downloaded, in size order."""
+    """Specs of candidate models already present in model_dir, in size
+    order. Auto-download entries match by URL basename; local_models
+    entries (url=None) match by their declared filename."""
     out = []
     for cand in CANDIDATE_MODELS:
-        path = Path(model_dir) / cand["url"].rsplit("/", 1)[1]
+        if cand.get("url"):
+            path = Path(model_dir) / cand["url"].rsplit("/", 1)[1]
+            size_mb = cand["size_mb"]
+        else:
+            path = Path(model_dir) / cand["filename"]
+            size_mb = (round(path.stat().st_size / (1024 * 1024))
+                       if path.exists() else 0)
         if path.exists():
             out.append({"name": cand["name"], "model_path": str(path),
-                        "params": cand["params"], "quant": "Q4_K_M",
-                        "size_mb": cand["size_mb"]})
+                        "params": cand.get("params", "?"), "quant": "Q4_K_M",
+                        "size_mb": size_mb})
     return sorted(out, key=lambda m: m["size_mb"])
 
 

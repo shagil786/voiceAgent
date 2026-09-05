@@ -16,4 +16,6 @@ def test_candidate_models_span_sizes():
     assert "qwen3-0.6b-q4" in names
     assert "qwen2.5-0.5b-q4" in names
     assert "qwen2.5-1.5b-q4" in names
-    assert all(m["size_mb"] > 0 for m in CANDIDATE_MODELS)
+    # size_mb is an auto-download property; local_models entries (url=None)
+    # get theirs from disk at listing time.
+    assert all(m["size_mb"] > 0 for m in CANDIDATE_MODELS if m.get("url"))

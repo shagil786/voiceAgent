@@ -308,26 +308,92 @@ def test_policy_engine_known_actions_accessor():
 # personal URLs in the default download path, config derives its stems.
 # ---------------------------------------------------------------------------
 
-def test_registry_yaml_parses_with_three_builtin_entries():
+HINGLISH_LOCAL = "qwen2.5-0.5b-hinglish-q4"
+
+def test_registry_yaml_parses_with_builtin_and_local_entries():
     from voiceagent.llm import load_model_registry
     entries = load_model_registry()
-    names = {m["name"] for m in entries}
-    assert names == {"qwen3-0.6b-q4", "qwen2.5-0.5b-q4", "qwen2.5-1.5b-q4"}
+    by_name = {m["name"]: m for m in entries}
+    assert {"qwen3-0.6b-q4", "qwen2.5-0.5b-q4",
+            "qwen2.5-1.5b-q4", HINGLISH_LOCAL} == set(by_name)
     for m in entries:
-        assert {"name", "url", "size_mb", "params"} <= set(m)
-        assert m["size_mb"] > 0
+        if m.get("url"):
+            assert {"name", "url", "size_mb", "params"} <= set(m)
+            assert m["size_mb"] > 0
+    # The local fine-tuned artifact is declared data: filename, never a URL.
+    assert by_name[HINGLISH_LOCAL]["url"] is None
+    assert by_name[HINGLISH_LOCAL]["filename"].endswith(".gguf")
 
 def test_no_personal_urls_in_default_registry():
     from voiceagent.llm import load_model_registry
     for m in load_model_registry():
-        assert "kaggle" not in m["url"].lower()
-        assert m["url"].startswith("https://huggingface.co/")
+        if m.get("url"):
+            assert "kaggle" not in m["url"].lower()
+            assert m["url"].startswith("https://huggingface.co/")
 
 def test_missing_registry_yaml_falls_back_to_builtins(tmp_path):
     from voiceagent.llm import load_model_registry
     entries = load_model_registry(tmp_path / "missing.yaml")
     assert {m["name"] for m in entries} == {
-        "qwen3-0.6b-q4", "qwen2.5-0.5b-q4", "qwen2.5-1.5b-q4"}
+        "qwen3-0.6b-q4", "qwen2.5-0.5b-q4", "qwen2.5-1.5b-q4", HINGLISH_LOCAL}
+
+def test_broken_registry_yaml_falls_back_never_crashes(tmp_path):
+    # A corrupted registry must degrade to the built-in list at import time,
+    # not take model discovery (and config) down with it.
+    from voiceagent.llm import load_model_registry
+    bad = tmp_path / "broken.yaml"
+    bad.write_bytes(b"models: [\n  - name: [unclosed")  # invalid YAML
+    assert load_model_registry(bad) == load_model_registry(tmp_path / "nope.yaml")
+
+def test_local_models_listed_by_filename(tmp_path):
+    # The hinglish GGUF is a local Kaggle artifact: present in the models
+    # dir it must appear in list_available_models (benchmark sweep parity),
+    # absent it must be silently skipped.
+    import voiceagent.llm as llm_mod
+    fake = tmp_path / "qwen2.5-0.5b-hinglish-q4_k_m.gguf"
+    fake.write_bytes(b"x" * (3 * 1024 * 1024))
+    old = llm_mod.CANDIDATE_MODELS
+    llm_mod.CANDIDATE_MODELS = [
+        {"name": HINGLISH_LOCAL, "url": None,
+         "filename": fake.name}]
+    try:
+        models = llm_mod.list_available_models(str(tmp_path))
+    finally:
+        llm_mod.CANDIDATE_MODELS = old
+    assert len(models) == 1
+    assert models[0]["name"] == HINGLISH_LOCAL
+    assert models[0]["model_path"] == str(fake)
+    assert models[0]["size_mb"] == 3
+
+def test_local_models_absent_are_silently_skipped(tmp_path):
+    import voiceagent.llm as llm_mod
+    old = llm_mod.CANDIDATE_MODELS
+    llm_mod.CANDIDATE_MODELS = [
+        {"name": HINGLISH_LOCAL, "url": None,
+         "filename": "not-on-disk.gguf"}]
+    try:
+        assert llm_mod.list_available_models(str(tmp_path)) == []
+    finally:
+        llm_mod.CANDIDATE_MODELS = old
+
+def test_download_model_rejects_local_entries():
+    import pytest
+    from voiceagent.llm import download_model
+    with pytest.raises(ValueError, match="never auto-downloaded"):
+        download_model(None)
+
+def test_real_local_hinglish_model_is_discovered():
+    # Regression for the review finding: removing the Kaggle URL silently
+    # dropped the local hinglish GGUF from list_available_models (and thus
+    # the benchmark sweep). The repo ships that artifact; it must be listed.
+    from pathlib import Path
+    from voiceagent.llm import list_available_models
+    models_dir = Path(__file__).resolve().parents[1] / "data" / "models"
+    if not (models_dir / "qwen2.5-0.5b-hinglish-q4_k_m.gguf").exists():
+        import pytest
+        pytest.skip("hinglish GGUF not built on this machine")
+    names = {m["name"] for m in list_available_models(str(models_dir))}
+    assert HINGLISH_LOCAL in names
 
 def test_config_default_candidate_stems_match_registry_names():
     from voiceagent.config import default_candidate_models
