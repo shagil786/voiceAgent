@@ -6,3 +6,4 @@ data/out/
 data/models/
 :memory:.ses
 .env
+data/tenants/pizzapal/

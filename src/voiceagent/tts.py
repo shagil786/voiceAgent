@@ -21,6 +21,7 @@ generate) is preserved for every registered language.
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
 import threading
 import time
@@ -39,13 +40,17 @@ logger = logging.getLogger(__name__)
 # must not receive the en voice.
 VOICE_REGISTRY = {
     "en": "en_US-lessac-medium",
-    "hi": "hi_IN-pratham-medium",
+    "hi": "hi_IN-priyamvada-medium",
     "te": "te_IN-maya-medium",
     "es": "es_MX-ald-medium",
     "fr": "fr_FR-siwis-medium",
     "de": "de_DE-thorsten-medium",
     "pt": "pt_BR-faber-medium",
 }
+
+# Speech rate: >1 slower, <1 faster. Env-overridable so deployments tune the
+# perceived pace without code changes (1.0 = the voice's native rate).
+DEFAULT_LENGTH_SCALE = 1.0
 
 # Romanized Hindi -> Hindi voice (see module docstring for the quality caveat).
 HINGLISH_VOICE_LANG = "hi"
@@ -72,11 +77,16 @@ class TTSHandle:
     def __init__(self, model_dir: str = "data/models",
                  registry: dict[str, str] | None = None,
                  fallback_voice: str = "en",
+                 length_scale: float | None = None,
                  voice_loader: Callable[[str, str], object] | None = None,
                  warn: Callable[[str], None] | None = None):
         self._model_dir = model_dir
         self._registry = dict(registry if registry is not None else VOICE_REGISTRY)
         self._fallback_voice = fallback_voice
+        if length_scale is None:
+            length_scale = float(os.environ.get("VOICEAGENT_TTS_LENGTH_SCALE",
+                                                DEFAULT_LENGTH_SCALE))
+        self._length_scale = length_scale
         self._voice_loader = voice_loader or _real_voice_loader
         self._warn = warn or (lambda msg: logger.warning(msg))
         self._voices: dict[str, object] = {}
@@ -112,7 +122,13 @@ class TTSHandle:
         _, voice_name = self.voice_for(language, text)
         voice = self._get_voice(voice_name)
         with wave.open(out_path, "wb") as w:
-            voice.synthesize_wav(text, w)  # type: ignore[attr-defined]
+            if self._length_scale != DEFAULT_LENGTH_SCALE:
+                from piper.config import SynthesisConfig
+                voice.synthesize_wav(  # type: ignore[attr-defined]
+                    text, w, syn_config=SynthesisConfig(
+                        length_scale=self._length_scale))
+            else:
+                voice.synthesize_wav(text, w)  # type: ignore[attr-defined]
         return out_path
 
     def synthesize_to_wav(self, text: str, out_path: str,
