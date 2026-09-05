@@ -88,6 +88,26 @@ class MockERP:
         o = self.orders.get(order_id)
         return copy.deepcopy(o) if o else None
 
+    def lookup_orders_by_phone(self, phone: str) -> list[dict]:
+        """Fetch orders for a caller-supplied phone number. The agent never
+        knows order IDs — it asks for the number and the backend returns the
+        matching orders (the not-found ladder's alternate lookup). Phone
+        matching is suffix-based on digits, so '+91-9876543210' matches
+        '9876543210'."""
+        self._check_live()
+        want = "".join(ch for ch in str(phone) if ch.isdigit())
+        if not want:
+            return []
+        out = []
+        for c in self.customers.values():
+            have = "".join(ch for ch in str(c.get("phone", "")) if ch.isdigit())
+            if have and (have == want or have.endswith(want) or want.endswith(have)):
+                for oid in c.get("orders", []):
+                    o = self.orders.get(oid)
+                    if o:
+                        out.append(copy.deepcopy(o))
+        return out
+
     def orders_for_customer(self, customer_id: str) -> list[str]:
         self._check_live()
         c = self.customers.get(customer_id)
@@ -187,6 +207,9 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
     # deliberately stays inside the demo delivery_eta group ("order",
     # "delivery") instead of becoming reschedule_delivery's own fact.
     "fetch_order_status": ToolSpec(params=("order_id",), facts=("order",)),
+    # Caller without an order ID: the agent asks for the phone number and the
+    # BACKEND returns the matching orders — order IDs are never agent data.
+    "order_lookup": ToolSpec(params=("phone",), facts=("order",)),
     "cancel_order": ToolSpec(
         params=("order_id", "reason"),
         preconditions=({"field": "status", "op": "not_in",
@@ -317,6 +340,8 @@ class ToolGateway:
         try:
             if tool_name == "fetch_order_status":
                 value = order
+            elif tool_name == "order_lookup":
+                value = self.erp.lookup_orders_by_phone(params["phone"])
             elif tool_name == "cancel_order":
                 value = self.erp.cancel_order(params["order_id"],
                                               params["reason"])

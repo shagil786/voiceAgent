@@ -1,7 +1,7 @@
 # tests/test_tools.py — Sprint A WS2: Tool Gateway, MockERP, GovernedToolRunner.
 import pytest
 
-from voiceagent.tools import (GovernedToolRunner, MockERP, ToolGateway,
+from voiceagent.tools import (DEFAULT_TOOL_SPECS, GovernedToolRunner, MockERP, ToolGateway,
                               ToolResult)
 from voiceagent.policy import PolicyEngine, PolicyContext
 
@@ -236,3 +236,23 @@ def test_spec_facts_union_helper():
     specs = {"a": ToolSpec(params=(), facts=("x", "y")),
              "b": ToolSpec(params=(), facts=("y", "z"))}
     assert spec_facts(specs) == ["x", "y", "z"]  # declaration order, deduped
+
+
+def test_order_lookup_by_phone_suffix_and_normalization():
+    gw = ToolGateway()
+    r = gw.execute("order_lookup", {"phone": "9876543210"})
+    assert r.ok and [o["order_id"] for o in r.value] == ["ORD-4821", "ORD-7734"]
+    r2 = gw.execute("order_lookup", {"phone": "+91-98765-43210"})
+    assert r2.ok and len(r2.value) == 2
+
+
+def test_order_lookup_unknown_phone_returns_empty_not_error():
+    gw = ToolGateway()
+    r = gw.execute("order_lookup", {"phone": "5550001111"})
+    assert r.ok and r.value == []
+
+
+def test_order_lookup_spec_declares_facts_and_params():
+    spec = DEFAULT_TOOL_SPECS["order_lookup"]
+    assert spec.params == ("phone",)
+    assert spec.facts == ("order",)

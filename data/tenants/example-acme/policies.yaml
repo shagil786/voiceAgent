@@ -13,6 +13,9 @@ high_value_refund_threshold: 5000
 order_status:
   allow: true
 
+order_lookup:
+  allow: true
+
 complaint:
   allow: true
   escalate_when:
