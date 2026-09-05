@@ -158,8 +158,13 @@ def load_config(env: Mapping[str, str] | None = None,
     hf_token = e.get("VOICEAGENT_HF_TOKEN") or None
 
     livekit_url = e.get("LIVEKIT_URL") or None
-    livekit_key = e.get("LIVEKIT_KEY") or None
-    livekit_secret = e.get("LIVEKIT_SECRET") or None
+    # LiveKit's own console/dotenv convention is LIVEKIT_API_KEY/SECRET;
+    # LIVEKIT_KEY/SECRET is the plan's original spelling — accept both so a
+    # correctly-named .env never silently yields None credentials (which
+    # fail-closes the webhook validator and the limb never answers).
+    livekit_key = (e.get("LIVEKIT_API_KEY") or e.get("LIVEKIT_KEY") or None)
+    livekit_secret = (e.get("LIVEKIT_API_SECRET")
+                      or e.get("LIVEKIT_SECRET") or None)
     livekit_number = e.get("LIVEKIT_NUMBER") or None
     livekit_trunk_id = e.get("LIVEKIT_TRUNK_ID") or None
     livekit_room_prefix = e.get("LIVEKIT_ROOM_PREFIX") or "call-"

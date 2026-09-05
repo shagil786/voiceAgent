@@ -34,3 +34,21 @@ def test_secrets_not_in_repr():
                           "VOICEAGENT_FRONTIER_KEY": "sk-abc"})
     assert "hf_x" not in repr(c)
     assert "sk-abc" not in repr(c)
+
+
+def test_livekit_credentials_accept_both_spellings():
+    # LiveKit's console convention is LIVEKIT_API_KEY/SECRET; the limb plan
+    # originally used LIVEKIT_KEY/SECRET. A correctly-named .env must never
+    # silently yield None creds (that fail-closes the webhook validator and
+    # the limb never answers a call).
+    from voiceagent.config import load_config
+    api = load_config(env={"LIVEKIT_URL": "wss://x",
+                           "LIVEKIT_API_KEY": "k1",
+                           "LIVEKIT_API_SECRET": "s1"})
+    assert api.livekit_key == "k1" and api.livekit_secret == "s1"
+    legacy = load_config(env={"LIVEKIT_KEY": "k2", "LIVEKIT_SECRET": "s2"})
+    assert legacy.livekit_key == "k2" and legacy.livekit_secret == "s2"
+    # API_ spelling wins when both are present (deterministic precedence).
+    both = load_config(env={"LIVEKIT_API_KEY": "a", "LIVEKIT_KEY": "b",
+                            "LIVEKIT_API_SECRET": "c", "LIVEKIT_SECRET": "d"})
+    assert both.livekit_key == "a" and both.livekit_secret == "c"
