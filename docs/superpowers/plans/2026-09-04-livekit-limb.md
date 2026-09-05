@@ -47,7 +47,7 @@
 - Consumes: `RuntimeConfig/load_config` conventions (Task: read `config.py` first — same dataclass + env pattern).
 - Produces: `RuntimeConfig` gains `livekit_url/key/secret/number: str|None = None`, `livekit_trunk_id: str|None = None`, `livekit_room_prefix: str = "call-"` reading `LIVEKIT_URL/KEY/SECRET/NUMBER/TRUNK_ID/ROOM_PREFIX`; `resample_48k_to_16k(pcm: bytes) -> bytes`, `resample_16k_to_48k(pcm: bytes) -> bytes`, `chunk_frames(pcm: bytes, frame_ms: int, sample_rate: int) -> list[bytes]` in `telephony/audio.py`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_livekit_audio.py
@@ -78,21 +78,21 @@ def test_config_livekit_fields():
     assert c.livekit_url == "wss://x" and c.livekit_number is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_livekit_audio.py -q`
 Expected: FAIL with `ModuleNotFoundError: No module named 'voiceagent.telephony.audio'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `audio.py`: numpy linear interp — `np.frombuffer(pcm, dtype=np.int16).astype(np.float32)`, `np.interp(new_idx, old_idx, x)`, clip to int16 range, `.tobytes()`. Ratios exactly 3:1 / 1:3. `chunk_frames`: split into `sample_rate*frame_ms//1000` samples per chunk (drop trailing partial). Config: 5 new fields + env reads in `load_config` (same style as frontier keys); do NOT change existing fields. `requirements.txt`: `livekit==1.1.17` + `livekit-api==1.2.1` (resolved 2026-09-04; NOTE: there is no `livekit-rtc` package on PyPI — the realtime SDK is `livekit`, imported as `from livekit import rtc`); then `.venv/bin/pip install` them for later tasks (network needed once).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_livekit_audio.py tests/test_config.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/voiceagent/telephony/audio.py src/voiceagent/config.py requirements.txt tests/test_livekit_audio.py
@@ -113,7 +113,7 @@ git commit -m "feat: livekit config, pinned deps, PCM resample helpers"
 
 Contract (exact, keeps the room out of this file for offline tests): the session owns VAD + playback queue. `feed_pcm16` accumulates; when VAD emits `complete_audio`, session calls `asr_stub(audio)` — NO: ASR belongs to wiring (Task 4), not the session. Instead session emits completed utterances via callback: constructor takes `on_utterance: Callable[[bytes], tuple[str, bytes]]` receiving 16k PCM, returning `(reply_text, reply_wav_16k)`. Session upsamples WAV to 48k, splits into 10ms chunks, queues; `take_playback` pops one chunk (returns None when idle/after `stop`). Barge-in: VAD's controller is constructed with `on_barge_in` that clears the playback queue (`stop audition, keep session`). STT/TTS/Orchestrator wiring lives in Task 4's `scripts/livekit_worker.py` + `telephony/inbound.py`, NOT here — this task is pure pump mechanics.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_bridge.py
@@ -155,21 +155,21 @@ def test_utterance_roundtrip_and_bargein_cancel():
     s2.stop(); s.stop()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_bridge.py -q`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `BridgeSession`: owns `StreamingVAD()` (defaults: 16k, 20ms frames, own `BargeInController` whose `on_barge_in` clears `self._play` deque); `start_speaking(turn_id)` called when queuing reply chunks (so VAD can fire barge-in); public `barge_in()` triggers controller (room layer may also call on loud uplink). `feed_pcm16` must receive exactly 320-sample (640-byte) frames — raise `ValueError` otherwise (fail fast on clock mismatch). `take_playback` returns 960-byte chunks or None. `stop()` clears queue + marks stopped (further `take_playback` → None).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_bridge.py tests/test_livekit_audio.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/voiceagent/telephony/livekit_bridge.py tests/test_bridge.py
@@ -188,7 +188,7 @@ git commit -m "feat: offline-testable room-to-turn bridge session"
 - Consumes: `BridgeSession` (Task 2); `RuntimeConfig` (Task 1); `Orchestrator/Deployment/handle_turn` + `transcribe_wav_routed` + `speak`-to-bytes (read exact WAV-bytes TTS entry: `tts.py` `speak()` writes files — for bytes, synthesize to temp WAV then read; reuse that pattern, do not add TTS API).
 - Produces: `make_turn_fn(orchestrator, session_id, language=None)` (ASR bytes→text via temp WAV + `transcribe_wav_routed`, `handle_turn`, reply→temp-WAV bytes via `speak`, returns `(reply, wav_bytes)`); `webhook_handler(config, join_room)` (validates via livekit `WebhookReceiver`, filters `room_started` with `room.name.startswith(room_prefix)`, calls `join_room(room_name)`); `run_room_session(room_name, config, deps)` (mint `AccessToken`, `rtc.Room` connect, subscribe first SIP audio track, greeting turn, pump loop on `AudioStream` frames with sample-rate assert, leave on participant-disconnect).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_livekit_inbound.py
@@ -219,21 +219,21 @@ def test_webhook_filters_by_prefix():
 
 Note: `make_turn_fn(orch, session_id, asr=None, tts=None, language=None)` — injectable asr/tts for tests (defaults: temp-WAV `transcribe_wav_routed` + `speak`), because no model loads in CI.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_livekit_inbound.py -q`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Per interfaces. `webhook_handler` signature `(config, join_room, validate=None)` — default validate uses livekit `WebhookReceiver(TokenVerifier(config.key, config.secret))` (verified against livekit-api==1.2.1 — NOT `WebhookReceiver(key, secret)`); injectable for tests. Prefix: `(config.livekit_room_prefix if config is not None else "call-")` (the test passes `config=None`). `run_room_session` imports `from livekit import rtc` lazily (function-level, so unit tests never need the dep installed... they will be installed post-Task-1; still lazy-import to keep cold paths light). Greeting: `turn_fn` equivalent with transcript `"(Inbound call connected — greet the caller.)"` spoken once after subscribe. Disconnect: leave room + return (worker loop respawns per webhook; no shared state).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_livekit_inbound.py tests/test_bridge.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/voiceagent/telephony/inbound.py scripts/livekit_worker.py tests/test_livekit_inbound.py
@@ -252,7 +252,7 @@ git commit -m "feat: inbound webhook worker with governed greeting"
 - Consumes: `RuntimeConfig` (trunk_id, number as caller ID); existing `dialer.RegulatoryDNDScrubber` + `amd.Sub600msAMD` (read exact interfaces first — reuse, do not reimplement); `campaign_turn` (orchestrator).
 - Produces: `dial_out(api, room_name, to_number, trunk_id, timeout_s=30, poll=None) -> str` returning `"connected" | "failed" | "timeout"`; `poll` injectable `(room_name) -> str` mapping to `active|failed|ringing` (default polls LiveKitAPI participant `sip.callStatus`); `scripts/livekit_dial.py` CLI (`--to --room [--trunk]`: create room (API), worker-join note, dial, print disposition; AMD + campaign wiring documented as Task-5-integrated? No — wire here: after `connected`, run existing AMD over the first 600ms of room audio? Offline-testable seam: `classify_early_audio(frames_iter) -> str` calling `Sub600msAMD().process_frame` per 20ms frame, returning first decisive `human|machine|beep|timeout`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_livekit_outbound.py
@@ -277,21 +277,21 @@ def test_amd_first_decision_wins():
     assert classify_early_audio(iter(frames)) in ("human", "machine", "beep", "timeout")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_livekit_outbound.py -q`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `dial_out(api, room_name, to_number, trunk_id, timeout_s=30, poll=None, create=None, sleep=None)`: default `create` calls `api.sip.create_sip_participant(CreateSIPParticipantRequest(room_name=..., sip_call_to=to_number, sip_trunk_id=trunk_id))` (verified against livekit-api==1.2.1 — request-object form, NOT kwargs); default `poll` maps `list_participants` → `ParticipantInfo.State` (`SIPParticipantInfo` carries no call status); default `sleep` is `time.sleep` (injectable → timeout test runs instantly). Poll loop: 1s cadence until `active`/`failed` or `timeout_s` → `"timeout"`. `classify_early_audio`: feed frames to `Sub600msAMD` (verify ctor from `outbound/amd.py` first), return on first decisive label else `"timeout"` after iterator exhausts. Regulatory note in docstring: CLI must run `RegulatoryDNDScrubber` before dialing (wire the check into `livekit_dial.py` main, not the library).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_livekit_outbound.py tests/test_livekit_inbound.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/voiceagent/telephony/outbound.py scripts/livekit_dial.py tests/test_livekit_outbound.py
@@ -311,7 +311,7 @@ git commit -m "feat: outbound SIP dial with AMD handoff seam"
 - Consumes: Tasks 1–4 surfaces.
 - Produces: runbook (dispatch rule recap, numbers/trunk inventory, webhook URL setup, test-call procedure with expected logs, per-minute cost table with TODAY's LiveKit Cloud + trunk rates marked verify-at-billing, recording-consent reminder for property/sales use); `livekit_loopback.py` (caller WAV → 16k frames → session A → WAV reply → assert non-empty + VAD endpointed ≥1 turn); README limb row → `⏳ limb on branch, first PSTN drill pending`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_loopback.py
@@ -332,21 +332,21 @@ def test_caller_wav_roundtrip():
     s.stop()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_loopback.py -q`
 Expected: PASS already (proves bridge reuse) — honest split: this task's new content is the script + docs; note it in the report.
 
-- [ ] **Step 3: Write script + docs + README row**
+- [x] **Step 3: Write script + docs + README row**
 
 `livekit_loopback.py`: plays a caller WAV (arg) through a BridgeSession with a stub turn fn, writes reply WAV out, prints turn count + timings. Runbook per interfaces. README: limb row + number (mask? No — DID is public by design when dialed; still, list as configured, not shouted).
 
-- [ ] **Step 4: Run tests to verify**
+- [x] **Step 4: Run tests to verify**
 
 Run: `.venv/bin/python -m pytest tests/test_loopback.py tests/test_bridge.py -q && .venv/bin/python scripts/livekit_loopback.py --help`
 Expected: PASS + usage printed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/livekit_loopback.py docs/telephony-runbook.md tests/test_loopback.py README.md
