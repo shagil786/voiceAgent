@@ -185,6 +185,13 @@ class LLMHandle:
     # strings and output cleanup. Base = no stops, no-op cleanup.
     family = "generic"
     stop_tokens: list[str] | None = None
+    # Tier marker (Task B "guardrails guide, not replace"): the frontier-vs-
+    # BASE routing is the adapter identity build_llm_from_env() already
+    # decides — the remote OpenAI-compatible adapter (OpenAICompatLLM) IS the
+    # frontier brain; local GGUF handles (LlamaCppLLM) and test stubs are the
+    # BASE tier, where deterministic templates remain the first choice. Agent
+    # reads this defensively (getattr), so unmarked stubs stay BASE.
+    frontier = False
 
     def __init__(self, specs: dict):
         self.specs = specs
@@ -248,6 +255,10 @@ class OpenAICompatLLM(FamilyLLM):
     Studio, ...) over stdlib urllib — no new dependencies. chat_template()
     builds the system/user messages; generate() performs the HTTP round
     trip through the same interface the agent already uses."""
+
+    # The frontier tier (see LLMHandle.frontier): build_llm_from_env() routes
+    # exactly this adapter as the remote brain when the env is configured.
+    frontier = True
 
     def __init__(self, base_url: str, model: str, api_key: str | None = None,
                  timeout: float = 30.0):

@@ -75,6 +75,11 @@ class AgentResult:
     latency_s: float
     decision: "Decision | None" = None
     tool_outcome: "GovernedOutcome | None" = None
+    # Task B (guardrails guide, not replace): 1 when a frontier repair
+    # re-render was attempted this turn, 0 otherwise (BASE tier, or no
+    # guardrail violation). Lightweight counter on the turn result — the
+    # Agent path has no per-turn DecisionLog record of its own to carry it.
+    repair_attempts: int = 0
 
 
 class Agent:
@@ -133,6 +138,13 @@ class Agent:
         bundle_declared = isinstance(tenant, Tenant) and tenant.exists
         self._echo_specs = specs
         self._echo_demo = not bundle_declared
+        # Task B (guardrails guide, not replace): frontier detection reuses
+        # the SAME condition that routes the frontier today — the adapter
+        # identity llm.build_llm_from_env() wires as the remote brain
+        # (OpenAICompatLLM.frontier = True). Local GGUF handles and unmarked
+        # test stubs are the BASE tier: deterministic templates stay first
+        # choice there, byte-identically.
+        self._frontier = bool(getattr(llm, "frontier", False))
 
     def handle(self, user_text: str, authenticated: bool = False,
                amount: float | None = None, conv_id: str = "",
@@ -247,12 +259,33 @@ class Agent:
         # M5b-4 reply-language guardrail: the LLM's reply must be in the
         # customer's language; a 0.5B model ignores the directive often
         # enough that this is checked deterministically, not trusted.
+        # Task B: with a frontier configured the guardrail GUIDES, not
+        # replaces — ONE governed re-render asks the brain to restate its own
+        # reply within the constraints (allowed languages, required facts,
+        # persona never-say / may-promise via the compiled system prompt).
+        # Only a still-violating re-render (or any repair failure — fail-open
+        # at the surface) falls back to the canned template path, and the
+        # no-frontier BASE tier keeps the canned path immediately, unchanged.
         target_langs = _acceptable_reply_langs(language)
+        repair_attempts = 0
         if (target_langs is not None and clean.strip()
                 and detect_language(clean) not in target_langs):
-            clean = _canned_reply(action, language or "en",
-                                  required if self._classifier is not None
-                                  else [])
+            repaired: str | None = None
+            if self._frontier:
+                repair_attempts = 1  # one extra frontier round, max
+                try:
+                    repaired = self._repair_reply(
+                        clean, prompt_text, language, target_langs,
+                        required if self._classifier is not None else [])
+                except Exception:
+                    repaired = None
+            if (repaired is not None and repaired.strip()
+                    and detect_language(repaired) in target_langs):
+                clean = repaired
+            else:
+                clean = _canned_reply(action, language or "en",
+                                      required if self._classifier is not None
+                                      else [])
             if self._classifier is not None:
                 clean = _patch_reply(clean, required)
         if not clean:
@@ -290,7 +323,55 @@ class Agent:
             clean = EMPATHY_PREFIXES.get(language, "") + clean
         return AgentResult(text=clean, action=action,
                            retrieved=retrieved, latency_s=time.time() - t0,
-                           decision=decision)
+                           decision=decision,
+                           repair_attempts=repair_attempts)
+
+    def _repair_reply(self, violating_reply: str, user_text: str,
+                      language: str, allowed_langs: frozenset,
+                      required_refs: list[str]) -> str:
+        """Task B: ONE governed re-render of a guardrail-violating frontier
+        reply. The repair prompt carries the ORIGINAL frontier reply, the
+        ORIGINAL user turn, the allowed language(s) and the required
+        references (missing ones called out for verbatim inclusion); persona
+        never_say / may_promise constraints travel through the compiled
+        system prompt, same as the main turn. Sync, one extra frontier round
+        max — the caller re-checks the guards and falls back to the canned
+        path when the re-render still violates; exceptions are the caller's
+        fail-open concern and never reach the customer."""
+        missing = [r for r in required_refs
+                   if r.lower() not in violating_reply.lower()]
+        lines = [
+            "Your previous reply violated this conversation's reply "
+            "constraints. Rewrite it now.",
+            f"Previous reply that violated the constraints: {violating_reply}",
+            f"The customer said: {user_text}",
+            "- Write the reply ONLY in language code(s): "
+            + ", ".join(sorted(allowed_langs)) + ".",
+        ]
+        if required_refs:
+            lines.append("- Keep these customer references verbatim: "
+                         + ", ".join(required_refs) + ".")
+        if missing:
+            lines.append("- These required references were MISSING and must "
+                         "appear verbatim: " + ", ".join(missing) + ".")
+        lines.append("- Respect every persona constraint in your "
+                     "instructions: never say or promise anything not "
+                     "permitted there.")
+        lines.append("Reply with the rewritten reply text only.")
+        instruction = "\n".join(lines)
+        if self._use_template:
+            prompt = self._llm.chat_template(self._system_prompt, "",
+                                             instruction)
+        else:
+            prompt = (f"{self._system_prompt}\n\nContext:\n\n"
+                      f"Customer: {instruction}\nAssistant:")
+        stop = getattr(self._llm, "stop_tokens", None)
+        text = self._llm.generate(prompt, max_tokens=300, stop=stop)
+        post = getattr(self._llm, "postprocess", None)
+        clean = post(text) if callable(post) else text
+        # The re-rendered reply is judged as a customer-visible reply: ACTION
+        # scaffolding is scrubbed before the guards re-check it.
+        return strip_action_lines(clean)
 
 
 # ---------------------------------------------------------------------------

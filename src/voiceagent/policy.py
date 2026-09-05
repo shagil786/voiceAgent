@@ -95,6 +95,29 @@ class PolicyEngine:
             return v
         return DEFAULT_HIGH_VALUE_REFUND_THRESHOLD
 
+    def not_found_ladder(self) -> dict | None:
+        """The clarify-and-dig ladder for not-found slot lookups (Task B),
+        declared per tenant as the top-level `not_found_ladder:` key in
+        policies.yaml: {max_retries: int >= 1, offer_alternates: bool,
+        alternates: [str, ...]} (e.g. "check the recent orders placed on this
+        phone number"). Absent or malformed -> None: the pre-ladder behavior
+        (the raw not-found result fed back to the brain on the first miss) is
+        the default, so existing deployments keep their semantics."""
+        v = self.policies.get("not_found_ladder")
+        if not isinstance(v, dict) or not v:
+            return None
+        max_retries = v.get("max_retries", 2)
+        if (not isinstance(max_retries, int)
+                or isinstance(max_retries, bool) or max_retries < 1):
+            return None
+        alternates = v.get("alternates")
+        return {
+            "max_retries": max_retries,
+            "offer_alternates": bool(v.get("offer_alternates", True)),
+            "alternates": ([str(a) for a in alternates]
+                           if isinstance(alternates, list) else []),
+        }
+
     def evaluate(self, action: str, ctx: PolicyContext | None = None) -> Decision:
         ctx = ctx or PolicyContext()
         escalate = set(self.policies.get("escalate", []))

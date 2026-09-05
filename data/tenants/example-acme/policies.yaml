@@ -17,3 +17,14 @@ complaint:
   allow: true
   escalate_when:
     frustrated: true
+
+# Task B: the clarify-and-dig ladder for not-found slot lookups (order_id).
+# On a not-found fetch the agent asks the caller to re-confirm the id, then
+# offers the declared alternate lookups, and only after the retries are
+# exhausted does the governed escalate_to_human remain. Undeclared -> the
+# platform default: the first miss feeds straight back to the brain.
+not_found_ladder:
+  max_retries: 2
+  offer_alternates: true
+  alternates:
+    - check the recent orders placed on this phone number
