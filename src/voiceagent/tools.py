@@ -73,10 +73,29 @@ class MockERP:
                 "items": ["Smart Watch"], "delivery_date": "2026-09-02",
                 "tracking_url": "https://track.fake/7734",
             },
+            # PizzaPal-flavored demo orders (CUST-002) so a phone lookup on
+            # the demo customer's own number returns a coherent pizza order.
+            "ORD-9021": {
+                "order_id": "ORD-9021", "customer_id": "CUST-002",
+                "status": "CONFIRMED", "amount": 749.0,
+                "items": ["Large Pepperoni Pizza", "Garlic Bread"],
+                "delivery_date": "2026-09-06",
+                "address": "21 Koramangala 5th Block, Bangalore",
+            },
+            "ORD-9022": {
+                "order_id": "ORD-9022", "customer_id": "CUST-002",
+                "status": "DELIVERED", "amount": 429.0,
+                "items": ["Medium Margherita"],
+                "delivery_date": "2026-09-04",
+                "address": "21 Koramangala 5th Block, Bangalore",
+            },
         }
         self.customers: dict[str, dict] = {
             "CUST-001": {"name": "Shagil", "phone": "+91-9876543210",
                          "orders": ["ORD-4821", "ORD-7734"]},
+            "CUST-002": {"name": "Demo PizzaPal Customer",
+                         "phone": "+91-9828379313",
+                         "orders": ["ORD-9021", "ORD-9022"]},
         }
         self.refunds: list[dict] = []
         self.handoffs: list[dict] = []

@@ -108,12 +108,17 @@ def make_turn_fn(
             wav_out = wav_out[1]
         wav_out = bytes(wav_out)
         t_tts = time.monotonic()
-        # Turn evidence: transcript -> reply -> per-stage timing. This is how
-        # a silent/garbled/late turn gets diagnosed after the fact.
+        # Turn evidence: transcript -> governed actions -> reply -> timing.
+        # This is how a silent/garbled/late/wrong-tool turn is diagnosed
+        # after the fact.
+        acts = getattr(result, "actions", None) or []
+        act_sig = "; ".join(
+            f"{a.get('action')}={a.get('verdict')}/{'ok' if a.get('ok') else (a.get('error') or 'err')}"
+            for a in acts)
         logger.info(
-            "turn: asr=%.2fs brain=%.2fs tts=%.2fs | caller=%r | reply[%s]=%r",
+            "turn: asr=%.2fs brain=%.2fs tts=%.2fs | caller=%r | tools=[%s] | reply[%s]=%r",
             t_asr - t0, t_brain - t_asr, t_tts - t_brain,
-            user_text[:120], detect_language(reply), reply[:120],
+            user_text[:120], act_sig, detect_language(reply), reply[:120],
         )
         return reply, wav_out
 
