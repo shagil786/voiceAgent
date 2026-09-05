@@ -67,3 +67,24 @@ def test_escalate_when_precedes_require_auth():
                                       "escalate_when": {"frustrated": True}}})
     d = eng.evaluate("complaint", PolicyContext(signals={"frustrated": True}))
     assert d.verdict == "ESCALATE"
+
+
+# ---------------------------------------------------------------------------
+# Currency is tenant data: the REQUIRE_HUMAN_APPROVAL reason is fed back to
+# the brain and shown to customers, so it must use the tenant's symbol, not a
+# hardcoded one. The platform default is "$" (USA/UK-first market).
+# ---------------------------------------------------------------------------
+
+def test_platform_default_currency_is_dollar():
+    eng = PolicyEngine({"refund": {"max_without_approval": 5000}})
+    d = eng.evaluate("refund", PolicyContext(amount=20000))
+    assert d.verdict == "REQUIRE_HUMAN_APPROVAL"
+    assert any("$20,000" in r and "$5,000" in r for r in d.reasons)
+    assert not any("₹" in r for r in d.reasons)
+
+def test_engine_currency_appears_in_amount_reason():
+    eng = PolicyEngine({"refund": {"max_without_approval": 5000}},
+                       currency="₹")
+    d = eng.evaluate("refund", PolicyContext(amount=20000))
+    assert any("₹20,000" in r and "₹5,000" in r for r in d.reasons)
+    assert not any("$" in r for r in d.reasons)

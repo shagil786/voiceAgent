@@ -75,9 +75,9 @@ def generate_eval_set(out_path: str, n: int = 1000, seed: int = 42) -> int:
 # same relative frequencies as the base set. NOTE: the native-script text is
 # LLM-authored synthetic phrasing (plausible support language, not real
 # transcripts). English keyword facts (fail/otp/bill/block) are omitted:
-# the echo guardrail's KEYWORD_FACTS is English-only, so they cannot be
-# echoed into a native-language reply and would distort the multilingual
-# measurement — order ids (digits) are kept.
+# the echo guardrail's tool-contract facts (ToolSpec.facts) are English-only,
+# so they cannot be echoed into a native-language reply and would distort the
+# multilingual measurement — order ids (digits) are kept.
 # ---------------------------------------------------------------------------
 
 _MULTILINGUAL_TEMPLATES: dict[str, list[tuple]] = {

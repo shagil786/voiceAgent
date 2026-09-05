@@ -10,24 +10,26 @@ from voiceagent.langid import NATIVE_SCRIPT_LANGS, detect_language
 from voiceagent.sentiment import (candidate_phrases_from,
                                   detect_frustration)
 from voiceagent.security import detect_injection, sanitize_for_prompt
+from voiceagent.tenant import DEFAULT_CURRENCY, Tenant
 
 if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
     from voiceagent.memory import Turn
 
-# Fallback action vocabulary for the system prompt. Used when the loaded
-# policy does not declare its own action set — policy rule keys are NOT the
-# vocabulary (partial coverage, differing names like order_cancellation vs
-# cancel_order): see PolicyEngine.known_actions.
-DEFAULT_ACTIONS = [
-    "order_status", "refund", "cancel_order", "address_change",
-    "payment_declined", "recharge", "billing", "return", "replacement",
-    "otp", "fraud", "account_closure", "delivery_delay", "product_info",
-    "invoice", "plan_change", "roaming", "network_issue", "complaint",
-    "high_value_refund", "refund_info", "delivery_eta",
-]
+# The demo deployment's action vocabulary is DEMO TENANT DATA
+# (voiceagent.demo_data), not core: orchestration core ships no e-commerce
+# list. Precedence for the system prompt's vocabulary: a policy that declares
+# its action set (PolicyEngine.known_actions) wins, then the action vocabulary
+# the assembly seam resolved from the tenant bundle (build_agent(actions=...)),
+# then the demo tenant data — so the no-tenant demo path keeps working
+# byte-identically. Policy rule keys are NOT the vocabulary (partial coverage,
+# differing names like order_cancellation vs cancel_order): see
+# PolicyEngine.known_actions.
+from voiceagent.demo_data import DEMO_TENANT_ACTIONS
 
-_DEFAULT_PERSONA = ("customer support assistant for an Indian ecommerce "
-                    "company")
+# Neutral by default: a persona is tenant data (M6a). The legacy default
+# ("...for an Indian ecommerce company") claimed a false identity for every
+# tenant bundle without a persona and every no-tenant legacy path.
+_DEFAULT_PERSONA = "customer support assistant"
 _INSTRUCTION_TAIL = (
     "Answer directly and concisely — do NOT use a thinking or reasoning "
     "phase. Answer ONLY from the provided context. "
@@ -40,7 +42,7 @@ _INSTRUCTION_TAIL = (
 )
 
 SYSTEM_PROMPT = ("You are a " + _DEFAULT_PERSONA + ". " + _INSTRUCTION_TAIL
-                 .format(actions=", ".join(DEFAULT_ACTIONS)))
+                 .format(actions=", ".join(DEMO_TENANT_ACTIONS)))
 
 
 def system_prompt_with_actions(actions: list[str], persona=None) -> str:
@@ -73,12 +75,18 @@ class AgentResult:
     latency_s: float
     decision: "Decision | None" = None
     tool_outcome: "GovernedOutcome | None" = None
+    # Task B (guardrails guide, not replace): 1 when a frontier repair
+    # re-render was attempted this turn, 0 otherwise (BASE tier, or no
+    # guardrail violation). Lightweight counter on the turn result — the
+    # Agent path has no per-turn DecisionLog record of its own to carry it.
+    repair_attempts: int = 0
 
 
 class Agent:
     def __init__(self, index, llm, classifier=None, policy=None,
                  decision_log=None, tenant=None, sentiment_store=None,
-                 tool_runner=None, erp=None):
+                 tool_runner=None, erp=None,
+                 actions: list[str] | None = None):
         self._index = index
         self._llm = llm
         self._classifier = classifier
@@ -90,20 +98,53 @@ class Agent:
         self._policy = None
         if policy is not None:
             from voiceagent.policy import PolicyEngine
-            self._policy = PolicyEngine(policy)
+            # Currency is tenant data: the policy reason strings use the
+            # tenant's symbol; no tenant -> the platform default.
+            currency = getattr(tenant, "currency", None) or DEFAULT_CURRENCY
+            self._policy = PolicyEngine(policy, currency=currency)
+        # The high-value-refund threshold (Sprint A2) is policy data: the
+        # promotion decision reads the VALUE through a PolicyEngine — the
+        # wired one when present, else the platform-default policy config —
+        # never an inline literal. (self._policy stays None without a wired
+        # policy: the governance gate keeps its historical semantics.)
+        if self._policy is not None:
+            self._threshold_policy = self._policy
+        else:
+            from voiceagent.policy import PolicyEngine as _DefaultPolicy
+            self._threshold_policy = _DefaultPolicy()
         self._decision_log = decision_log
         self._tool_runner = tool_runner
         self._erp = erp
         self._trackers: dict[str, Any] = {}
         # Single-source the action list: a policy that declares its action
         # vocabulary (PolicyEngine.known_actions) drives the system prompt;
-        # otherwise the static DEFAULT_ACTIONS list above is kept. The
-        # persona comes from the tenant config (M6a); no tenant -> the
-        # historical default, byte-identical prompts for the benchmark.
+        # then the vocabulary the assembly seam resolved from the tenant
+        # bundle; otherwise the demo tenant data keeps the no-tenant path
+        # byte-identical. The persona comes from the tenant config (M6a).
         persona = getattr(tenant, "persona", None) or _DEFAULT_PERSONA
         declared = self._policy.known_actions() if self._policy else []
         self._system_prompt = system_prompt_with_actions(
-            declared or DEFAULT_ACTIONS, persona)
+            declared or actions or DEMO_TENANT_ACTIONS, persona)
+        # Echo-guardrail facts (Sprint A3) are TOOL-CONTRACT data. ONE shared
+        # resolution (echo_spec_registry, below) for both here and the
+        # extract_required_references default: when a governed tool surface is
+        # wired, its specs are the base — and in DEMO mode (no real tenant
+        # bundle declared) the demo tenant contracts are merged in, so the
+        # historical keyword guarantees survive a bare code-default
+        # ToolGateway. With a real tenant bundle declared, ONLY the bundle's
+        # declared specs apply (no demo leakage).
+        gateway = getattr(self._tool_runner, "gateway", None)
+        specs = getattr(gateway, "specs", None)
+        bundle_declared = isinstance(tenant, Tenant) and tenant.exists
+        self._echo_specs = specs
+        self._echo_demo = not bundle_declared
+        # Task B (guardrails guide, not replace): frontier detection reuses
+        # the SAME condition that routes the frontier today — the adapter
+        # identity llm.build_llm_from_env() wires as the remote brain
+        # (OpenAICompatLLM.frontier = True). Local GGUF handles and unmarked
+        # test stubs are the BASE tier: deterministic templates stay first
+        # choice there, byte-identically.
+        self._frontier = bool(getattr(llm, "frontier", False))
 
     def handle(self, user_text: str, authenticated: bool = False,
                amount: float | None = None, conv_id: str = "",
@@ -174,10 +215,15 @@ class Agent:
         # was provided — e.g. unit tests — from the LLM's ACTION line).
         if self._classifier is not None:
             action, _ = self._classifier.classify(user_text)
-            # Deterministic promotion: a refund with an extracted amount above
-            # the policy threshold IS a high-value refund — don't leave that
-            # call to embedding similarity (which can't use the number).
-            if action == "refund" and amount is not None and amount > 5000:
+            # Deterministic promotion: a refund with an extracted amount at or
+            # above the policy threshold IS a high-value refund — don't leave
+            # that call to embedding similarity (which can't use the number).
+            # The threshold is POLICY DATA (policies.yaml
+            # `high_value_refund_threshold`, evaluated through the PolicyEngine
+            # with the tenant's currency wired), never an inline literal.
+            if (action == "refund" and amount is not None
+                    and amount >= self._threshold_policy
+                    .high_value_refund_threshold()):
                 action = "high_value_refund"
         else:
             action = extract_action(clean)
@@ -195,8 +241,12 @@ class Agent:
             # LLM often answers generically — or its reply was scaffolding
             # only — so patch any missing reference with a deterministic
             # confirmation. This is the product's "the AI cannot drift from
-            # your order/account" guarantee.
-            required = extract_required_references(user_text)
+            # your order/account" guarantee. The keyword facts are TOOL
+            # CONTRACT data (the registry resolved in __init__ via
+            # echo_spec_registry: wired gateway specs + demo contracts in
+            # demo mode) — never a hardcoded dict.
+            required = extract_required_references(
+                user_text, specs=self._echo_specs, demo=self._echo_demo)
             # Reference inheritance: a follow-up like "and when will it
             # arrive?" states no order id — inherit the most recent one from
             # the conversation so the guardrail keeps the reply pinned to the
@@ -209,20 +259,42 @@ class Agent:
         # M5b-4 reply-language guardrail: the LLM's reply must be in the
         # customer's language; a 0.5B model ignores the directive often
         # enough that this is checked deterministically, not trusted.
+        # Task B: with a frontier configured the guardrail GUIDES, not
+        # replaces — ONE governed re-render asks the brain to restate its own
+        # reply within the constraints (allowed languages, required facts,
+        # persona never-say / may-promise via the compiled system prompt).
+        # Only a still-violating re-render (or any repair failure — fail-open
+        # at the surface) falls back to the canned template path, and the
+        # no-frontier BASE tier keeps the canned path immediately, unchanged.
         target_langs = _acceptable_reply_langs(language)
+        repair_attempts = 0
         if (target_langs is not None and clean.strip()
                 and detect_language(clean) not in target_langs):
-            clean = _canned_reply(action, language or "hi",
-                                  required if self._classifier is not None
-                                  else [])
+            repaired: str | None = None
+            if self._frontier:
+                repair_attempts = 1  # one extra frontier round, max
+                try:
+                    repaired = self._repair_reply(
+                        clean, prompt_text, language, target_langs,
+                        required if self._classifier is not None else [])
+                except Exception:
+                    repaired = None
+            if (repaired is not None and repaired.strip()
+                    and detect_language(repaired) in target_langs):
+                clean = repaired
+            else:
+                clean = _canned_reply(action, language or "en",
+                                      required if self._classifier is not None
+                                      else [])
             if self._classifier is not None:
                 clean = _patch_reply(clean, required)
         if not clean:
             # Safety net: a reply with no references and no content still
-            # reaches the customer as something — in THEIR language.
-            clean = NOTED_REPLIES.get(
-                language if language in ("hi", "te", "hinglish") else "",
-                "Your request has been noted.")
+            # reaches the customer as something — in THEIR language when the
+            # language is covered, neutral English otherwise (never an
+            # unrelated language).
+            clean = NOTED_REPLIES.get(language or "",
+                                      "Your request has been noted.")
         # Policy gate: every action passes through the deterministic policy
         # engine (ALLOW / DENY / REQUIRE_AUTH / REQUIRE_HUMAN_APPROVAL /
         # ESCALATE). No LLM in this path. Every decision is appended to the
@@ -251,7 +323,55 @@ class Agent:
             clean = EMPATHY_PREFIXES.get(language, "") + clean
         return AgentResult(text=clean, action=action,
                            retrieved=retrieved, latency_s=time.time() - t0,
-                           decision=decision)
+                           decision=decision,
+                           repair_attempts=repair_attempts)
+
+    def _repair_reply(self, violating_reply: str, user_text: str,
+                      language: str, allowed_langs: frozenset,
+                      required_refs: list[str]) -> str:
+        """Task B: ONE governed re-render of a guardrail-violating frontier
+        reply. The repair prompt carries the ORIGINAL frontier reply, the
+        ORIGINAL user turn, the allowed language(s) and the required
+        references (missing ones called out for verbatim inclusion); persona
+        never_say / may_promise constraints travel through the compiled
+        system prompt, same as the main turn. Sync, one extra frontier round
+        max — the caller re-checks the guards and falls back to the canned
+        path when the re-render still violates; exceptions are the caller's
+        fail-open concern and never reach the customer."""
+        missing = [r for r in required_refs
+                   if r.lower() not in violating_reply.lower()]
+        lines = [
+            "Your previous reply violated this conversation's reply "
+            "constraints. Rewrite it now.",
+            f"Previous reply that violated the constraints: {violating_reply}",
+            f"The customer said: {user_text}",
+            "- Write the reply ONLY in language code(s): "
+            + ", ".join(sorted(allowed_langs)) + ".",
+        ]
+        if required_refs:
+            lines.append("- Keep these customer references verbatim: "
+                         + ", ".join(required_refs) + ".")
+        if missing:
+            lines.append("- These required references were MISSING and must "
+                         "appear verbatim: " + ", ".join(missing) + ".")
+        lines.append("- Respect every persona constraint in your "
+                     "instructions: never say or promise anything not "
+                     "permitted there.")
+        lines.append("Reply with the rewritten reply text only.")
+        instruction = "\n".join(lines)
+        if self._use_template:
+            prompt = self._llm.chat_template(self._system_prompt, "",
+                                             instruction)
+        else:
+            prompt = (f"{self._system_prompt}\n\nContext:\n\n"
+                      f"Customer: {instruction}\nAssistant:")
+        stop = getattr(self._llm, "stop_tokens", None)
+        text = self._llm.generate(prompt, max_tokens=300, stop=stop)
+        post = getattr(self._llm, "postprocess", None)
+        clean = post(text) if callable(post) else text
+        # The re-rendered reply is judged as a customer-visible reply: ACTION
+        # scaffolding is scrubbed before the guards re-check it.
+        return strip_action_lines(clean)
 
 
 # ---------------------------------------------------------------------------
@@ -270,33 +390,91 @@ REPLY_TEMPLATES: dict[str, dict[str, str]] = {
         "hi": "आपके ऑर्डर {ref} की स्थिति जाँच ली गई है। ताज़ा स्थिति जल्द ही आपके ऐप और एसएमएस पर अपडेट होगी।",
         "te": "మీ ఆర్డర్ {ref} స్థితి తనిఖీ చేయబడింది. తాజా స్థితి త్వరలో మీ యాప్‌లో మరియు ఎస్ఎంఎస్ ద్వారా అందుతుంది.",
         "hinglish": "Aapke order {ref} ka status check kar liya gaya hai. Latest update jald hi app aur SMS par milega.",
+        "en": "Your order {ref} has been checked. The latest status will "
+              "arrive in your app and by SMS shortly.",
+        "es": "Su pedido {ref} ha sido verificado. El estado más reciente "
+              "llegará pronto a su aplicación y por SMS.",
+        "fr": "Votre commande {ref} a été vérifiée. Le statut le plus "
+              "récent arrivera bientôt dans votre application et par SMS.",
+        "de": "Ihre Bestellung {ref} wurde überprüft. Der aktuelle Status "
+              "kommt in Kürze in Ihre App und per SMS.",
+        "pt": "Seu pedido {ref} foi verificado. O status mais recente "
+              "chegará em breve no seu aplicativo e por SMS.",
     },
     "refund": {
         "hi": "आपका रिफंड अनुरोध दर्ज हो गया है। प्रक्रिया पूरी होने पर स्थिति की जानकारी दी जाएगी।",
         "te": "మీ రీఫండ్ అభ్యర్థన నమోదైంది. ప్రక్రియ పూర్తయిన తర్వాత స్థితి తెలియజేయబడుతుంది.",
         "hinglish": "Aapka refund request note kar liya gaya hai. Process complete hone par status update mil jayega.",
+        "en": "Your refund request has been recorded. You will be informed "
+              "once the process is complete.",
+        "es": "Su solicitud de reembolso ha sido registrada. Se le "
+              "informará cuando el proceso esté completo.",
+        "fr": "Votre demande de remboursement a été enregistrée. Vous "
+              "serez informé une fois le processus terminé.",
+        "de": "Ihre Rückerstattungsanfrage wurde aufgenommen. Sie werden "
+              "informiert, sobald der Vorgang abgeschlossen ist.",
+        "pt": "Sua solicitação de reembolso foi registrada. Você será "
+              "informado quando o processo for concluído.",
     },
     "refund_info": {
         "hi": "रिफंड स्वीकृत होने के 5-7 कार्यदिवसों में आपके खाते में आ जाता है।",
         "te": "రీఫండ్ ఆమోదించబడిన 5-7 పనిదినాల్లో మీ ఖాతాలో జమ అవుతుంది.",
         "hinglish": "Refund approve hone ke 5-7 working days mein aapke account mein aa jata hai.",
+        "en": "Refunds reach your account within 5-7 working days of "
+              "approval.",
+        "es": "El reembolso llega a su cuenta dentro de 5-7 días hábiles "
+              "después de la aprobación.",
+        "fr": "Le remboursement arrive sur votre compte dans les 5-7 jours "
+              "ouvrés suivant l'approbation.",
+        "de": "Die Rückerstattung trifft innerhalb von 5-7 Werktagen nach "
+              "Genehmigung auf Ihrem Konto ein.",
+        "pt": "O reembolso chega à sua conta em 5-7 dias úteis após a "
+              "aprovação.",
     },
     "delivery_eta": {
         "hi": "आपका ऑर्डर 3-5 कार्यदिवसों में डिलीवर होने की उम्मीद है।",
         "te": "మీ ఆర్డర్ 3-5 పనిదినాల్లో డెలివరీ అవుతుందని భావిస్తున్నాము.",
         "hinglish": "Aapka order 3-5 working days mein deliver hone ki expectation hai.",
+        "en": "Your order is expected to be delivered within 3-5 working "
+              "days.",
+        "es": "Se espera que su pedido llegue dentro de 3-5 días hábiles.",
+        "fr": "Votre commande devrait être livrée dans les 3-5 jours "
+              "ouvrés.",
+        "de": "Ihre Bestellung wird voraussichtlich innerhalb von 3-5 "
+              "Werktagen geliefert.",
+        "pt": "Seu pedido deve ser entregue em 3-5 dias úteis.",
     },
     "default": {
         "hi": "आपका अनुरोध दर्ज कर लिया गया है। हमारी टीम जल्द ही आपकी सहायता करेगी।",
         "te": "మీ అభ్యర్థన నమోదు చేయబడింది. మా బృందం త్వరలో మీకు సహాయం చేస్తుంది.",
         "hinglish": "Aapka request note kar liya gaya hai. Hamari team jald hi aapki help karegi.",
+        "en": "Your request has been recorded. Our team will assist you "
+              "shortly.",
+        "es": "Su solicitud ha sido registrada. Nuestro equipo le ayudará "
+              "pronto.",
+        "fr": "Votre demande a été enregistrée. Notre équipe vous aidera "
+              "bientôt.",
+        "de": "Ihre Anfrage wurde aufgenommen. Unser Team wird Ihnen in "
+              "Kürze helfen.",
+        "pt": "Sua solicitação foi registrada. Nossa equipe irá ajudá-lo "
+              "em breve.",
     },
 }
+
+# The es/fr/de/pt templates are LLM-authored SYNTHETIC phrasings (es: LatAm-
+# neutral; fr: EU vous-form; de: formal Sie; pt: Brazilian-neutral você) —
+# real-traffic validation pending, same as the intent exemplars.
+_SERVED_REPLY_LANGS = frozenset(REPLY_TEMPLATES["default"])
 
 NOTED_REPLIES = {
     "hi": "आपका अनुरोध दर्ज कर लिया गया है।",
     "te": "మీ అభ్యర్థన నమోదు చేయబడింది.",
     "hinglish": "Aapka request note kar liya gaya hai.",
+    "en": "Your request has been noted.",
+    "es": "Su solicitud ha sido registrada.",
+    "fr": "Votre demande a été enregistrée.",
+    "de": "Ihre Anfrage wurde aufgenommen.",
+    "pt": "Sua solicitação foi registrada.",
 }
 
 # M6a: empathy lines for HIGH frustration, in the customer's language
@@ -309,6 +487,7 @@ EMPATHY_PREFIXES = {
     "es": "Lamento mucho las molestias. ",
     "fr": "Je suis vraiment désolé pour ce désagrément. ",
     "de": "Es tut mir wirklich leid für die Umstände. ",
+    "pt": "Sinto muito pelo inconveniente. ",
 }
 
 _APOLOGY_MARKERS = ("sorry", "apolog", "khed", "kshama", "माफ", "खेद",
@@ -342,7 +521,9 @@ def _ref_for_template(refs: list[str]) -> str:
 
 
 def _canned_reply(action: str | None, language: str, refs: list[str]) -> str:
-    lang_key = language if language in ("hi", "te", "hinglish") else "hi"
+    # A language outside the template tables gets neutral English — the old
+    # "else 'hi'" fallback served Hindi text to es/fr/de/pt customers.
+    lang_key = language if language in _SERVED_REPLY_LANGS else "en"
     table = REPLY_TEMPLATES.get(action or "") or REPLY_TEMPLATES["default"]
     tpl = table.get(lang_key) or REPLY_TEMPLATES["default"][lang_key]
     return tpl.format(ref=_ref_for_template(refs))
@@ -352,40 +533,59 @@ ORDER_ID_RE = re.compile(
     r"\b(?:ORD[-#]?\s*)?(\d{4,10})\b", re.IGNORECASE
 )
 
-# Intent keywords that must appear in the reply for non-entity intents
-# (fraud, otp, billing). These are the eval set's key_facts for those rows.
-KEYWORD_FACTS = {
-    "fraud": ["block"],
-    "otp": ["otp"],
-    "billing": ["bill"],
-    "payment_declined": ["declined"],
-    "recharge": ["fail", "recharge"],
-    # M5c informational intents: eval rows carry the topic keyword as
-    # key_facts, so the echo guardrail pins it into the reply too.
-    "refund_info": ["refund"],
-    "delivery_eta": ["order", "delivery"],
-}
+# Intent keywords that must appear in the reply when the customer states them
+# are TOOL-CONTRACT data now (Sprint A3): ToolSpec.facts on the deployment's
+# declared specs (DEFAULT_TOOL_SPECS + tenant tools.yaml overrides), with the
+# demo tenant contracts (voiceagent.demo_data.DEMO_TENANT_CONTRACT_SPECS) as
+# the no-bundle fallback.
+def echo_spec_registry(specs: "dict | None", demo: bool = True) -> dict:
+    """ONE shared resolution of the echo guardrail's fact groups, used by
+    Agent.__init__ and extract_required_references (single source, no
+    copy-paste). `specs` is the wired tool surface (gateway.specs) or None;
+    `demo` is True whenever no real tenant bundle is declared — the demo
+    tenant contracts are then merged in (over the code defaults, under the
+    wired specs) so the historical keyword guarantees are enforced on every
+    demo wiring. A declared tenant bundle suppresses the demo contracts
+    entirely: only the bundle's own specs apply."""
+    from voiceagent.demo_data import DEMO_TENANT_CONTRACT_SPECS
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+    registry: dict = {}
+    if demo:
+        registry.update(DEFAULT_TOOL_SPECS)
+        registry.update(DEMO_TENANT_CONTRACT_SPECS)
+    if specs:
+        registry.update(specs)
+    return registry
+
+
+def extract_required_references(user_text: str,
+                                specs: "dict | None" = None,
+                                demo: bool = True) -> list[str]:
+    """References the reply must contain: the customer's stated order id(s)
+    and any declared tool-contract fact the customer stated. Shared with
+    chat.py (turn records) and the echo guardrail. The scan is
+    FIRST-MATCH-PER-SPEC (one fact per spec, then move on) — exactly the
+    historical KEYWORD_FACTS group semantics: e.g. "my recharge failed" pins
+    only 'fail' (recharge's first fact), never both 'fail' and 'recharge'.
+    specs=None resolves the demo registry (the historical default for callers
+    with no tool surface)."""
+    registry = echo_spec_registry(specs, demo)
+    refs: list[str] = []
+    for m in ORDER_ID_RE.finditer(user_text):
+        refs.append(m.group(0))
+    lower = user_text.lower()
+    for spec in registry.values():
+        for f in spec.facts:
+            if f in lower:
+                if f not in refs:  # cross-spec duplicates stay single
+                    refs.append(f)
+                break  # first match per spec — historical group semantics
+    return refs
 
 
 def extract_action(text: str) -> str | None:
     m = ACTION_RE.search(text)
     return m.group(1).lower() if m else None
-
-
-def extract_required_references(user_text: str) -> list[str]:
-    """References the reply must contain: the customer's stated order id(s)
-    and any intent keyword that is a ground-truth fact. Shared with chat.py
-    (turn records) and the echo guardrail."""
-    refs: list[str] = []
-    for m in ORDER_ID_RE.finditer(user_text):
-        refs.append(m.group(0))
-    lower = user_text.lower()
-    for kw in KEYWORD_FACTS.values():
-        for k in kw:
-            if k in lower:
-                refs.append(k)
-                break
-    return refs
 
 
 def find_order_id(text: str) -> str | None:
@@ -470,11 +670,11 @@ def strip_action_lines(text: str) -> str:
 
 def build_agent(index, llm, classifier=None, policy=None, decision_log=None,
                 tenant=None, sentiment_store=None, tool_runner=None,
-                erp=None) -> Agent:
+                erp=None, actions: list[str] | None = None) -> Agent:
     agent = Agent(index, llm, classifier=classifier, policy=policy,
                   decision_log=decision_log, tenant=tenant,
                   sentiment_store=sentiment_store, tool_runner=tool_runner,
-                  erp=erp)
+                  erp=erp, actions=actions)
     # Real LlamaCppLLM has chat_template; FakeLLM (tests) does not.
     agent._use_template = hasattr(llm, "chat_template")
     return agent

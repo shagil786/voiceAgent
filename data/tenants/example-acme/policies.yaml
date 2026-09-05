@@ -4,10 +4,30 @@
 escalate:
   - fraud
 
+# Sprint A2: business thresholds are POLICY DATA. The amount at/above which a
+# refund IS a high_value_refund — previously hardcoded in agent.py, now
+# declared here and evaluated through the PolicyEngine (tenant currency
+# wired). Undeclared -> the platform default (5000).
+high_value_refund_threshold: 5000
+
 order_status:
+  allow: true
+
+order_lookup:
   allow: true
 
 complaint:
   allow: true
   escalate_when:
     frustrated: true
+
+# Task B: the clarify-and-dig ladder for not-found slot lookups (order_id).
+# On a not-found fetch the agent asks the caller to re-confirm the id, then
+# offers the declared alternate lookups, and only after the retries are
+# exhausted does the governed escalate_to_human remain. Undeclared -> the
+# platform default: the first miss feeds straight back to the brain.
+not_found_ladder:
+  max_retries: 2
+  offer_alternates: true
+  alternates:
+    - check the recent orders placed on this phone number

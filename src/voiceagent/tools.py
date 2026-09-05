@@ -16,13 +16,39 @@ from __future__ import annotations
 
 import copy
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 
 # ---------------------------------------------------------------------------
 # Mock ERP
 # ---------------------------------------------------------------------------
+
+@runtime_checkable
+class SupportBackend(Protocol):
+    """The ERP/CRM binding surface the ToolGateway executes against — the
+    exact method set the gateway's bindings call (this IS the ERP
+    abstraction; bindings stay code, per "declarations are data, bindings
+    are code"). A production deployment implements this protocol (HTTP
+    connector, SDK client, ...) and passes it via ToolGateway(erp=...);
+    MockERP satisfies it structurally. Structural: no inheritance needed."""
+
+    def get_order(self, order_id: str) -> dict | None: ...
+
+    def orders_for_customer(self, customer_id: str) -> list[str]: ...
+
+    def cancel_order(self, order_id: str, reason: str) -> dict: ...
+
+    def reschedule_delivery(self, order_id: str, new_date: str) -> dict: ...
+
+    def initiate_refund(self, order_id: str, amount: float,
+                        reason: str) -> dict: ...
+
+    def mark_return(self, order_id: str, reason: str) -> dict: ...
+
+    def record_handoff(self, reason: str) -> dict: ...
+
 
 class MockERP:
     """In-memory ERP with the demo customer's orders and failure injection."""
@@ -61,6 +87,26 @@ class MockERP:
         self._check_live()
         o = self.orders.get(order_id)
         return copy.deepcopy(o) if o else None
+
+    def lookup_orders_by_phone(self, phone: str) -> list[dict]:
+        """Fetch orders for a caller-supplied phone number. The agent never
+        knows order IDs — it asks for the number and the backend returns the
+        matching orders (the not-found ladder's alternate lookup). Phone
+        matching is suffix-based on digits, so '+91-9876543210' matches
+        '9876543210'."""
+        self._check_live()
+        want = "".join(ch for ch in str(phone) if ch.isdigit())
+        if not want:
+            return []
+        out = []
+        for c in self.customers.values():
+            have = "".join(ch for ch in str(c.get("phone", "")) if ch.isdigit())
+            if have and (have == want or have.endswith(want) or want.endswith(have)):
+                for oid in c.get("orders", []):
+                    o = self.orders.get(oid)
+                    if o:
+                        out.append(copy.deepcopy(o))
+        return out
 
     def orders_for_customer(self, customer_id: str) -> list[str]:
         self._check_live()
@@ -113,6 +159,34 @@ class ToolSpec:
     preconditions: tuple[dict, ...] = ()
     # preconditions entries: {"field": <order field>, "op": in|not_in|eq|ne,
     # "value": ...} evaluated against the fetched order record.
+    # Contract facts (Sprint A3): the customer-visible guarantees this tool's
+    # reply must carry (e.g. the order reference, the word "refund"). The echo
+    # guardrail forces a fact into the reply when the CUSTOMER stated it —
+    # declared here per tool (code defaults, tools.yaml overrides), never
+    # hardcoded in the guard.
+    facts: tuple[str, ...] = ()
+
+
+def parse_facts(value, where: str = "tools.yaml") -> tuple[str, ...]:
+    """Validate a `facts` declaration: a non-empty list of non-empty strings.
+    Raises ValueError with a deploy-gate-friendly message on bad data."""
+    if (not isinstance(value, list) or not value
+            or not all(isinstance(x, str) and x.strip() for x in value)):
+        raise ValueError(f"{where}: 'facts' must be a non-empty list of "
+                         f"non-empty strings, got {value!r}")
+    return tuple(value)
+
+
+def spec_facts(specs: dict[str, "ToolSpec"]) -> list[str]:
+    """Union of the contract facts across a spec registry, in declaration
+    order, deduplicated — the fact list the echo guardrail scans against the
+    customer's own words."""
+    out: list[str] = []
+    for spec in specs.values():
+        for f in spec.facts:
+            if f not in out:
+                out.append(f)
+    return out
 
 
 @dataclass
@@ -124,7 +198,18 @@ class ToolResult:
 
 
 DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
-    "fetch_order_status": ToolSpec(params=("order_id",)),
+    # facts = the tool's reply contract (Sprint A3): what the customer must
+    # see acknowledged when this tool serves the turn. A tenant bundle
+    # overrides per tool via tools.yaml `facts:`.
+    # NOTE: the echo guardrail scans FIRST-MATCH-PER-SPEC (one fact per spec,
+    # historical KEYWORD_FACTS group semantics), so one keyword must not be
+    # split across specs that can both match the same turn — e.g. "delivery"
+    # deliberately stays inside the demo delivery_eta group ("order",
+    # "delivery") instead of becoming reschedule_delivery's own fact.
+    "fetch_order_status": ToolSpec(params=("order_id",), facts=("order",)),
+    # Caller without an order ID: the agent asks for the phone number and the
+    # BACKEND returns the matching orders — order IDs are never agent data.
+    "order_lookup": ToolSpec(params=("phone",), facts=("order",)),
     "cancel_order": ToolSpec(
         params=("order_id", "reason"),
         preconditions=({"field": "status", "op": "not_in",
@@ -133,7 +218,8 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
         params=("order_id", "new_date"),
         preconditions=({"field": "status", "op": "in",
                         "value": ["CONFIRMED", "SHIPPED"]},)),
-    "initiate_refund": ToolSpec(params=("order_id", "amount", "reason")),
+    "initiate_refund": ToolSpec(params=("order_id", "amount", "reason"),
+                                facts=("refund",)),
     # Escalation is always permitted — no preconditions; the point is that
     # the handoff becomes a real, auditable governed action.
     "escalate_to_human": ToolSpec(params=("reason",)),
@@ -143,6 +229,30 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
         preconditions=({"field": "status", "op": "in",
                         "value": ["SHIPPED", "DELIVERED"]},)),
 }
+
+
+def specs_with_yaml_facts(path: str | Path,
+                          base: dict[str, ToolSpec] | None = None
+                          ) -> dict[str, ToolSpec]:
+    """Merge optional per-tool `facts:` declarations from a bundle's tools.yaml
+    into a COPY of the base specs (DEFAULT_TOOL_SPECS). Tools the file does
+    not mention keep their base spec untouched (params AND preconditions);
+    unknown tool names are rejected — bindings are code, declarations are
+    data. This is the facts-only view of the DEPLOYMENT tools.yaml shape
+    (action/description/...) — never run it through ToolGateway.from_yaml,
+    which would wipe default preconditions."""
+    import yaml
+    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    tools = raw.get("tools") or {}
+    out = dict(base or DEFAULT_TOOL_SPECS)
+    for name, meta in tools.items():
+        if name not in out:
+            raise ValueError(f"tools.yaml: unknown tool '{name}'")
+        if isinstance(meta, dict) and "facts" in meta:
+            out[name] = replace(out[name],
+                                facts=parse_facts(meta["facts"],
+                                                  f"tools.yaml '{name}'"))
+    return out
 
 
 def _check_precondition(order: dict, cond: dict) -> str | None:
@@ -164,9 +274,12 @@ def _check_precondition(order: dict, cond: dict) -> str | None:
 class ToolGateway:
     """Executes tools against the ERP with precondition, idempotency, and
     timeout protection. Specs are declarative (Python defaults, overridable
-    from a tenant bundle's tools.yaml); the tool->ERP bindings are code."""
+    from a tenant bundle's tools.yaml); the tool->ERP bindings are code —
+    the if/elif chain below maps each tool name to the SupportBackend
+    method it calls. A production backend implements SupportBackend and is
+    passed via erp= (MockERP is the offline demo fixture)."""
 
-    def __init__(self, erp: MockERP | None = None,
+    def __init__(self, erp: SupportBackend | None = None,
                  specs: dict[str, ToolSpec] | None = None):
         self.erp = erp or MockERP()
         self.specs = dict(specs or DEFAULT_TOOL_SPECS)
@@ -187,7 +300,11 @@ class ToolGateway:
             params = tuple(spec.get("params",
                                     list(DEFAULT_TOOL_SPECS[name].params)))
             preconds = tuple(spec.get("preconditions", []))
-            gw.specs[name] = ToolSpec(params=params, preconditions=preconds)
+            facts = (parse_facts(spec["facts"], f"tools.yaml '{name}'")
+                     if "facts" in spec
+                     else DEFAULT_TOOL_SPECS[name].facts)
+            gw.specs[name] = ToolSpec(params=params, preconditions=preconds,
+                                      facts=facts)
         return gw
 
     def execute(self, tool_name: str, params: dict,
@@ -223,6 +340,8 @@ class ToolGateway:
         try:
             if tool_name == "fetch_order_status":
                 value = order
+            elif tool_name == "order_lookup":
+                value = self.erp.lookup_orders_by_phone(params["phone"])
             elif tool_name == "cancel_order":
                 value = self.erp.cancel_order(params["order_id"],
                                               params["reason"])

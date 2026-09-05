@@ -4,6 +4,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# The reason strings reach the brain and the customer, so amounts are shown
+# in the deployment's currency — tenant data, not a hardcoded symbol. The
+# platform default follows tenant.DEFAULT_CURRENCY (single source).
+from voiceagent.tenant import DEFAULT_CURRENCY
+
 
 DEFAULT_POLICIES = {
     "escalate": ["fraud", "legal", "chargeback", "high_value_refund"],
@@ -19,6 +24,12 @@ DEFAULT_POLICIES = {
     "payment_declined": {"allow": True},
     "otp": {"require_auth": True},
 }
+
+# Platform-default high-value-refund threshold, used ONLY when no policy file
+# declares the top-level `high_value_refund_threshold` key. A tenant declares
+# its own value in policies.yaml (validated by scripts/validate_tenant.py);
+# business thresholds are data, never inline literals in agent code.
+DEFAULT_HIGH_VALUE_REFUND_THRESHOLD = 5000
 
 
 def load_policies(path: str) -> dict:
@@ -54,8 +65,10 @@ class Decision:
 
 
 class PolicyEngine:
-    def __init__(self, policies: dict | None = None):
+    def __init__(self, policies: dict | None = None,
+                 currency: str = DEFAULT_CURRENCY):
         self.policies = policies or dict(DEFAULT_POLICIES)
+        self.currency = currency
 
     def known_actions(self) -> list[str]:
         """Action vocabulary the policy explicitly declares, via an optional
@@ -68,6 +81,42 @@ class PolicyEngine:
         if not isinstance(acts, list):
             return []
         return [a for a in acts if isinstance(a, str)]
+
+    def high_value_refund_threshold(self) -> float:
+        """The amount at/above which a refund IS a high_value_refund —
+        declared per tenant as the top-level `high_value_refund_threshold`
+        key in policies.yaml (business thresholds are policy data, evaluated
+        through this engine so the tenant's currency is wired). A malformed
+        or undeclared value falls back to the platform default, never
+        crashes the turn."""
+        v = self.policies.get("high_value_refund_threshold")
+        if (isinstance(v, (int, float)) and not isinstance(v, bool)
+                and v > 0):
+            return v
+        return DEFAULT_HIGH_VALUE_REFUND_THRESHOLD
+
+    def not_found_ladder(self) -> dict | None:
+        """The clarify-and-dig ladder for not-found slot lookups (Task B),
+        declared per tenant as the top-level `not_found_ladder:` key in
+        policies.yaml: {max_retries: int >= 1, offer_alternates: bool,
+        alternates: [str, ...]} (e.g. "check the recent orders placed on this
+        phone number"). Absent or malformed -> None: the pre-ladder behavior
+        (the raw not-found result fed back to the brain on the first miss) is
+        the default, so existing deployments keep their semantics."""
+        v = self.policies.get("not_found_ladder")
+        if not isinstance(v, dict) or not v:
+            return None
+        max_retries = v.get("max_retries", 2)
+        if (not isinstance(max_retries, int)
+                or isinstance(max_retries, bool) or max_retries < 1):
+            return None
+        alternates = v.get("alternates")
+        return {
+            "max_retries": max_retries,
+            "offer_alternates": bool(v.get("offer_alternates", True)),
+            "alternates": ([str(a) for a in alternates]
+                           if isinstance(alternates, list) else []),
+        }
 
     def evaluate(self, action: str, ctx: PolicyContext | None = None) -> Decision:
         ctx = ctx or PolicyContext()
@@ -101,9 +150,10 @@ class PolicyEngine:
 
         max_amount = policy.get("max_without_approval")
         if max_amount is not None and ctx.amount is not None and ctx.amount > max_amount:
+            c = self.currency
             return Decision(
                 "REQUIRE_HUMAN_APPROVAL",
-                [f"amount ₹{ctx.amount:,.0f} exceeds ₹{max_amount:,.0f} without approval"],
+                [f"amount {c}{ctx.amount:,.0f} exceeds {c}{max_amount:,.0f} without approval"],
             )
 
         if policy.get("escalate"):

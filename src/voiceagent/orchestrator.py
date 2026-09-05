@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from voiceagent.decisionlog import DecisionEntry, DecisionLog
+from voiceagent.dialogue import DialogueTracker, render_directive
 from voiceagent.learn.corrections import classify_correction
 from voiceagent.learn.profiles import Profile, ProfileStore, contact_key
 from voiceagent.memory import ConversationMemory, InMemoryMemory, Turn, now_ts
@@ -64,6 +65,12 @@ class Deployment:
     # through GovernedToolRunner.
     gateway_tools: dict[str, dict] = field(default_factory=dict)
     knowledge: dict[str, str] = field(default_factory=dict)  # id -> text
+    # The deployment's declared action vocabulary (Sprint A1): resolved from
+    # the tenant bundle (intents/ + tools.yaml `action:` + tenant.json
+    # extras) by the runtime assembly. None = nothing declared — consumers
+    # keep their existing (demo-fallback) behavior. Core ships no business
+    # action list.
+    actions: list[str] | None = None
     metadata: dict = field(default_factory=dict)
 
 
@@ -105,7 +112,8 @@ class Orchestrator:
                  decision_log: DecisionLog | None = None,
                  max_tool_rounds: int = 3,
                  profiles: ProfileStore | None = None,
-                 metrics: Metrics | None = None):
+                 metrics: Metrics | None = None,
+                 actions: list[str] | None = None):
         self.brain = brain
         self.runner = runner
         self.memory: ConversationMemory = memory or InMemoryMemory()
@@ -116,6 +124,17 @@ class Orchestrator:
         self.profiles = profiles
         # Runtime metrics sink: None = no recording (zero behavior change).
         self.metrics = metrics
+        # The resolved action vocabulary (Sprint A1): declared tenant data
+        # passed in by the assembly seam (build_orchestrator / deploy());
+        # None = nothing declared, existing behavior. The frontier brain's
+        # proposal surface stays tool-schema-driven — this seam exists so the
+        # vocabulary is available to placements/prompt builders without
+        # re-deriving it from the bundle.
+        self.actions: list[str] | None = list(actions) if actions else None
+        # Dialogue state (Task B): the bounded not-found clarify-and-dig
+        # ladder. Inert unless the wired policy declares not_found_ladder —
+        # absent config keeps the pre-ladder single-miss behavior.
+        self._dialogue = DialogueTracker()
         self._profile_links: dict[str, str] = {}  # session_id -> contact key
         self._gateway_tools: dict[str, dict] = {}
         self._deployment: Deployment | None = None
@@ -128,6 +147,8 @@ class Orchestrator:
         brain's tool surface; prompt + knowledge become the system message."""
         self._deployment = deployment
         self._gateway_tools = dict(deployment.gateway_tools)
+        if deployment.actions:  # declared vocabulary wins; None keeps existing
+            self.actions = list(deployment.actions)
         for spec in deployment.specs:
             self.brain.register_specialist(DomainSpecialist(spec=spec))
         for tool_name, meta in deployment.gateway_tools.items():
@@ -206,6 +227,7 @@ class Orchestrator:
         latency = 0.0
         raw_tool_calls = 0
         escalated = False
+        directive_text: str | None = None
 
         reply = self._chat(messages, tools)
         latency += reply.latency_s
@@ -213,6 +235,7 @@ class Orchestrator:
         while rounds < self.max_tool_rounds and reply.tool_calls:
             rounds += 1
             messages.append(self._assistant_message(reply))
+            stop = False
             for call in reply.tool_calls:
                 raw_tool_calls += 1
                 payload, entry, is_escalation = self._dispatch_tool_call(
@@ -220,12 +243,27 @@ class Orchestrator:
                 if entry is not None:
                     actions.append(entry)
                 escalated = escalated or is_escalation
+                # Task B clarify-and-dig ladder: a not-found slot lookup may
+                # emit a bounded clarify directive (re-confirm the id, offer
+                # the declared alternate lookups) instead of leaving the
+                # first miss to the brain. No-op unless the policy declares
+                # not_found_ladder. Runs BEFORE the tool message is appended
+                # so an exhausted ladder can annotate the fed-back payload.
+                clarify = self._not_found_ladder(payload, call, session_id)
                 messages.append({"role": "tool", "tool_call_id": call.id,
                                  "content": json.dumps(payload, default=str)})
+                if clarify is not None:
+                    directive_text = clarify
+                    stop = True
+                    break
+            if stop:
+                # The tracker's directive IS the reply: deterministic, no
+                # extra frontier round spent improvising on a known miss.
+                break
             reply = self._chat(messages, tools)
             latency += reply.latency_s
 
-        if reply.tool_calls:
+        if directive_text is None and reply.tool_calls:
             # Round budget exhausted mid-ping-pong: force a text-only close
             # (no tool surface, so the model must speak). Stray calls are
             # surfaced in raw_tool_calls but never executed.
@@ -234,7 +272,8 @@ class Orchestrator:
             latency += reply.latency_s
             raw_tool_calls += len(reply.tool_calls)
 
-        final_text = (reply.content or "").strip() or _FALLBACK_REPLY
+        final_text = (directive_text if directive_text is not None
+                      else (reply.content or "").strip() or _FALLBACK_REPLY)
 
         # record the turn on the blackboard and in durable memory
         state.append_turn("user", user_text)
@@ -356,6 +395,49 @@ class Orchestrator:
                                                  c.arguments or {},
                                                  default=str)}}
                                for c in reply.tool_calls]}
+
+    def _not_found_ladder(self, payload: dict, call: FrontierToolCall,
+                          session_id: str) -> str | None:
+        """Task B clarify-and-dig ladder for not-found slot lookups. Returns
+        the directive text to serve as the turn's reply (re-confirm ask /
+        alternate-lookup offer), or None to keep the existing flow.
+
+        Only active when the wired policy declares the top-level
+        `not_found_ladder:` key — absent config leaves the raw not-found tool
+        result fed back to the brain exactly as before. The escalation rung
+        is NOT rendered here: exhaustion annotates the fed-back payload so
+        the brain proposes the governed escalate_to_human (policy verdict,
+        DecisionLog audit) as today — escalation stays the mandatory
+        terminal, never a bot loop, never an invented order."""
+        engine = (getattr(self.runner, "policy", None)
+                  if self.runner is not None else None)
+        ladder = engine.not_found_ladder() if engine is not None else None
+        if ladder is None:
+            return None
+        args = call.arguments or {}
+        if "order_id" not in args:
+            return None                       # only slot-bearing lookups
+        slot = "order_id"
+        if payload.get("ok"):
+            # Slot FILLED: a successful lookup resets the probe counter.
+            self._dialogue.found(session_id, slot)
+            return None
+        error = payload.get("error")
+        if not (isinstance(error, str) and error.startswith("order_not_found")):
+            return None
+        directive = self._dialogue.not_found(
+            session_id, slot, value=str(args.get("order_id") or ""),
+            max_retries=ladder["max_retries"],
+            alternates=(ladder["alternates"]
+                        if ladder["offer_alternates"] else []))
+        if directive.kind == "escalate":
+            payload["not_found_ladder_exhausted"] = True
+            payload["instruction"] = (
+                "The order id could not be resolved after repeated "
+                "clarify attempts — propose escalate_to_human with a short "
+                "reason now; do not invent an order.")
+            return None
+        return render_directive(directive)
 
     def _dispatch_tool_call(self, call: FrontierToolCall, state: BlackboardState,
                             session_id: str,

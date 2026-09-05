@@ -55,7 +55,7 @@ def test_registry_covers_en_hi_te_and_excludes_ta():
     assert {"en", "hi", "te"} <= set(VOICE_REGISTRY)
     assert "ta" not in VOICE_REGISTRY
     assert VOICE_REGISTRY["en"] == "en_US-lessac-medium"
-    assert VOICE_REGISTRY["hi"] == "hi_IN-pratham-medium"
+    assert VOICE_REGISTRY["hi"] == "hi_IN-priyamvada-medium"
     assert VOICE_REGISTRY["te"] == "te_IN-maya-medium"
 
 
@@ -70,7 +70,7 @@ def test_hindi_text_routes_to_hi_voice(tmp_path):
     calls = []
     h = _make_handle(tmp_path, calls)
     h.speak(HI_TEXT, out_path=_out(tmp_path))
-    assert calls == ["hi_IN-pratham-medium"]
+    assert calls == ["hi_IN-priyamvada-medium"]
 
 
 def test_english_text_routes_to_en_voice(tmp_path):
@@ -92,7 +92,7 @@ def test_hinglish_routes_to_hi_voice(tmp_path):
     h = _make_handle(tmp_path, calls)
     h.speak("kya hai mera order kab aayega", language="hinglish",
             out_path=_out(tmp_path))
-    assert calls == ["hi_IN-pratham-medium"]
+    assert calls == ["hi_IN-priyamvada-medium"]
 
 
 def test_explicit_language_overrides_detection(tmp_path):
@@ -100,7 +100,7 @@ def test_explicit_language_overrides_detection(tmp_path):
     h = _make_handle(tmp_path, calls)
     # English text forced to Hindi voice: explicit language wins.
     h.speak("hello there", language="hi", out_path=_out(tmp_path))
-    assert calls == ["hi_IN-pratham-medium"]
+    assert calls == ["hi_IN-priyamvada-medium"]
 
 
 # ------------------------------------------------------------------- fallback
@@ -128,7 +128,7 @@ def test_fallback_voice_is_injectable(tmp_path):
     calls, warns = [], []
     h = _make_handle(tmp_path, calls, fallback_voice="hi", warn=warns.append)
     h.speak(TA_TEXT, out_path=_out(tmp_path))
-    assert calls == ["hi_IN-pratham-medium"]
+    assert calls == ["hi_IN-priyamvada-medium"]
     assert "hi" in warns[0]
 
 
@@ -170,9 +170,9 @@ def test_chunked_synthesis_routes_every_chunk_to_language_voice(tmp_path):
     h = TTSHandle(model_dir=str(tmp_path), voice_loader=loader)
     long_text = " ".join(["order"] * 60)
     out = h.synthesize_chunks(long_text, chunk_chars=80, language="hi")
-    assert calls == ["hi_IN-pratham-medium"]
+    assert calls == ["hi_IN-priyamvada-medium"]
     assert len(out) > 1                                # actually chunked
-    synth_texts = loader_voices["hi_IN-pratham-medium"].texts
+    synth_texts = loader_voices["hi_IN-priyamvada-medium"].texts
     assert len(synth_texts) == len(out)                # one synth per chunk
     assert " ".join(synth_texts).replace(" ", "") == long_text.replace(" ", "")
 
@@ -185,11 +185,11 @@ def _touch(path, size=8):
 
 def test_ensure_voice_skips_download_when_files_exist(tmp_path, monkeypatch):
     monkeypatch.setattr(urllib.request, "urlretrieve", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no download expected")))
-    onnx = tmp_path / "hi_IN-pratham-medium.onnx"
-    cfg = tmp_path / "hi_IN-pratham-medium.onnx.json"
+    onnx = tmp_path / "hi_IN-priyamvada-medium.onnx"
+    cfg = tmp_path / "hi_IN-priyamvada-medium.onnx.json"
     _touch(onnx)
     _touch(cfg)
-    p = ensure_voice("hi_IN-pratham-medium", str(tmp_path))
+    p = ensure_voice("hi_IN-priyamvada-medium", str(tmp_path))
     assert p == onnx and onnx.exists()
 
 
@@ -201,11 +201,11 @@ def test_ensure_voice_downloads_onnx_and_config_once_each(tmp_path, monkeypatch)
         Path(dest).write_bytes(b"dummy")
 
     monkeypatch.setattr(urllib.request, "urlretrieve", fake_urlretrieve)
-    ensure_voice("hi_IN-pratham-medium", str(tmp_path))
+    ensure_voice("hi_IN-priyamvada-medium", str(tmp_path))
     assert len(downloaded) == 2
-    assert all("hi_IN-pratham-medium" in u for u in downloaded)
+    assert all("hi_IN-priyamvada-medium" in u for u in downloaded)
     # second call: files now exist -> no new downloads (download-once)
-    ensure_voice("hi_IN-pratham-medium", str(tmp_path))
+    ensure_voice("hi_IN-priyamvada-medium", str(tmp_path))
     assert len(downloaded) == 2
 
 

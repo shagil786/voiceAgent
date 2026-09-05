@@ -5,7 +5,12 @@
 - intents/*.yaml files are lists of non-empty strings; filenames are valid
   intent names (lowercase snake_case)
 - policies.yaml (if present) passes the same structural checks as the
-  platform policies (scripts/validate_policies.py logic)
+  platform policies (scripts/validate_policies.py logic); the top-level
+  `high_value_refund_threshold` (Sprint A2) must be a positive number and an
+  optional `actions:` list must be a list of strings
+- tools.yaml (if present) declares a valid DEPLOYMENT tool surface: only
+  code-bound tool names, every entry has an action, escalate_to_human present,
+  and any per-tool `facts:` reply contract (Sprint A3) is a list of strings
 
 The tenant bundle is the Control Plane's per-customer artifact: it is
 validated in CI, versioned in git, and deployed atomically. A bundle that
@@ -16,6 +21,10 @@ Usage: .venv/bin/python scripts/validate_tenant.py [data/tenants/example-acme]
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from voiceagent.runtime import gateway_tools_from_yaml  # noqa: E402
 
 INTENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -60,6 +69,15 @@ def validate(root: Path) -> list[str]:
             if bad:
                 errors.append(f"{f}: {len(bad)} non-string/empty exemplars")
 
+    tools_yaml = root / "tools.yaml"
+    if tools_yaml.exists():
+        # Same validation the runtime applies at load time (single source of
+        # truth) — the gate just runs it before deploy instead of at startup.
+        try:
+            gateway_tools_from_yaml(tools_yaml)
+        except ValueError as e:
+            errors.append(f"{tools_yaml}: {e}")
+
     pol = root / "policies.yaml"
     if pol.exists():
         import yaml
@@ -71,7 +89,25 @@ def validate(root: Path) -> list[str]:
             if not isinstance(pdata, dict):
                 errors.append(f"{pol}: must be a YAML mapping")
             else:
+                # Sprint A2/A1: the policy file also carries non-action
+                # declarations — validate them, don't mistake them for rules.
+                thresh = pdata.get("high_value_refund_threshold")
+                if thresh is not None and (
+                        not isinstance(thresh, (int, float))
+                        or isinstance(thresh, bool) or thresh <= 0):
+                    errors.append(
+                        f"{pol}: high_value_refund_threshold must be a "
+                        f"positive number, got {thresh!r}")
+                declared_actions = pdata.get("actions")
+                if declared_actions is not None and (
+                        not isinstance(declared_actions, list)
+                        or not all(isinstance(a, str)
+                                   for a in declared_actions)):
+                    errors.append(
+                        f"{pol}: actions must be a list of strings")
                 for action, rule in pdata.items():
+                    if action in ("high_value_refund_threshold", "actions"):
+                        continue  # validated above, not an action rule
                     if not INTENT_NAME_RE.match(str(action)):
                         errors.append(f"{pol}: invalid action key '{action}'")
                     if isinstance(rule, dict):

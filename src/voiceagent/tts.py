@@ -21,6 +21,8 @@ generate) is preserved for every registered language.
 from __future__ import annotations
 
 import logging
+import os
+import re
 import tempfile
 import threading
 import time
@@ -34,11 +36,38 @@ logger = logging.getLogger(__name__)
 
 # Text language -> piper voice name. en: the M3 English voice; hi: pratham
 # medium; te: maya medium (verified on HF te/te_IN, no medium Tamil exists).
+# Global target set verified on HF at authoring time (HEAD 200): es_MX-ald,
+# fr_FR-siwis, de_DE-thorsten, pt_BR-faber — the README's es/fr/de/pt callers
+# must not receive the en voice.
 VOICE_REGISTRY = {
     "en": "en_US-lessac-medium",
-    "hi": "hi_IN-pratham-medium",
+    "hi": "hi_IN-priyamvada-medium",
     "te": "te_IN-maya-medium",
+    "es": "es_MX-ald-medium",
+    "fr": "fr_FR-siwis-medium",
+    "de": "de_DE-thorsten-medium",
+    "pt": "pt_BR-faber-medium",
 }
+
+# Speech rate: >1 slower, <1 faster. Env-overridable so deployments tune the
+# perceived pace without code changes (1.0 = the voice's native rate).
+DEFAULT_LENGTH_SCALE = 1.0
+
+
+def voice_overrides_from_env(env: dict[str, str] | None = None) -> dict[str, str]:
+    """Per-language voice overrides from VOICEAGENT_TTS_VOICES, formatted
+    'en=en_US-amy-medium,hi=hi_IN-priyamvada-medium'. Deployment config, not
+    code: switching voices never touches the registry default."""
+    import os as _os
+    e = _os.environ if env is None else env
+    raw = e.get("VOICEAGENT_TTS_VOICES") or ""
+    out: dict[str, str] = {}
+    for pair in raw.split(","):
+        if "=" in pair:
+            lang, voice = pair.split("=", 1)
+            if lang.strip() and voice.strip():
+                out[lang.strip()] = voice.strip()
+    return out
 
 # Romanized Hindi -> Hindi voice (see module docstring for the quality caveat).
 HINGLISH_VOICE_LANG = "hi"
@@ -55,6 +84,25 @@ def _real_voice_loader(voice_name: str, model_dir: str):
         return PiperVoice.load(onnx)
 
 
+
+_RE_DIGIT_RUN = re.compile(r"\d{8,}")
+_RE_NONSPEECH = __import__("re").compile(
+    "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\u2190-\u21FF\u2B00-\u2BFF]")
+
+
+def speech_text(text: str) -> str:
+    """Make model text speakable: long digit runs (phone/order numbers) are
+    read digit-by-digit — never as magnitudes ("9 billion") — and emoji /
+    symbol codepoints (which the phonemizer gurgles on) are dropped. This is
+    a UNIVERSAL reading rule (like pluralization), not per-number data:
+    domain specifics still arrive via memory/knowledge."""
+    def _spell(m: "re.Match[str]") -> str:
+        return " ".join(m.group(0))
+    out = _RE_NONSPEECH.sub(" ", text)
+    out = _RE_DIGIT_RUN.sub(_spell, out)
+    return out
+
+
 class TTSHandle:
     """Multilingual TTS handle: routes text to per-language piper voices.
 
@@ -65,11 +113,17 @@ class TTSHandle:
     def __init__(self, model_dir: str = "data/models",
                  registry: dict[str, str] | None = None,
                  fallback_voice: str = "en",
+                 length_scale: float | None = None,
                  voice_loader: Callable[[str, str], object] | None = None,
                  warn: Callable[[str], None] | None = None):
         self._model_dir = model_dir
         self._registry = dict(registry if registry is not None else VOICE_REGISTRY)
+        self._registry.update(voice_overrides_from_env())
         self._fallback_voice = fallback_voice
+        if length_scale is None:
+            length_scale = float(os.environ.get("VOICEAGENT_TTS_LENGTH_SCALE",
+                                                DEFAULT_LENGTH_SCALE))
+        self._length_scale = length_scale
         self._voice_loader = voice_loader or _real_voice_loader
         self._warn = warn or (lambda msg: logger.warning(msg))
         self._voices: dict[str, object] = {}
@@ -102,10 +156,17 @@ class TTSHandle:
         if out_path is None:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 out_path = tmp.name
+        text = speech_text(text)
         _, voice_name = self.voice_for(language, text)
         voice = self._get_voice(voice_name)
         with wave.open(out_path, "wb") as w:
-            voice.synthesize_wav(text, w)  # type: ignore[attr-defined]
+            if self._length_scale != DEFAULT_LENGTH_SCALE:
+                from piper.config import SynthesisConfig
+                voice.synthesize_wav(  # type: ignore[attr-defined]
+                    text, w, syn_config=SynthesisConfig(
+                        length_scale=self._length_scale))
+            else:
+                voice.synthesize_wav(text, w)  # type: ignore[attr-defined]
         return out_path
 
     def synthesize_to_wav(self, text: str, out_path: str,

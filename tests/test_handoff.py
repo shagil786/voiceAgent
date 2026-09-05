@@ -38,3 +38,13 @@ def test_handoff_markdown_contains_key_fields():
     assert "ESCALATE" in md
     assert "Your refund for ORD-5 is being processed." in md
     assert "above threshold" in md
+
+def test_handoff_amount_symbol_follows_currency():
+    conv = Conversation(id="c2", language="en", intent="refund",
+                        user_text="refund ORD-7", expected_action="refund",
+                        key_facts=["ORD-7"])
+    res = AgentResult(text="ok", action="refund", retrieved=[], latency_s=0.1)
+    h = build_handoff(conv, res, Entities(amount=25000.0))
+    # Platform default symbol is "$"; a tenant caller passes its currency.
+    assert "- **Amount:** $25,000" in handoff_markdown(h)
+    assert "- **Amount:** ₹25,000" in handoff_markdown(h, currency="₹")

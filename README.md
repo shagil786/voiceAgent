@@ -43,10 +43,11 @@ LEARNING LOOPS
 | **Governance** (policy DSL + validator 7/7, decision log, injection guard, frustration detector) | ✅ enforced |
 | **Voice I/O** (Qwen3-ASR primary + whisper fallback + Indic routing, Piper TTS, barge-in/VAD) | ✅ built, needs fresh e2e latency run |
 | **Outbound** (dialer with DND scrub + window, sub-600ms AMD logic, swarm organs) | ✅ built, synthetic-only validation |
-| **Tests** | ✅ 409 collected, 406 passed / 2 skipped / 1 xfailed |
+| **Tests** | ✅ 564 collected, 561 passed / 2 skipped / 1 xfailed |
 | **Batch-learn job** | ✅ on `main` |
 | **Operator packs, adversarial harness, onboarding drill** | ✅ on `feat/operator-packs-harness` |
-| **Telephony limb** (SIP/WebRTC + real number), **real ERP adapter**, **packaging** (Docker/VPS) | ❌ the remaining organs — MockERP, stub sidecars only |
+| **Telephony limb** (SIP/WebRTC + real number) | ⏳ built on `feat/livekit-limb` — loopback-verified, first PSTN drill pending (docs/telephony-runbook.md) |
+| **Real ERP adapter**, **packaging** (Docker/VPS) | ❌ the remaining organs — MockERP, stub sidecars only |
 
 Design: `docs/superpowers/specs/2026-09-03-global-adaptive-agent-design.md`.
 Plans: `docs/superpowers/plans/2026-09-04-instant-learn-profiles.md` (done),
