@@ -36,7 +36,7 @@ Fill trunk IDs from your LiveKit console — **this doc does not invent them.**
 | Inbound SIP trunk | Console → SIP → Trunks | name `voice-agent`, type **Individual**, numbers: +1 240 231 5037 |
 | Dispatch rule | Console → SIP → Dispatch | match rooms with prefix **`call-`**, create SIP participant (room per call) |
 | Inbound DID | Console → SIP | +1 240 231 5037 (configurable via `LIVEKIT_NUMBER`) |
-| Outbound trunk | Console → SIP → Trunks (outbound) | stored trunk ID in `LIVEKIT_TRUNK_ID`, **or** inline `CreateSIPParticipant` without `sip_trunk_id` |
+| Outbound trunk | Console → Telephony → SIP trunks (outbound) | external provider (Telnyx/Twilio); stored trunk ID in `LIVEKIT_TRUNK_ID` — native LiveKit numbers CANNOT dial out |
 
 Worker + dispatch contract: the worker only joins rooms whose name starts with
 `config.livekit_room_prefix` (default `call-`, override `LIVEKIT_ROOM_PREFIX`),
@@ -78,6 +78,23 @@ agree on the prefix.
    callback; the thread then returns).
 
 ## Outbound test-call procedure
+
+**IMPORTANT (verified 2026-09-05): LiveKit-native Phone Numbers (bought in the
+LiveKit console, e.g. +1 240 231 5037) are INBOUND ONLY.** LiveKit's docs:
+"LiveKit Phone Numbers currently only supports inbound calling. Support for
+outbound calls is coming soon." A native number cannot dial out, and
+`CreateSIPParticipant` returns `permission_denied` ("project is not authorised
+to initiate outbound calls"). Outbound dialing REQUIRES an outbound SIP trunk
+from an external provider (Telnyx, Twilio, Plivo — LiveKit's tested list):
+
+1. Sign up at a provider (Telnyx gives $5 trial credit, no card; Twilio gives
+   $15 trial credit) and buy/enable a number there.
+2. Enable the destination country in the provider portal (Telnyx: Outbound
+   Voice Profile → Allowed Destinations → India; Twilio: Voice Geographic
+   Permissions). Trial accounts can typically only call numbers you verify.
+3. LiveKit Console → Telephony → SIP trunks → New **outbound** trunk with the
+   provider's credentials/number; note the trunk ID.
+4. `export LIVEKIT_TRUNK_ID=<that id>` and run the procedure below.
 
 ```bash
 .venv/bin/python scripts/livekit_dial.py --to +15551234567 --room call-demo-1

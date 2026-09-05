@@ -9,6 +9,7 @@ the dep on the cold path.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import tempfile
 import wave
 from pathlib import Path
@@ -264,6 +265,11 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
     room.on("participant_disconnected", _on_leave)
     await room.connect(config.livekit_url, token)
 
+    # Bound before `try`: the no-SIP-track early return flows through the
+    # same `finally`, which must never touch an unassigned variable.
+    pump_stop = asyncio.Event()
+    pump_task: asyncio.Task | None = None
+
     try:
         # Subscribe: first remote SIP audio track. The SIP participant may
         # join after us, so wait (bounded) instead of dropping dead calls.
@@ -283,6 +289,16 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
         audio_track = rtc.LocalAudioTrack.create_audio_track("worker-reply", source)
         await room.local_participant.publish_track(audio_track)
 
+        # Playback pump: the ONLY writer to `source`, paced by
+        # `await capture_frame` (backpressure = real-time playback). It
+        # polls `session.take_playback()` directly, so a barge-in clearing
+        # the session queue silences it within one 10ms chunk. The feed
+        # loop below never touches `source`, keeping VAD/barge-in live
+        # while the agent is speaking.
+        pump_task = asyncio.create_task(
+            _playback_pump(source, session, pump_stop)
+        )
+
         # Greeting: one governed turn, spoken once after subscribe.
         greet_result = orchestrator.handle_turn(session_id, GREETING_TRANSCRIPT)
         greet_wav = tts(greet_result.reply) if tts is not None else _default_tts(
@@ -290,7 +306,7 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
         )
         if isinstance(greet_wav, (tuple, list)):
             greet_wav = greet_wav[1]
-        _publish_pcm16(source, bytes(greet_wav))
+        await _publish_pcm16(source, bytes(greet_wav))
 
         stream = rtc.AudioStream(track)
         pending = b""
@@ -302,29 +318,56 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
             while len(pending) >= 640:
                 session.feed_pcm16(pending[:640])
                 pending = pending[640:]
-                chunk = session.take_playback()
-                while chunk is not None:
-                    source.capture_frame(
-                        rtc.AudioFrame(chunk, _ROOM_SAMPLE_RATE, 1, len(chunk) // 2)
-                    )
-                    chunk = session.take_playback()
             if disconnected.is_set():
                 break
         return True
     finally:
+        pump_stop.set()
+        if pump_task is not None:
+            pump_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await pump_task
         session.stop()
         await room.disconnect()
 
 
-def _publish_pcm16(source: Any, reply_wav_16k: bytes) -> None:
-    """Upsample a greeting reply to 48k and publish via `AudioSource`."""
+async def _playback_pump(source: Any, session: Any, stop: asyncio.Event) -> None:
+    """Drain `session.take_playback()` into `source` until `stop` is set.
+
+    `AudioSource.capture_frame` is a coroutine — awaiting it is what
+    actually queues the frame AND paces playback to real time (its
+    backpressure releases one frame per 10ms). Polling the session's own
+    queue means a barge-in (which clears that queue) stops playback on
+    the next iteration.
+    """
+    from livekit import rtc
+
+    while not stop.is_set():
+        chunk = session.take_playback()
+        if chunk is None:
+            await asyncio.sleep(0.005)
+            continue
+        await source.capture_frame(
+            rtc.AudioFrame(chunk, _ROOM_SAMPLE_RATE, 1, len(chunk) // 2)
+        )
+
+
+async def _publish_pcm16(source: Any, reply_wav_16k: bytes) -> None:
+    """Upsample a greeting reply to 48k and publish via `AudioSource`.
+
+    `AudioSource.capture_frame` is a coroutine in livekit rtc (its await
+    provides backpressure/real-time pacing); each frame MUST be awaited
+    or nothing is queued and the caller hears silence.
+    """
     from livekit import rtc
 
     from voiceagent.telephony.audio import chunk_frames, resample_16k_to_48k
 
     upsampled = resample_16k_to_48k(bytes(reply_wav_16k))
     for chunk in chunk_frames(upsampled, 10, _ROOM_SAMPLE_RATE):
-        source.capture_frame(rtc.AudioFrame(chunk, _ROOM_SAMPLE_RATE, 1, len(chunk) // 2))
+        await source.capture_frame(
+            rtc.AudioFrame(chunk, _ROOM_SAMPLE_RATE, 1, len(chunk) // 2)
+        )
 
 
 def run_room_session(room_name: str, config: Any, deps: Any = None) -> bool:

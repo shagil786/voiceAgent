@@ -57,3 +57,63 @@ def test_async_waiter_timeout_returns_none():
     t0 = time.monotonic()
     assert asyncio.run(_wait_for_sip_track_async(lambda: None, 0.02)) is None
     assert time.monotonic() - t0 < 5
+
+
+# --- capture_frame regression: unawaited coroutine = silent calls -----------
+
+def _fake_source():
+    class FakeSource:
+        def __init__(self):
+            self.frames = []
+            self.awaited = 0
+
+        async def capture_frame(self, frame):
+            self.awaited += 1
+            self.frames.append(frame)
+
+    return FakeSource()
+
+
+def test_publish_pcm16_awaits_capture_frame():
+    """_publish_pcm16 must await capture_frame — a bare call publishes nothing."""
+    import struct
+
+    from voiceagent.telephony.inbound import _publish_pcm16
+
+    source = _fake_source()
+    # 100ms of tone @16k int16 mono
+    wav = struct.pack("<1600h", *([1000] * 1600))
+    asyncio.run(_publish_pcm16(source, wav))
+    assert source.awaited > 0
+    assert all(
+        f.samples_per_channel == 480 and f.sample_rate == 48000 and f.num_channels == 1
+        for f in source.frames
+    )  # 10ms @48k mono
+
+
+def test_playback_pump_polls_session_and_stops():
+    """Pump drains the session queue (not a copy), so barge-in clears silence it."""
+    import asyncio as aio
+
+    from voiceagent.telephony.inbound import _playback_pump
+
+    source = _fake_source()
+    chunks = [b"\x00" * 960]
+
+    class FakeSession:
+        def take_playback(self):
+            return chunks.pop(0) if chunks else None
+
+    stop = aio.Event()
+
+    async def stop_after_first(frame):
+        source.awaited += 1
+        stop.set()
+
+    source.capture_frame = stop_after_first
+
+    async def run():
+        await aio.wait_for(_playback_pump(source, FakeSession(), stop), timeout=2.0)
+
+    asyncio.run(run())
+    assert source.awaited == 1  # one chunk played, then stop -> no hang, no drain-after-barge-in
