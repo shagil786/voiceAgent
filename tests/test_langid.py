@@ -196,3 +196,10 @@ def test_eval_corpus_english_rows_stay_english():
     for r in rows:
         got = detect_language(r["user_text"])
         assert got in allowed[r["language"]], (r["id"], r["user_text"], got)
+
+
+# Recall guard: the most common French refund phrasing carries no domain
+# noun beyond "remboursement" — it must still detect as French.
+def test_french_refund_phrasing_is_french():
+    assert detect_language("Je veux un remboursement") == "fr"
+    assert detect_language("Je voudrais le suivi de ma commande") == "fr"

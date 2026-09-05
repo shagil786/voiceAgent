@@ -74,7 +74,7 @@ GLOBAL_LEXICONS = {
     }),
     "fr": frozenset({
         "commande", "remboursement", "livraison", "merci", "mais", "vous",
-        "mon", "ma", "pas", "le", "la", "les",
+        "mon", "ma", "pas", "le", "la", "les", "je", "veux", "voudrais",
     }),
     "de": frozenset({
         "der", "das", "nicht", "und", "bitte", "danke", "mein",
