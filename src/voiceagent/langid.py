@@ -61,9 +61,12 @@ HINGLISH_LEXICON = frozenset({
 # carry the signal; domain nouns (pedido, commande, Bestellung) make
 # support-desk turns unambiguous. Accented AND unaccented forms are listed
 # because ASR output often strips diacritics ("dónde" -> "donde"). Tokens
-# shared with English ("die", "los", "la") are single-edged: the
-# 2-distinct-hits rule keeps "Los Angeles order status" and "the battery
-# will die" English.
+# shared with English ("los", "la") are single-edged: the 2-distinct-hits
+# rule keeps "Los Angeles order status" English. "die" is deliberately
+# ABSENT from the German lexicon: it is a common English verb, and an
+# English sentence carrying it alongside one more German word ("the die is
+# cast, das is fine") would flip to de and serve German text to an English
+# caller — der/das/nicht carry the German signal without that collision.
 GLOBAL_LEXICONS = {
     "es": frozenset({
         "que", "para", "pero", "gracias", "quiero", "mi", "mis", "pedido",
@@ -74,9 +77,10 @@ GLOBAL_LEXICONS = {
         "mon", "ma", "pas", "le", "la", "les",
     }),
     "de": frozenset({
-        "die", "der", "das", "nicht", "und", "bitte", "danke", "mein",
+        "der", "das", "nicht", "und", "bitte", "danke", "mein",
         "meine", "bestellung", "lieferung", "rückerstattung",
-        "rueckerstattung", "für", "fuer",
+        "rueckerstattung", "ruckerstattung", "ich", "eine", "einen",
+        "mochte", "möchte", "wann", "kommt", "für", "fuer",
     }),
     "pt": frozenset({
         "obrigado", "obrigada", "não", "nao", "meu", "minha", "você",

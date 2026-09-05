@@ -162,6 +162,23 @@ def test_english_with_one_overlap_token_stays_english(text):
     assert detect_language(text) == "en"
 
 
+# Multi-token adversarials: English sentences reaching 2 hits on one lexicon
+# must STILL stay English (the wrong-language failure mode is symmetric —
+# a German false positive serves German text to an English caller).
+@pytest.mark.parametrize("text", [
+    "The die is cast, das is fine",       # de: das (die deliberately excluded)
+    "I will die without das feedback",    # de: das
+])
+def test_english_with_two_overlap_tokens_stays_english(text):
+    assert detect_language(text) == "en"
+
+
+# Recall guard: a realistic German support sentence with NO domain noun and
+# a simple ü->u transliteration must still detect as German.
+def test_german_support_sentence_without_domain_noun_is_german():
+    assert detect_language("Ich mochte eine Ruckerstattung bitte") == "de"
+
+
 def test_eval_corpus_english_rows_stay_english():
     # The global lexicons change detection for some previously-"en" inputs;
     # the only acceptable change is text that is genuinely es/fr/de/pt. The
