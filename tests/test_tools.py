@@ -12,6 +12,12 @@ def test_mockerp_seed_data():
     assert o["status"] == "CONFIRMED" and o["amount"] == 1299.0
     assert erp.orders_for_customer("CUST-001") == ["ORD-4821", "ORD-7734"]
 
+def test_mockerp_satisfies_support_backend_protocol():
+    # The gateway's ERP binding surface is a documented Protocol; the demo
+    # fixture satisfies it structurally (no inheritance).
+    from voiceagent.tools import SupportBackend
+    assert isinstance(MockERP(), SupportBackend)
+
 def test_fetch_order_status():
     gw = ToolGateway()
     r = gw.execute("fetch_order_status", {"order_id": "ORD-7734"})

@@ -73,6 +73,12 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     config = load_config()
     deps = build_deps()
+    if not os.environ.get("VOICEAGENT_TENANT"):
+        # One line, not a gate: the built-in Acme deployment is a demo
+        # default and must never impersonate a real deployment silently.
+        print("WARNING: no VOICEAGENT_TENANT set — serving the built-in "
+              "demo deployment (Acme); set VOICEAGENT_TENANT for a real "
+              "deployment", file=sys.stderr)
     if deps.get("orchestrator") is None:
         print("ERROR: VOICEAGENT_FRONTIER_URL not set — the LiveKit worker "
               "cannot serve calls without a governed brain. See .env.example.",

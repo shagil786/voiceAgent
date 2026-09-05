@@ -9,7 +9,8 @@ Design notes:
 - stdlib only (os, dataclasses, json, pathlib); no new dependencies.
 - `env` is an injectable mapping so tests never touch os.environ.
 - Defaults are verbatim copies of today's hardcoded behavior (NOT guesses):
-    - candidate model stems: the "name" fields of llm.CANDIDATE_MODELS.
+    - candidate model stems: derived from the model registry
+      (llm.load_model_registry -> data/models/registry.yaml), single source.
     - voices: a copy of tts.VOICE_REGISTRY (piper voice names).
   They are COPIED rather than imported so this module never pulls in heavy
   third-party deps (llm.py imports llama_cpp at module top).
@@ -27,13 +28,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 
-# Verbatim copy of the "name" fields of llm.CANDIDATE_MODELS (src/voiceagent/llm.py).
-DEFAULT_CANDIDATE_MODELS = [
-    "qwen3-0.6b-q4",
-    "qwen2.5-0.5b-q4",
-    "qwen2.5-1.5b-q4",
-    "qwen2.5-0.5b-hinglish-q4",
-]
+def default_candidate_models() -> list[str]:
+    """Candidate model stems — the "name" fields of the model registry
+    (llm.load_model_registry / data/models/registry.yaml), so there is ONE
+    registry, not a copied list. llm is imported lazily inside the call:
+    importing it at module level would pull llama_cpp into every config
+    consumer (this module stays stdlib-only at import time)."""
+    from voiceagent.llm import load_model_registry
+    return [m["name"] for m in load_model_registry()]
 
 # Verbatim copy of tts.VOICE_REGISTRY (src/voiceagent/tts.py): text language
 # -> piper voice name. ("hinglish" is NOT a registry key — TTSHandle routes
@@ -53,7 +55,7 @@ class RuntimeConfig:
     """Resolved runtime configuration (env > tenant JSON > code defaults)."""
     models_dir: str = DEFAULT_MODELS_DIR
     candidate_models: list[str] = field(
-        default_factory=lambda: list(DEFAULT_CANDIDATE_MODELS))
+        default_factory=default_candidate_models)
     voices: dict[str, str] = field(
         default_factory=lambda: dict(DEFAULT_VOICES))
     embedding_space: str = DEFAULT_EMBEDDING_SPACE
@@ -138,7 +140,7 @@ def load_config(env: Mapping[str, str] | None = None,
     models_dir = e.get("VOICEAGENT_MODELS_DIR") or DEFAULT_MODELS_DIR
 
     cand = _parse_list(e.get("VOICEAGENT_CANDIDATE_MODELS"))
-    candidate_models = cand if cand else list(DEFAULT_CANDIDATE_MODELS)
+    candidate_models = cand if cand else default_candidate_models()
 
     voices: dict[str, str] = dict(DEFAULT_VOICES)
     t_voices = _tenant_voices(tenant)

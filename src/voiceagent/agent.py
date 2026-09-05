@@ -10,6 +10,7 @@ from voiceagent.langid import NATIVE_SCRIPT_LANGS, detect_language
 from voiceagent.sentiment import (candidate_phrases_from,
                                   detect_frustration)
 from voiceagent.security import detect_injection, sanitize_for_prompt
+from voiceagent.tenant import DEFAULT_CURRENCY
 
 if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
     from voiceagent.memory import Turn
@@ -92,7 +93,10 @@ class Agent:
         self._policy = None
         if policy is not None:
             from voiceagent.policy import PolicyEngine
-            self._policy = PolicyEngine(policy)
+            # Currency is tenant data: the policy reason strings use the
+            # tenant's symbol; no tenant -> the platform default.
+            currency = getattr(tenant, "currency", None) or DEFAULT_CURRENCY
+            self._policy = PolicyEngine(policy, currency=currency)
         self._decision_log = decision_log
         self._tool_runner = tool_runner
         self._erp = erp

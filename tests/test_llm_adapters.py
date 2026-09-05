@@ -303,6 +303,38 @@ def test_policy_engine_known_actions_accessor():
     assert PolicyEngine({"actions": ["a", "b"]}).known_actions() == ["a", "b"]
     assert PolicyEngine({"actions": "nope"}).known_actions() == []
 
+# ---------------------------------------------------------------------------
+# Model registry as data: one registry (data/models/registry.yaml), no
+# personal URLs in the default download path, config derives its stems.
+# ---------------------------------------------------------------------------
+
+def test_registry_yaml_parses_with_three_builtin_entries():
+    from voiceagent.llm import load_model_registry
+    entries = load_model_registry()
+    names = {m["name"] for m in entries}
+    assert names == {"qwen3-0.6b-q4", "qwen2.5-0.5b-q4", "qwen2.5-1.5b-q4"}
+    for m in entries:
+        assert {"name", "url", "size_mb", "params"} <= set(m)
+        assert m["size_mb"] > 0
+
+def test_no_personal_urls_in_default_registry():
+    from voiceagent.llm import load_model_registry
+    for m in load_model_registry():
+        assert "kaggle" not in m["url"].lower()
+        assert m["url"].startswith("https://huggingface.co/")
+
+def test_missing_registry_yaml_falls_back_to_builtins(tmp_path):
+    from voiceagent.llm import load_model_registry
+    entries = load_model_registry(tmp_path / "missing.yaml")
+    assert {m["name"] for m in entries} == {
+        "qwen3-0.6b-q4", "qwen2.5-0.5b-q4", "qwen2.5-1.5b-q4"}
+
+def test_config_default_candidate_stems_match_registry_names():
+    from voiceagent.config import default_candidate_models
+    from voiceagent.llm import load_model_registry
+    assert default_candidate_models() == \
+        [m["name"] for m in load_model_registry()]
+
 def test_system_prompt_byte_identical_to_legacy_text():
     # Pin the exact pre-refactor SYSTEM_PROMPT so prompt changes are always
     # a conscious, reviewed decision. Consciously changed: the default

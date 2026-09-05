@@ -4,6 +4,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# The reason strings reach the brain and the customer, so amounts are shown
+# in the deployment's currency — tenant data, not a hardcoded symbol. The
+# platform default follows tenant.DEFAULT_CURRENCY (single source).
+from voiceagent.tenant import DEFAULT_CURRENCY
+
 
 DEFAULT_POLICIES = {
     "escalate": ["fraud", "legal", "chargeback", "high_value_refund"],
@@ -54,8 +59,10 @@ class Decision:
 
 
 class PolicyEngine:
-    def __init__(self, policies: dict | None = None):
+    def __init__(self, policies: dict | None = None,
+                 currency: str = DEFAULT_CURRENCY):
         self.policies = policies or dict(DEFAULT_POLICIES)
+        self.currency = currency
 
     def known_actions(self) -> list[str]:
         """Action vocabulary the policy explicitly declares, via an optional
@@ -101,9 +108,10 @@ class PolicyEngine:
 
         max_amount = policy.get("max_without_approval")
         if max_amount is not None and ctx.amount is not None and ctx.amount > max_amount:
+            c = self.currency
             return Decision(
                 "REQUIRE_HUMAN_APPROVAL",
-                [f"amount ₹{ctx.amount:,.0f} exceeds ₹{max_amount:,.0f} without approval"],
+                [f"amount {c}{ctx.amount:,.0f} exceeds {c}{max_amount:,.0f} without approval"],
             )
 
         if policy.get("escalate"):

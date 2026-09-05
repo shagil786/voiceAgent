@@ -1,0 +1,22 @@
+# Candidate GGUF models for auto-download — the single model registry.
+# Consumers: llm.load_model_registry (download/list) and
+# config.default_candidate_models (candidate stems). Same fields as the
+# historical CANDIDATE_MODELS literals: name / url / size_mb / params.
+#
+# Local fine-tuned artifacts (e.g. qwen2.5-0.5b-hinglish-q4_k_m.gguf) are
+# NOT listed here: they are discovered by filename in data/models, and
+# producing them is a Kaggle-notebook workflow (scripts/kaggle/), not an
+# auto-download — never ship a personal notebook URL as a default source.
+models:
+  - name: qwen3-0.6b-q4
+    url: https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf
+    size_mb: 397
+    params: 0.6B
+  - name: qwen2.5-0.5b-q4
+    url: https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf
+    size_mb: 400
+    params: 0.5B
+  - name: qwen2.5-1.5b-q4
+    url: https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf
+    size_mb: 1100
+    params: 1.5B

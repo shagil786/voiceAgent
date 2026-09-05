@@ -10,7 +10,9 @@ from tests.test_agent import FakeIndex, FakeLLM
 def test_load_missing_file_returns_historical_defaults(tmp_path):
     t = TenantConfig.load(tmp_path / "missing.json")
     assert t.persona.role.startswith("customer support assistant")
-    assert t.currency == "₹"
+    # Deliberate pin update: the platform default currency is "$" (USA/UK-first
+    # target market); a tenant declares its own currency in tenant.json.
+    assert t.currency == "$"
 
 def test_load_tenant_json(tmp_path):
     p = tmp_path / "t.json"
@@ -41,8 +43,15 @@ def test_default_persona_is_neutral():
 def test_currency_parameterized_entities():
     e = extract_entities("I want a refund of $250 for my order", currency="$")
     assert e.amount == 250.0
-    e2 = extract_entities("refund of ₹25,000 please")
-    assert e2.amount == 25000.0  # default unchanged
+    # Deliberate pin update: the rupee word forms are currency-scoped now, so
+    # the ₹ behaviour is pinned with an explicit currency, not the default.
+    e2 = extract_entities("refund of ₹25,000 please", currency="₹")
+    assert e2.amount == 25000.0
+
+
+def test_platform_default_currency_is_dollar():
+    from voiceagent.tenant import DEFAULT_CURRENCY
+    assert DEFAULT_CURRENCY == "$"
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +127,7 @@ def test_missing_bundle_falls_back_to_all_builtins(tmp_path):
     assert t.intent_exemplars() is None      # caller falls back to built-ins
     assert t.policy_file() is None
     assert t.knowledge_dir() is None
-    assert t.config.currency == "₹"
+    assert t.config.currency == "$"  # platform default (deliberate change)
 
 def test_bundle_surfaces_resolve(tmp_path):
     root = _make_bundle(tmp_path / "acme", exemplar=["where is my order"])

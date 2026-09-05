@@ -18,11 +18,37 @@ import copy
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 
 # ---------------------------------------------------------------------------
 # Mock ERP
 # ---------------------------------------------------------------------------
+
+@runtime_checkable
+class SupportBackend(Protocol):
+    """The ERP/CRM binding surface the ToolGateway executes against — the
+    exact method set the gateway's bindings call (this IS the ERP
+    abstraction; bindings stay code, per "declarations are data, bindings
+    are code"). A production deployment implements this protocol (HTTP
+    connector, SDK client, ...) and passes it via ToolGateway(erp=...);
+    MockERP satisfies it structurally. Structural: no inheritance needed."""
+
+    def get_order(self, order_id: str) -> dict | None: ...
+
+    def orders_for_customer(self, customer_id: str) -> list[str]: ...
+
+    def cancel_order(self, order_id: str, reason: str) -> dict: ...
+
+    def reschedule_delivery(self, order_id: str, new_date: str) -> dict: ...
+
+    def initiate_refund(self, order_id: str, amount: float,
+                        reason: str) -> dict: ...
+
+    def mark_return(self, order_id: str, reason: str) -> dict: ...
+
+    def record_handoff(self, reason: str) -> dict: ...
+
 
 class MockERP:
     """In-memory ERP with the demo customer's orders and failure injection."""
@@ -164,9 +190,12 @@ def _check_precondition(order: dict, cond: dict) -> str | None:
 class ToolGateway:
     """Executes tools against the ERP with precondition, idempotency, and
     timeout protection. Specs are declarative (Python defaults, overridable
-    from a tenant bundle's tools.yaml); the tool->ERP bindings are code."""
+    from a tenant bundle's tools.yaml); the tool->ERP bindings are code —
+    the if/elif chain below maps each tool name to the SupportBackend
+    method it calls. A production backend implements SupportBackend and is
+    passed via erp= (MockERP is the offline demo fixture)."""
 
-    def __init__(self, erp: MockERP | None = None,
+    def __init__(self, erp: SupportBackend | None = None,
                  specs: dict[str, ToolSpec] | None = None):
         self.erp = erp or MockERP()
         self.specs = dict(specs or DEFAULT_TOOL_SPECS)

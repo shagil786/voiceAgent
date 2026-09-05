@@ -33,7 +33,7 @@ from voiceagent.tools import (
     MockERP,
     ToolGateway,
 )
-from voiceagent.tenant import Tenant, compile_persona_block
+from voiceagent.tenant import DEFAULT_CURRENCY, Tenant, compile_persona_block
 
 # Default policy file + deployment name. A real deployment overrides the
 # Deployment (system prompt, gateway tools, knowledge) per business; the policy
@@ -248,7 +248,10 @@ def build_orchestrator(
     # actions get a DENY fed back to the brain. Only a bundle that declares no
     # policy file falls back to the platform policy_path.
     policy_src = (bundle.policy_file() or policy_path) if bundle else policy_path
-    policy = PolicyEngine(load_policies(policy_src))
+    # Currency is tenant data: the bundle declares it, the platform default
+    # covers a no-tenant deployment. Feeds the policy reason strings.
+    currency = bundle.config.currency if bundle else DEFAULT_CURRENCY
+    policy = PolicyEngine(load_policies(policy_src), currency=currency)
     runner = GovernedToolRunner(
         ToolGateway(erp=erp or MockERP()), policy, decision_log=log)
     brain = FrontierAgentBridge(FrontierClient(cfg))

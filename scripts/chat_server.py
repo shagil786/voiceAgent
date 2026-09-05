@@ -78,6 +78,12 @@ if __name__ == "__main__":
     Path("data/out").mkdir(parents=True, exist_ok=True)
     MEMORY = SQLiteMemory("data/out/memory.db")
     ORCH = _build_live_orchestrator()
+    if not os.environ.get("VOICEAGENT_TENANT"):
+        # One line, not a gate: the built-in Acme deployment is a demo
+        # default and must never impersonate a real deployment silently.
+        print("WARNING: no VOICEAGENT_TENANT set — serving the built-in "
+              "demo deployment (Acme); set VOICEAGENT_TENANT for a real "
+              "deployment", file=sys.stderr)
     if ORCH is None:
         print("ERROR: VOICEAGENT_FRONTIER_URL not set — the demo server serves "
               "the governed Orchestrator; set a frontier (see .env.example).",

@@ -18,9 +18,9 @@ def test_env_over_tenant_over_default():
     assert c.voices["hi"] == "/v/hi.onnx" and c.hf_token == "hf_x"
 
 def test_empty_candidate_models_falls_back_to_defaults():
-    from voiceagent.config import DEFAULT_CANDIDATE_MODELS
+    from voiceagent.config import default_candidate_models
     c = load_config(env={"VOICEAGENT_CANDIDATE_MODELS": "  "})
-    assert c.candidate_models == DEFAULT_CANDIDATE_MODELS
+    assert c.candidate_models == default_candidate_models()
 
 def test_tenant_mapping_voices_env_wins_per_key():
     tenant = {"voices": {"hi": "/t/hi.onnx"}}

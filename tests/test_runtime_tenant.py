@@ -193,6 +193,19 @@ def test_bundle_policy_drives_the_policy_engine():
     assert pol.evaluate("reschedule_delivery").verdict == "DENY"
 
 
+# --- currency is wired tenant data --------------------------------------------
+
+def test_tenant_currency_wires_into_the_policy_engine(monkeypatch):
+    monkeypatch.chdir(ROOT)  # bare bundle names resolve under data/tenants/
+    orch = build_orchestrator(env=dict(FRONTIER_URL), tenant="example-acme")
+    assert orch.runner.policy.currency == "$"  # example-acme declares "$"
+
+def test_no_tenant_policy_currency_is_platform_default():
+    from voiceagent.tenant import DEFAULT_CURRENCY
+    orch = build_orchestrator(env=dict(FRONTIER_URL))
+    assert orch.runner.policy.currency == DEFAULT_CURRENCY
+
+
 def test_least_privilege_deny_fed_back_to_brain(tmp_path, monkeypatch):
     # Bundle with the example-acme policy surface (order_status + complaint
     # only) but NO tools.yaml, so the built-in tool surface still exposes

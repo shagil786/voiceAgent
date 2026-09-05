@@ -10,7 +10,14 @@ from pathlib import Path
 
 from llama_cpp import Llama
 
-CANDIDATE_MODELS = [
+# The model registry is DATA (data/models/registry.yaml, one source shared
+# with config.default_candidate_models). The built-in list below is the
+# fallback when the YAML is missing/broken — same three entries. Local
+# fine-tuned artifacts (e.g. qwen2.5-0.5b-hinglish-q4_k_m.gguf) are
+# discovered by filename in the models dir; producing them is a
+# Kaggle-notebook workflow, not an auto-download, so no registry entry
+# ships an external URL for them.
+_BUILTIN_CANDIDATE_MODELS = [
     {
         "name": "qwen3-0.6b-q4",
         "url": ("https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/"
@@ -32,17 +39,33 @@ CANDIDATE_MODELS = [
         "size_mb": 1100,
         "params": "1.5B",
     },
-    {
-        # Fine-tuned on Kaggle (notebook93c684b345, LoRA r=8 merged) — Hinglish
-        # support data. GGUF produced locally via convert_hf_to_gguf.py f16 +
-        # llama-quantize Q4_K_M. Discovered by filename in data/models.
-        "name": "qwen2.5-0.5b-hinglish-q4",
-        "url": ("https://www.kaggle.com/code/shagilhmx/notebook93c684b345/"
-                "output/qwen2.5-0.5b-hinglish-q4_k_m.gguf"),
-        "size_mb": 400,
-        "params": "0.5B",
-    },
 ]
+
+# Anchored to the repo root so the registry resolves from any CWD (tests,
+# scripts) — data/ is repo data, not a cwd-relative lookup.
+REGISTRY_PATH = Path(__file__).resolve().parents[2] / "data" / "models" / "registry.yaml"
+
+
+def load_model_registry(path: str | Path | None = None) -> list[dict]:
+    """Model registry entries (name/url/size_mb/params) from
+    data/models/registry.yaml; a missing/broken file falls back to the
+    built-in list so model discovery never crashes offline."""
+    p = Path(path) if path is not None else REGISTRY_PATH
+    try:
+        import yaml
+        raw = yaml.safe_load(p.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError):
+        raw = None
+    entries = raw.get("models") if isinstance(raw, dict) else None
+    if isinstance(entries, list):
+        clean = [dict(e) for e in entries
+                 if isinstance(e, dict) and e.get("name") and e.get("url")]
+        if clean:
+            return clean
+    return [dict(m) for m in _BUILTIN_CANDIDATE_MODELS]
+
+
+CANDIDATE_MODELS = load_model_registry()
 
 
 # ---------------------------------------------------------------------------

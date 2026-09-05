@@ -30,7 +30,10 @@ from pathlib import Path
 # an Indian ecommerce company") claimed a false identity for tenants that
 # did not declare a role.
 DEFAULT_PERSONA_ROLE = "customer support assistant"
-DEFAULT_CURRENCY = "₹"
+# Platform default currency: USA/UK-first target market. Per-tenant currency
+# (tenant.json "currency") is the real answer; this default only covers
+# deployments that declare nothing.
+DEFAULT_CURRENCY = "$"
 TENANT_CONFIG_PATH = "data/tenants/default/tenant.json"
 
 

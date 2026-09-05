@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from voiceagent.tenant import DEFAULT_CURRENCY
+
 # Devanagari digits -> ASCII (whisper-hi / Qwen-hi sometimes emit ४८२१).
 _DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
 
@@ -222,31 +224,81 @@ def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
     return best
 
 
-def _amount_from_words(text: str) -> float | None:
-    """'rupees five thousand and two hundred' -> 5000.00 (same >=₹100 guard
-    as the digit path). Non-currency number words ("one agent") never
-    qualify because the phrase must contain a scale word (hundred+)."""
+# Currency WORD forms per currency symbol (regex fragments, `re.IGNORECASE`):
+# the words that may introduce or follow a money amount for THAT currency.
+# Scoped to the active currency only — "dollars" must not create amounts for
+# a ₹ tenant. Keep the rupee alternation byte-identical (hi/Devanagari
+# behaviour is pinned by tests).
+_CURRENCY_WORDS: dict[str, tuple[str, ...]] = {
+    "₹": (r"rs\.?", r"rupees?", r"रुपये?", r"रु\.?"),
+    "$": (r"dollars?", r"usd?"),
+    "€": (r"euros?", r"eur"),
+}
+
+
+def _currency_word_alts(currency: str) -> str:
+    """Regex alternation of the currency's word forms (symbol included)."""
+    return "|".join((re.escape(currency),)
+                    + _CURRENCY_WORDS.get(currency, ()))
+
+
+def _amount_from_words(text: str, currency: str = DEFAULT_CURRENCY) -> float | None:
+    """Prefix form: 'rupees five thousand and two hundred' -> 5200.00. Same
+    >=min guard as the digit path; non-currency number words ("one agent")
+    never qualify because the phrase must contain a scale word (hundred+)."""
     tokens = _words_after(text, re.compile(
-        r"\b(?:₹|rs\.?|rupees?|रुपये?|रु\.?)\s*", re.IGNORECASE))
+        r"\b(?:" + _currency_word_alts(currency) + r")\s*", re.IGNORECASE))
     if not any(t in _SCALES for t in tokens):
         return None
     n = words_to_number(tokens)
     return float(n) if n is not None and n >= 100 else None
 
 
-def extract_entities(text: str, currency: str = "₹",
+def _amount_from_words_suffix(text: str, currency: str) -> float | None:
+    """Suffix form: 'five thousand dollars' -> 5000.00 — the currency word
+    FOLLOWS the phrase (English word order). Same scale-word + >=100 guard
+    as the prefix form; words are scoped to the active currency."""
+    words = _CURRENCY_WORDS.get(currency, ())
+    if not words:
+        return None
+    cw = re.compile(r"^(?:" + "|".join(words) + r")$", re.IGNORECASE)
+    tokens = text.split()
+    best: float | None = None
+    for i, tok in enumerate(tokens):
+        if not cw.match(tok.strip(_PUNCT)):
+            continue
+        run: list[str] = []
+        for t in reversed(tokens[:i]):
+            w = _canon_token(t)
+            if w is None:
+                break
+            run.append(w)
+        run.reverse()
+        if not run or not any(w in _SCALES for w in run):
+            continue
+        n = words_to_number(run)
+        if n is not None and n >= 100:
+            best = float(n)
+            break
+    return best
+
+
+def extract_entities(text: str, currency: str = DEFAULT_CURRENCY,
                      min_amount: float = 100.0) -> Entities:
     """Extract an amount and an order id (ORD-xxxxx) from customer text.
     Pure regex + number-word normalization, no LLM — deterministic and cheap.
 
-    currency/min_amount are tenant config (M6a): the default reproduces the
-    historical ₹ behaviour; a US tenant passes currency='$'. The amount
-    regex always keeps the word forms (rupees/रुपये) alongside the symbol."""
+    currency/min_amount are tenant config (M6a): both default to the platform
+    defaults (tenant.DEFAULT_CURRENCY, $ 100). The digit regex and the
+    money-word patterns are scoped to the ACTIVE currency's word forms
+    (dollars/USD for "$", rupees/रुपये for "₹", ...); a bare number >=
+    min_amount still counts as an amount either way."""
     text = text.translate(_DEVANAGARI_DIGITS)
     sym = re.escape(currency)
+    words = _currency_word_alts(currency)
     amount_re = re.compile(
-        r"(?:" + sym + r"|(?:rs\.?|rupees?|रुपये?|रु\.?))?\s*"
-        r"(\d[\d,]*(?:\.\d+)?)\s*(?:" + sym + r"|(?:rs\.?|rupees?|रुपये?|रु\.?))?",
+        r"(?:" + sym + r"|" + words + r")?\s*"
+        r"(\d[\d,]*(?:\.\d+)?)\s*(?:" + sym + r"|" + words + r")?",
         re.IGNORECASE,
     )
 
@@ -266,7 +318,9 @@ def extract_entities(text: str, currency: str = "₹",
             amount = candidate
             break
     if amount is None:
-        amount = _amount_from_words(order_text)
+        amount = _amount_from_words(order_text, currency)
+    if amount is None:
+        amount = _amount_from_words_suffix(order_text, currency)
     if amount is None:
         amount = _amount_from_bare_hi_phrase(order_text)
 

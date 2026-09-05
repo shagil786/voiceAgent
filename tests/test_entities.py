@@ -41,7 +41,10 @@ def test_order_id_from_digit_list_words():
 
 
 def test_order_id_words_span_removed_for_amount_scan():
-    e = extract_entities("refund rupees five hundred for ORD four eight two one")
+    # Deliberate pin update: the rupee word forms are currency-scoped, so the
+    # rupee-word amount path is pinned with an explicit currency="₹".
+    e = extract_entities("refund rupees five hundred for ORD four eight two one",
+                         currency="₹")
     assert e.order_id == "ORD-4821"
     assert e.amount == 500.0
 
@@ -58,7 +61,10 @@ def test_short_number_words_are_not_order_ids():
 
 
 def test_amount_from_currency_number_words():
-    e = extract_entities("I want a refund of rupees five thousand and two hundred")
+    # Deliberate pin update: the rupee word forms are currency-scoped — the
+    # rupee behaviour is unchanged but needs an explicit currency="₹".
+    e = extract_entities("I want a refund of rupees five thousand and two hundred",
+                         currency="₹")
     assert e.amount == 5200.0  # "and" swallowed: 5*1000 + 2*100
 
 
@@ -105,3 +111,29 @@ def test_english_path_unchanged_regression():
     e = extract_entities("Where is my order ORD-55671?")
     assert e.order_id == "ORD-55671"
     assert e.amount is None
+
+
+# --------------------------------------------------------------------------
+# Currency-scoped money words: a "$" tenant must extract "five thousand
+# dollars" / "$5,000"; the rupee words must NOT create amounts for it and
+# vice versa (words are scoped to the ACTIVE currency only).
+# --------------------------------------------------------------------------
+
+def test_dollar_words_extract_amount_for_dollar_tenant():
+    e = extract_entities("I want a refund of five thousand dollars",
+                         currency="$")
+    assert e.amount == 5000.0
+
+def test_dollar_symbol_extracts_amount():
+    e = extract_entities("refund $5,000 please", currency="$")
+    assert e.amount == 5000.0
+
+def test_dollar_words_do_not_create_amounts_for_rupee_tenant():
+    e = extract_entities("refund of five thousand dollars please",
+                         currency="₹")
+    assert e.amount is None
+
+def test_rupee_word_path_unchanged_with_rupee_currency():
+    e = extract_entities("rupees four thousand eight hundred twenty one",
+                         currency="₹")
+    assert e.amount == 4821.0

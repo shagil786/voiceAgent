@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from voiceagent.dataset import Conversation
 from voiceagent.agent import AgentResult
 from voiceagent.entities import Entities
+from voiceagent.tenant import DEFAULT_CURRENCY
 
 
 @dataclass
@@ -38,13 +39,15 @@ def build_handoff(conv: Conversation, res: AgentResult,
     )
 
 
-def handoff_markdown(h: HandoffBundle) -> str:
+def handoff_markdown(h: HandoffBundle, currency: str = DEFAULT_CURRENCY) -> str:
+    # The amount symbol is the deployment's currency (tenant data where a
+    # tenant is available; the platform default otherwise).
     lines = [
         f"# Handoff — {h.conv_id}",
         f"- **Action:** {h.action or 'none'}",
         f"- **Policy decision:** {h.decision or 'n/a'}",
         f"- **Authenticated:** {h.authenticated}",
-        f"- **Amount:** ₹{h.amount:,.0f}" if h.amount else "- **Amount:** n/a",
+        f"- **Amount:** {currency}{h.amount:,.0f}" if h.amount else "- **Amount:** n/a",
         f"- **Order:** {h.order_id or 'n/a'}",
         "",
         "## Customer said",
