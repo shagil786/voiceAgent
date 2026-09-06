@@ -43,7 +43,8 @@ def _decision_rows(audit_db: str, days: int) -> list[dict]:
     rows = _rows(
         audit_db,
         "SELECT ts, conv_id, action, verdict, reasons, amount FROM decision_log"
-        " ORDER BY id")
+        " WHERE ts >= datetime('now', ?) ORDER BY id",
+        (f"-{days} days",))
     out = []
     for ts, conv_id, action, verdict, reasons, amount in rows:
         try:

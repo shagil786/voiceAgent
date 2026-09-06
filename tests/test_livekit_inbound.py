@@ -203,5 +203,5 @@ def test_phone_slot_accumulates_across_turns():
     turn(b"\x00" * 640)   # 3 digits so far -> no annotation yet
     assert "caller phone number on file" not in seen[0]
     turn(b"\x00" * 640)   # completes to 10 digits -> annotated
-    assert "caller phone number on file: 9828379313" in seen[1]
+    assert "caller phone digits so far" in seen[1] and "9828379313" in seen[1]
     assert "982" in seen[1]

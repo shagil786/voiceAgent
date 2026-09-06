@@ -577,9 +577,10 @@ def test_eager_preload_embeds_at_construction(tmp_path):
     assert calls == []                 # default stays lazy
 
 
-def test_label_cap_top_100_by_episode_count(tmp_path):
-    # 150 distinct labels -> consolidation embeds at most the top-100
-    # labels (by episode count, label asc tie-break) per pass.
+def test_label_cap_top_25_by_episode_count(tmp_path):
+    # 150 distinct labels -> consolidation embeds at most the top-25
+    # labels (by episode count, label asc tie-break) per pass — the M3
+    # embed-budget bound keeps an inline pass sub-second.
     dim = 256
     vectors = {}
     for i in range(150):
@@ -591,8 +592,8 @@ def test_label_cap_top_100_by_episode_count(tmp_path):
         store.capture(TENANT, f"text {i}", f"l{i:03d}", 0.5)
     store.consolidate(TENANT)
     labels = {p[0] for p in store.prototypes_for(TENANT)}
-    assert len(labels) == 100
-    assert labels == {f"l{i:03d}" for i in range(100)}   # lowest ids win tie
+    assert len(labels) == 25
+    assert labels == {f"l{i:03d}" for i in range(25)}   # lowest ids win tie
 
 
 class VersionedStore:

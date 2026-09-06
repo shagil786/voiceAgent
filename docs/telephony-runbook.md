@@ -165,7 +165,7 @@ before recording, and store/retain recordings under an owner-approved policy.
   Indic-routed engine). Set the trunk's language per deployment.
 - **Barge-in is session-level, not semantic**: uplink speech clears the
   playback queue; it does not understand *what* was said mid-reply.
-- **Greeting is one governed turn**: `handle_turn("(Inbound call connected —
+- **Greeting is the tenant's DECLARED greeting text when declared (instant); otherwise one governed turn**: `handle_turn("(Inbound call connected —
   greet the caller.)")` spoken once after the SIP track appears — not a canned
   file, and not multi-turn negotiation.
 - **One room = one session thread**: rooms are joined on `room_started` only;

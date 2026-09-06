@@ -88,20 +88,39 @@ def make_turn_fn(
     # converted) so the brain can look orders up without re-asking.
     phone_digits = ""
 
+    _re_phone_context = re.compile(r"number|phone|contact|\u0928\u0902\u092c\u0930", re.I)
+
     def _absorb_phone_digits(text: str) -> None:
+        """Only PHONE-SHAPED utterances feed the slot:
+        - a phone/number keyword in the sentence, OR
+        - one long digit run (>=7 — a number read straight out), OR
+        - a continuation while the slot is already open AND the utterance is
+          purely number-ish (every word is a number word / digits).
+        'My order is 4821' must NOT poison the slot with order digits."""
         nonlocal phone_digits
+        from voiceagent.entities import _token_value
         digits = "".join(re.findall(r"\d+", text))
-        if not digits:
-            from voiceagent.entities import _token_value
-            words = "".join(
-                str(_token_value(tok) or "") for tok in re.findall(r"[a-z]+", text.lower()))
-            digits = words
-        if digits:
+        alpha_toks = re.findall(r"[a-z]+", text.lower())
+        numberish = (all(_token_value(t) is not None for t in alpha_toks)
+                     if alpha_toks else bool(digits))
+        if not digits and (_re_phone_context.search(text)
+                           or (phone_digits and numberish)):
+            # keyword present (first read) OR a continuation while the slot
+            # is already open: convert the number-word tokens only —
+            # "my"/"is" contribute nothing to the digits.
+            digits = "".join(str(_token_value(t) or "")
+                             for t in alpha_toks)
+        phone_shaped = (_re_phone_context.search(text)
+                        or max((len(run) for run in re.findall(r"\d+", text)),
+                               default=0) >= 7
+                        or (phone_digits and digits and numberish))
+        if digits and phone_shaped:
             phone_digits = (phone_digits + digits)[-16:]
 
     def _text_for_brain(user_text: str) -> str:
         if len(phone_digits) >= 10:
-            return f"{user_text} (caller phone number on file: {phone_digits})"
+            return (f"{user_text} (caller phone digits so far — may be "
+                    f"partial: {phone_digits})")
         return user_text
 
     _re_nonspeech = re.compile(r"^[\W一-鿿ぁ-ゟァ-ヿ]+$")
@@ -116,6 +135,8 @@ def make_turn_fn(
         _absorb_phone_digits(user_text)
         user_text = _text_for_brain(user_text)
         stripped = user_text.strip()
+        if not stripped:
+            return "", b""  # empty ASR output is non-speech too
         cjk_only = (stripped and re.search(r"[一-鿿ぁ-ゟァ-ヿ]", stripped)
                     and not re.search(r"[A-Za-z0-9\u0900-\u097F]", stripped))
         if (len(stripped) <= 2 and _re_nonspeech.match(stripped)) or cjk_only:
@@ -387,8 +408,12 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
                 session.feed_pcm16(pending[:640])
                 pending = pending[640:]
             if getattr(turn_fn, "call_ended", False):
-                logger.info("call ended by agent (end_call executed)")
-                break
+                # The farewell must be HEARD before we hang up: wait for the
+                # session queue to drain (the pump consumes it in real time)
+                # instead of breaking on the turn that triggered end_call.
+                if not session.has_pending_playback():
+                    logger.info("call ended by agent (farewell played)")
+                    break
             if disconnected.is_set():
                 break
         return True

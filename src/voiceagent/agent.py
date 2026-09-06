@@ -172,7 +172,6 @@ class Agent:
         self._decision_log = decision_log
         self._tool_runner = tool_runner
         self._erp = erp
-        self._trackers: dict[str, Any] = {}
         # Single-source the action list: a policy that declares its action
         # vocabulary (PolicyEngine.known_actions) drives the system prompt;
         # then the vocabulary the assembly seam resolved from the tenant

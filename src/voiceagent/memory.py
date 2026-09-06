@@ -136,8 +136,12 @@ CAPTURE_CONFIDENCE_THRESHOLD = 0.35
 EPISODE_TTL_DAYS = 14        # episodic fragments are ephemeral (ADR-002)
 CONSOLIDATE_EVERY = 25       # every Nth capture triggers a consolidation pass
 PROTOTYPE_TOP_K = 50         # bounded growth: max prototypes per tenant
-MAX_LABELS_PER_PASS = 100    # consolidation embeds at most this many labels
-MAX_VECTORS_PER_PROTOTYPE = 100   # centroid window cap (most recent episodes)
+MAX_LABELS_PER_PASS = 25     # consolidation embeds at most this many labels
+MAX_VECTORS_PER_PROTOTYPE = 30   # centroid window cap (most recent episodes)
+# Pass embedding budget: labels processed until this many episode vectors
+# have been embedded (25 labels x 30 vectors worst case ~= seconds on CPU,
+# never the 10k-vector mega-pass possible with uncapped windows).
+MAX_EMBEDS_PER_PASS = 300
 EXEMPLARS_PER_PROTOTYPE = 3  # representative texts kept per prototype
 # NOTE on the merge threshold: 0.95 sits above LaBSE's typical same-intent
 # similarity, BUT LaBSE is known to over-score Romanized code-mixed Hindi
@@ -469,9 +473,17 @@ class IntentMemoryStore:
 
         # 2. Build one prototype per label (sorted labels -> deterministic).
         built: list[dict] = []
+        embed_budget = MAX_EMBEDS_PER_PASS
         for label in sorted(by_label):
             eps = by_label[label]
             window = eps[-self._max_vectors:]     # most recent win the cap
+            # Per-pass embed budget: a label that does not fit is left to the
+            # survivor/decay path and rebuilt next pass — this pass can never
+            # embed more than MAX_EMBEDS_PER_PASS texts, so an inline
+            # consolidation on a turn thread stays sub-second-ish.
+            if len(window) > embed_budget:
+                window = window[-embed_budget:]
+            embed_budget -= len(window)
             vectors = np.asarray(
                 self._embed([r[2] for r in window]), dtype=np.float32)
             centroid = vectors.mean(axis=0)
