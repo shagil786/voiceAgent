@@ -171,16 +171,54 @@ def test_missing_escalate_valve_fails_fast(tmp_path):
         make_deployment(tenant=Tenant.load(root))
 
 
-# --- 5. knowledge cap ----------------------------------------------------------
+# --- 5. knowledge cap + retrieval switch (RAG phase 1) --------------------------
 
-def test_knowledge_cap_drops_beyond_cap_in_sorted_order(tmp_path):
+def test_cap_knowledge_drops_beyond_cap_in_sorted_order():
+    from voiceagent.runtime import _cap_knowledge
+    capped = _cap_knowledge({"a": "a" * 4000, "b": "b" * MAX_KNOWLEDGE_CHARS})
+    # Sorted-id prefix fits under the cap; b.md is dropped whole.
+    assert set(capped) == {"a"}
+    assert len(capped["a"]) <= MAX_KNOWLEDGE_CHARS
+
+
+def test_small_tenant_kb_keeps_whole_file_behavior(tmp_path):
+    (tmp_path / "knowledge").mkdir()
+    (tmp_path / "knowledge" / "a.md").write_text("a" * 4000)
+    dep = make_deployment(tenant=Tenant.load(tmp_path))
+    # Under the budget: EXACTLY today's behavior — whole files, no chunks.
+    assert set(dep.knowledge) == {"a"}
+    assert dep.chunked_knowledge is None
+
+
+def test_large_tenant_kb_switches_to_chunked_retrieval(tmp_path):
+    from tests.test_knowledge_rag import FakeEmbedder
     (tmp_path / "knowledge").mkdir()
     (tmp_path / "knowledge" / "a.md").write_text("a" * 4000)
     (tmp_path / "knowledge" / "b.md").write_text("b" * MAX_KNOWLEDGE_CHARS)
-    dep = make_deployment(tenant=Tenant.load(tmp_path))
-    # Sorted-id prefix fits under the cap; b.md is dropped whole.
+    dep = make_deployment(tenant=Tenant.load(tmp_path),
+                          knowledge_embedder=FakeEmbedder(),
+                          knowledge_cache_path=tmp_path / "chunks.pkl")
+    # Over the budget: the deployment stores CHUNKS + embeddings, not full
+    # texts — no whole-file dropping that asserts the opposite of what it cut.
+    assert dep.knowledge == {}
+    assert dep.chunked_knowledge is not None
+    assert dep.chunked_knowledge.source_texts == {"a": "a" * 4000,
+                                                  "b": "b" * MAX_KNOWLEDGE_CHARS}
+    assert len(dep.chunked_knowledge.chunks) >= 2
+
+
+def test_large_tenant_kb_build_failure_fails_open_to_cap(tmp_path):
+    from tests.test_knowledge_rag import FakeEmbedder
+    (tmp_path / "knowledge").mkdir()
+    (tmp_path / "knowledge" / "a.md").write_text("a" * 4000)
+    (tmp_path / "knowledge" / "b.md").write_text("b" * MAX_KNOWLEDGE_CHARS)
+    dep = make_deployment(tenant=Tenant.load(tmp_path),
+                          knowledge_embedder=FakeEmbedder(fail=True),
+                          knowledge_cache_path=tmp_path / "chunks.pkl")
+    # The embedder is down: the historical whole-file cap behavior stands.
     assert set(dep.knowledge) == {"a"}
     assert len(dep.knowledge["a"]) <= MAX_KNOWLEDGE_CHARS
+    assert dep.chunked_knowledge is None
 
 
 # --- 6. policy comes from the bundle ------------------------------------------

@@ -27,6 +27,11 @@ from typing import Any
 
 from voiceagent.decisionlog import DecisionEntry, DecisionLog
 from voiceagent.dialogue import DialogueTracker, render_directive
+from voiceagent.knowledge_rag import (
+    KNOWLEDGE_BUDGET_CHARS,
+    cap_knowledge,
+    retrieve_chunks,
+)
 from voiceagent.learn.corrections import classify_correction
 from voiceagent.learn.profiles import Profile, ProfileStore, contact_key
 from voiceagent.memory import (CAPTURE_CONFIDENCE_THRESHOLD,
@@ -70,6 +75,11 @@ class Deployment:
     # through GovernedToolRunner.
     gateway_tools: dict[str, dict] = field(default_factory=dict)
     knowledge: dict[str, str] = field(default_factory=dict)  # id -> text
+    # RAG phase 1: the chunk index for KBs that outgrow the whole-file
+    # budget (built by runtime's retrieval switch). When set, deploy() renders
+    # NO static knowledge block — handle_turn retrieves the top-K chunks per
+    # turn and injects them (with fail-open to the whole-file cap on error).
+    chunked_knowledge: Any | None = None
     # Declared greeting (tenant data): spoken instantly on pickup, no brain
     # roundtrip. Empty -> greeting is one governed brain turn (legacy path).
     greeting: str = ""
@@ -95,6 +105,15 @@ class TurnResult:
     # telephony turn logger and tests can trace which KB documents informed a
     # reply. (Spoken citations stay out of scope; this is observability.)
     knowledge_ids: list[str] = field(default_factory=list)
+    # RAG phase 1 (chunked deployments): the chunk ids actually injected into
+    # THIS turn's system prompt, similarity-ordered — per-claim provenance.
+    # Empty for whole-file (non-chunked) deployments; [] with a non-empty
+    # knowledge_gaps also marks the "nothing matched" turn.
+    retrieved_chunk_ids: list[str] = field(default_factory=list)
+    # RAG phase 1 gap detection: when NO chunk cleared the similarity floor,
+    # the user text (truncated) is recorded here so the telephony turn
+    # logger (actions/knowledge fields) can surface KB coverage holes.
+    knowledge_gaps: list[str] = field(default_factory=list)
 
 
 # --- contact memory block ----------------------------------------------------
@@ -203,7 +222,9 @@ class Orchestrator:
         # The bridge keeps its system prompt private by design (frontier.py is
         # frozen), so deployment writes through this seam.
         parts = [deployment.system_prompt]
-        if deployment.knowledge:
+        # RAG phase 1: chunked deployments render NO static knowledge block —
+        # handle_turn injects the per-turn top-K retrieval instead.
+        if deployment.chunked_knowledge is None and deployment.knowledge:
             parts.append("## Knowledge\n" + "\n".join(
                 f"- [{kid}] {text}"
                 for kid, text in deployment.knowledge.items()))
@@ -259,6 +280,20 @@ class Orchestrator:
             messages[0] = {"role": "system",
                            "content": _system_prefix + "\n\n"
                                       + messages[0]["content"]}
+        # RAG phase 1: chunked deployments retrieve the top-K knowledge
+        # chunks for THIS turn and append them to the system prompt (the
+        # whole-file deployments' static block was rendered by deploy()).
+        turn_chunk_ids: list[str] = []
+        turn_gaps: list[str] = []
+        turn_chunk_file_ids: list[str] = []
+        if self._deployment is not None \
+                and self._deployment.chunked_knowledge is not None:
+            block, turn_chunk_ids, turn_gaps, turn_chunk_file_ids = \
+                self._turn_knowledge_block(user_text)
+            if block:
+                messages[0] = {"role": "system",
+                               "content": messages[0]["content"]
+                                          + "\n\n" + block}
         tools = self.brain.tool_schemas() or None
 
         actions: list[dict] = []
@@ -375,14 +410,23 @@ class Orchestrator:
         # Task D4: the knowledge ids that entered this turn's system prompt
         # (deploy() renders the whole block) — recorded for provenance even
         # when the reply needs none of it. Declaration order == prompt order.
-        knowledge_ids = (list(self._deployment.knowledge)
-                         if (self._deployment is not None
-                             and self._deployment.knowledge) else [])
+        # RAG phase 1 chunked deployments instead carry the source files of
+        # the chunks actually injected this turn (or the fail-open fallback
+        # files); knowledge_ids for whole-file deployments is UNCHANGED.
+        if self._deployment is not None \
+                and self._deployment.chunked_knowledge is not None:
+            knowledge_ids = turn_chunk_file_ids
+        else:
+            knowledge_ids = (list(self._deployment.knowledge)
+                             if (self._deployment is not None
+                                 and self._deployment.knowledge) else [])
 
         return TurnResult(reply=final_text, actions=actions,
                           brain_latency_s=latency, session_id=session_id,
                           raw_tool_calls=raw_tool_calls, escalated=escalated,
-                          knowledge_ids=knowledge_ids)
+                          knowledge_ids=knowledge_ids,
+                          retrieved_chunk_ids=turn_chunk_ids,
+                          knowledge_gaps=turn_gaps)
 
     def campaign_turn(self, session_id: str, lead: dict, script_goal: str, *,
                       profile: CallerProfile | None = None) -> TurnResult:
@@ -430,6 +474,47 @@ class Orchestrator:
         return self.profiles.export_contact(resolved)
 
     # -- internals ----------------------------------------------------------
+
+    def _turn_knowledge_block(self, user_text: str) -> tuple[str, list[str], list[str], list[str]]:
+        """RAG phase 1 per-turn knowledge for chunked deployments: retrieve
+        the top-K chunks matching the user text by cosine and render them in
+        the historical knowledge-block pattern ("- [chunk_id] text").
+
+        Returns (system-prompt block or "", retrieved_chunk_ids,
+        knowledge_gaps, knowledge_file_ids). Gap detection: when NO chunk
+        clears the deployment's similarity floor, the block notes the miss
+        (the brain must not invent) and the user text (truncated) is recorded
+        in knowledge_gaps. FAIL-OPEN: any retrieval error falls back to the
+        highest-priority whole files that fit under the budget — exactly
+        today's _cap_knowledge behavior (whole-file ids become the turn's
+        knowledge_ids; no gap is claimed, the failure is not evidence of one)."""
+        ck = self._deployment.chunked_knowledge
+        try:
+            hits = retrieve_chunks(ck, user_text)
+        except Exception:
+            logger.warning("knowledge retrieval failed; falling back to "
+                           "the whole-file cap (fail-open)", exc_info=True)
+            capped = cap_knowledge(ck.source_texts, KNOWLEDGE_BUDGET_CHARS)
+            if not capped:
+                return "", [], [], []
+            block = "## Knowledge\n" + "\n".join(
+                f"- [{kid}] {text}" for kid, text in capped.items())
+            return block, [], [], list(capped)
+        if hits:
+            block = "## Knowledge\n" + "\n".join(
+                f"- [{chunk.chunk_id}] {chunk.text}" for chunk, _ in hits)
+            chunk_ids = [chunk.chunk_id for chunk, _ in hits]
+            # per-turn file provenance: source files of the injected chunks,
+            # first-appearance order (== prompt order)
+            file_ids = list(dict.fromkeys(
+                chunk.source_file_id for chunk, _ in hits))
+            return block, chunk_ids, [], file_ids
+        gap_block = (
+            "## Knowledge\n"
+            "(No knowledge base entry matched this question — do not invent "
+            "an answer; say you will check and offer to connect the caller "
+            "with a human colleague.)")
+        return gap_block, [], [user_text[:200]], []
 
     def _capture_intent_episode(self, user_text: str,
                                 outcome_action: str | None,

@@ -14,6 +14,7 @@ model loads happen lazily inside the integration adapters, not here.
 """
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -126,7 +127,17 @@ def _load_default_bundle_knowledge() -> dict[str, str]:
 
 # Total injected knowledge is capped because deploy() joins it into the
 # system prompt — an unbounded KB would bloat every single turn.
-MAX_KNOWLEDGE_CHARS = 6000
+# (RAG phase 1: the SAME number is the chunked-retrieval switch threshold —
+# see _knowledge_for; the constant lives in knowledge_rag so both seams
+# share one value.)
+from voiceagent.knowledge_rag import (  # noqa: E402  (light: numpy only)
+    DEFAULT_CHUNKS_CACHE_PATH,
+    KNOWLEDGE_BUDGET_CHARS,
+    build_chunked_index,
+    cap_knowledge,
+)
+
+MAX_KNOWLEDGE_CHARS = KNOWLEDGE_BUDGET_CHARS
 
 
 def gateway_tools_from_yaml(path: str | Path) -> dict[str, dict]:
@@ -183,16 +194,41 @@ def _cap_knowledge(knowledge: dict[str, str]) -> dict[str, str]:
     """Sorted-id prefix of the knowledge that fits under MAX_KNOWLEDGE_CHARS.
     Whole-file granularity: a file that does not fit is dropped together with
     everything after it — a truncated FAQ could assert the opposite of the
-    text it cut off."""
-    capped: dict[str, str] = {}
-    total = 0
-    for kid in sorted(knowledge):
-        text = knowledge[kid]
-        if total + len(text) > MAX_KNOWLEDGE_CHARS:
-            break
-        capped[kid] = text
-        total += len(text)
-    return capped
+    text it cut off. (Delegates to knowledge_rag.cap_knowledge, which also
+    serves as the chunked-retrieval fail-open fallback.)"""
+    return cap_knowledge(knowledge, MAX_KNOWLEDGE_CHARS)
+
+
+def _knowledge_for(
+    raw: dict[str, str],
+    *,
+    embedder: Any | None = None,
+    cache_path: str | Path | None = None,
+) -> tuple[dict[str, str], Any | None]:
+    """THE RETRIEVAL SWITCH (RAG phase 1). Returns (knowledge, chunked):
+
+    - Total KB <= MAX_KNOWLEDGE_CHARS -> (whole-file capped dict, None):
+      EXACTLY today's behavior — byte-identical prompt, knowledge_ids as
+      pinned.
+    - Total KB over the budget -> ({}, ChunkedKnowledge): the deployment
+      stores CHUNKS (with source ids) + normalized embeddings (cached on
+      disk with a bumped cache version) and the orchestrator retrieves
+      top-K per turn instead of injecting the whole KB.
+    - Any chunk-index build failure (e.g. the embedder is unavailable)
+      fails OPEN to the historical whole-file cap — a broken embedder must
+      never take a deployment down."""
+    if sum(len(text) for text in raw.values()) <= MAX_KNOWLEDGE_CHARS:
+        return _cap_knowledge(raw), None
+    try:
+        return {}, build_chunked_index(
+            raw, embedder=embedder,
+            cache_path=(DEFAULT_CHUNKS_CACHE_PATH if cache_path is None
+                        else cache_path))
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "chunked knowledge build failed; falling back to the "
+            "whole-file cap (fail-open)", exc_info=True)
+        return _cap_knowledge(raw), None
 
 
 BUILTIN_KNOWLEDGE: dict[str, str] = _load_default_bundle_knowledge()
@@ -205,15 +241,25 @@ def _bundle_gateway_tools(tenant: Tenant) -> dict[str, dict]:
     return dict(BUILTIN_GATEWAY_TOOLS)
 
 
-def _bundle_knowledge(tenant: Tenant) -> dict[str, str]:
+def _bundle_knowledge(
+    tenant: Tenant,
+    *,
+    embedder: Any | None = None,
+    cache_path: str | Path | None = None,
+) -> tuple[dict[str, str], Any | None]:
+    """The tenant's knowledge through the retrieval switch (_knowledge_for):
+    whole-file capped dict for a KB under the budget, chunked index for a KB
+    over it. Returns (knowledge, chunked_knowledge)."""
     d = tenant.knowledge_dir()
     if d is None:
-        return dict(BUILTIN_KNOWLEDGE)
-    files = sorted(Path(d).glob("*.md"))
-    knowledge = {f.stem: f.read_text(encoding="utf-8") for f in files}
-    if not knowledge:
-        return dict(BUILTIN_KNOWLEDGE)
-    return _cap_knowledge(knowledge)
+        return _knowledge_for(dict(BUILTIN_KNOWLEDGE), embedder=embedder,
+                              cache_path=cache_path)
+    files = {f.stem: f.read_text(encoding="utf-8")
+             for f in sorted(Path(d).glob("*.md"))}
+    if not files:
+        return _knowledge_for(dict(BUILTIN_KNOWLEDGE), embedder=embedder,
+                              cache_path=cache_path)
+    return _knowledge_for(files, embedder=embedder, cache_path=cache_path)
 
 
 def _resolve_tenant(tenant: str | None,
@@ -241,11 +287,21 @@ def _resolve_tenant(tenant: str | None,
 def make_deployment(
     tenant: "Tenant | None" = None,
     policy_path: str = DEFAULT_POLICY_PATH,
+    *,
+    knowledge_embedder: Any | None = None,
+    knowledge_cache_path: str | Path | None = None,
 ) -> Deployment:
     """Build the governed Deployment: prompt + gateway tool surface + inline
     knowledge. With a tenant bundle, identity/persona, tool surface,
     knowledge and metadata all come from data/tenants/<name>/ — onboarding a
     customer is data, not code.
+
+    RAG phase 1: knowledge goes through the retrieval switch (_knowledge_for).
+    A KB over MAX_KNOWLEDGE_CHARS produces Deployment.chunked_knowledge (a
+    chunk index with cached embeddings) and an EMPTY knowledge dict — the
+    orchestrator retrieves top-K chunks per turn. `knowledge_embedder`/
+    `knowledge_cache_path` inject the encoder/cache for tests; None defers
+    to the shared lazy default embedder and the platform cache path.
 
     tenant=None loads the COMMITTED default bundle (data/tenants/default/)
     through the SAME Tenant.load machinery as named tenants — the platform's
@@ -257,6 +313,9 @@ def make_deployment(
     policy engine is wired in build_orchestrator.)"""
     if tenant is None:
         tenant = Tenant.load(DEFAULT_TENANT_BUNDLE)
+        knowledge, chunked = _bundle_knowledge(
+            tenant, embedder=knowledge_embedder,
+            cache_path=knowledge_cache_path)
         return Deployment(
             name=DEFAULT_DEPLOYMENT_NAME,
             # The identity sentence compiles from the bundle's declared
@@ -265,14 +324,19 @@ def make_deployment(
             system_prompt=compile_persona_block(tenant.config.persona)
                           + " " + PLATFORM_PROMPT_BASE,
             gateway_tools=dict(BUILTIN_GATEWAY_TOOLS),
-            knowledge=_bundle_knowledge(tenant),
+            knowledge=knowledge,
+            chunked_knowledge=chunked,
         )
+    knowledge, chunked = _bundle_knowledge(
+        tenant, embedder=knowledge_embedder,
+        cache_path=knowledge_cache_path)
     return Deployment(
         name=tenant.config.name,
         system_prompt=PLATFORM_PROMPT_BASE + "\n\n"
                       + compile_persona_block(tenant.config.persona),
         gateway_tools=_bundle_gateway_tools(tenant),
-        knowledge=_bundle_knowledge(tenant),
+        knowledge=knowledge,
+        chunked_knowledge=chunked,
         # Declared greeting: instant pickup line (tenant data); '' keeps the
         # governed greeting-turn path.
         greeting=str(getattr(tenant.config, "greeting", "") or ""),
