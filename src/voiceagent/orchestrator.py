@@ -21,6 +21,7 @@ deps; stdlib only.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -28,7 +29,9 @@ from voiceagent.decisionlog import DecisionEntry, DecisionLog
 from voiceagent.dialogue import DialogueTracker, render_directive
 from voiceagent.learn.corrections import classify_correction
 from voiceagent.learn.profiles import Profile, ProfileStore, contact_key
-from voiceagent.memory import ConversationMemory, InMemoryMemory, Turn, now_ts
+from voiceagent.memory import (CAPTURE_CONFIDENCE_THRESHOLD,
+                               ConversationMemory, InMemoryMemory, Turn,
+                               _sidecar_classifier, now_ts)
 from voiceagent.metrics import Metrics
 from voiceagent.policy import PolicyContext
 from voiceagent.sentiment import Frustration, detect_frustration
@@ -40,6 +43,8 @@ from voiceagent.swarm.frontier import (
 )
 from voiceagent.swarm.specialist import DomainSpecialist, SpecialistSpec
 from voiceagent.tools import GovernedToolRunner
+
+logger = logging.getLogger(__name__)
 
 _FALLBACK_REPLY = (
     "I'm sorry, I wasn't able to complete that here. Let me connect you "
@@ -65,6 +70,9 @@ class Deployment:
     # through GovernedToolRunner.
     gateway_tools: dict[str, dict] = field(default_factory=dict)
     knowledge: dict[str, str] = field(default_factory=dict)  # id -> text
+    # Declared greeting (tenant data): spoken instantly on pickup, no brain
+    # roundtrip. Empty -> greeting is one governed brain turn (legacy path).
+    greeting: str = ""
     # The deployment's declared action vocabulary (Sprint A1): resolved from
     # the tenant bundle (intents/ + tools.yaml `action:` + tenant.json
     # extras) by the runtime assembly. None = nothing declared — consumers
@@ -82,6 +90,11 @@ class TurnResult:
     session_id: str
     raw_tool_calls: int
     escalated: bool = False
+    # Task D4 (knowledge provenance): WHICH knowledge ids from the deployed
+    # knowledge block were in this turn's system prompt context — so the
+    # telephony turn logger and tests can trace which KB documents informed a
+    # reply. (Spoken citations stay out of scope; this is observability.)
+    knowledge_ids: list[str] = field(default_factory=list)
 
 
 # --- contact memory block ----------------------------------------------------
@@ -113,7 +126,9 @@ class Orchestrator:
                  max_tool_rounds: int = 3,
                  profiles: ProfileStore | None = None,
                  metrics: Metrics | None = None,
-                 actions: list[str] | None = None):
+                 actions: list[str] | None = None,
+                 intent_memory: Any | None = None,
+                 intent_classifier: Any | None = None):
         self.brain = brain
         self.runner = runner
         self.memory: ConversationMemory = memory or InMemoryMemory()
@@ -131,6 +146,18 @@ class Orchestrator:
         # vocabulary is available to placements/prompt builders without
         # re-deriving it from the bundle.
         self.actions: list[str] | None = list(actions) if actions else None
+        # ADR-002: the learned intent memory (IntentMemoryStore) — episodic
+        # capture of low-confidence turns via the SIDECAR classifier and
+        # prototype retrieval for classifier seeding. None = the memory layer
+        # is inert (opt-in via VOICEAGENT_MEMORY_DB). Retrieval on the
+        # frontier path is pending (see ADR-002 "Current deviations"): the
+        # frontier brain classifies nothing, so this seam today feeds capture
+        # only; retrieval via classifier_exemplars applies to the Agent path.
+        self.intent_memory = intent_memory
+        # Sidecar classifier (M4): built lazily on first capture so an
+        # orchestrator without wired memory never loads the encoders;
+        # injectable for tests.
+        self._intent_classifier = intent_classifier
         # Dialogue state (Task B): the bounded not-found clarify-and-dig
         # ladder. Inert unless the wired policy declares not_found_ladder —
         # absent config keeps the pre-ladder single-miss behavior.
@@ -139,6 +166,11 @@ class Orchestrator:
         self._gateway_tools: dict[str, dict] = {}
         self._deployment: Deployment | None = None
         self._sessions: dict[str, BlackboardState] = {}
+
+    @property
+    def greeting(self) -> str:
+        """The deployment's declared greeting (tenant data); '' when none."""
+        return self._deployment.greeting if self._deployment else ""
 
     # -- deployment ---------------------------------------------------------
 
@@ -152,13 +184,19 @@ class Orchestrator:
         for spec in deployment.specs:
             self.brain.register_specialist(DomainSpecialist(spec=spec))
         for tool_name, meta in deployment.gateway_tools.items():
+            # description precedence: tenant tools.yaml > the binding's own
+            # ToolSpec.description > generic wording.
+            from voiceagent.tools import DEFAULT_TOOL_SPECS
+            fallback = DEFAULT_TOOL_SPECS.get(tool_name)
+            generic = (f"Governed action '{meta.get('action', tool_name)}' — "
+                       "proposals only; executed through the policy-governed "
+                       "runner.")
             self.brain.register_tool(
                 name=tool_name,
                 description=meta.get(
                     "description",
-                    f"Governed action '{meta.get('action', tool_name)}' — "
-                    "proposals only; executed through the policy-governed "
-                    "runner."),
+                    (fallback.description if fallback and fallback.description
+                     else generic)),
                 parameters=meta.get("parameters"),
                 handler=None,  # governed tools are NEVER brain-executed
             )
@@ -242,6 +280,22 @@ class Orchestrator:
                     call, state, session_id, frustration)
                 if entry is not None:
                     actions.append(entry)
+                    if (entry.get("action") == "record_feedback"
+                            and entry.get("ok") and self.intent_memory
+                            is not None):
+                        try:
+                            tenant = ((self._deployment.metadata or {})
+                                      .get("tenant") or "default")
+                            self.intent_memory.record_rating(
+                                tenant, session_id,
+                                float((call.arguments or {})
+                                      .get("rating", 0)),
+                                str((call.arguments or {})
+                                    .get("comment", "")))
+                        except Exception:
+                            logger.warning(
+                                "intent memory: rating record failed "
+                                "(fail-open)", exc_info=True)
                 escalated = escalated or is_escalation
                 # Task B clarify-and-dig ladder: a not-found slot lookup may
                 # emit a bounded clarify directive (re-confirm the id, offer
@@ -309,9 +363,26 @@ class Orchestrator:
             self.metrics.record(
                 latency, primary["verdict"] if primary else "none")
 
+        # M4 (ADR-002): episodic capture on the frontier path — the brain
+        # produces no (label, confidence) pair, so the SIDECAR classifier
+        # runs purely for memory (never for decisions). Same capture policy
+        # and fail-open wrapper as the Agent path.
+        if self.intent_memory is not None:
+            self._capture_intent_episode(
+                user_text, primary["action"] if primary else None,
+                session_id=session_id)
+
+        # Task D4: the knowledge ids that entered this turn's system prompt
+        # (deploy() renders the whole block) — recorded for provenance even
+        # when the reply needs none of it. Declaration order == prompt order.
+        knowledge_ids = (list(self._deployment.knowledge)
+                         if (self._deployment is not None
+                             and self._deployment.knowledge) else [])
+
         return TurnResult(reply=final_text, actions=actions,
                           brain_latency_s=latency, session_id=session_id,
-                          raw_tool_calls=raw_tool_calls, escalated=escalated)
+                          raw_tool_calls=raw_tool_calls, escalated=escalated,
+                          knowledge_ids=knowledge_ids)
 
     def campaign_turn(self, session_id: str, lead: dict, script_goal: str, *,
                       profile: CallerProfile | None = None) -> TurnResult:
@@ -359,6 +430,34 @@ class Orchestrator:
         return self.profiles.export_contact(resolved)
 
     # -- internals ----------------------------------------------------------
+
+    def _capture_intent_episode(self, user_text: str,
+                                outcome_action: str | None,
+                                session_id: str = "") -> None:
+        """M4 (ADR-002): capture one episodic fragment on the frontier-brain
+        path. The local (sidecar) classifier labels the utterance ONLY to
+        feed the memory store — its output never touches the decision path.
+        Same policy as the Agent capture site: low-confidence or unknown
+        turns are the learning candidates. FAIL-OPEN: any error (classifier
+        load, store write) is logged and swallowed — never breaks the turn."""
+        try:
+            clf = self._intent_classifier
+            if clf is None:
+                clf = _sidecar_classifier()
+                self._intent_classifier = clf
+            label, confidence = clf.classify(user_text)
+            if confidence < CAPTURE_CONFIDENCE_THRESHOLD or not label:
+                tenant = "default"
+                if self._deployment is not None:
+                    tenant = ((self._deployment.metadata or {})
+                              .get("tenant") or "default")
+                self.intent_memory.capture(
+                    tenant, user_text, label or "", float(confidence),
+                    outcome=outcome_action or "unmatched",
+                    session_id=session_id)
+        except Exception:
+            logger.warning("intent memory: sidecar capture failed "
+                           "(fail-open)", exc_info=True)
 
     def _chat(self, messages: list[dict], tools: list[dict] | None) -> FrontierReply:
         return self.brain.client.chat(messages, tools=tools)

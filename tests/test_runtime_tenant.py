@@ -78,9 +78,12 @@ def test_no_tenant_deployment_is_byte_identical():
     dep = make_deployment()
     assert dep.name == "acme_support"
     assert dep.system_prompt == BUILTIN_ACME_PROMPT
-    assert set(dep.gateway_tools) == {"fetch_order_status", "reschedule_delivery",
-                                      "cancel_order", "escalate_to_human",
-                                      "initiate_return"}
+    # Derived from DEFAULT_TOOL_SPECS (pure): the surface can never drift
+    # from the bindings, and policy actions come from spec.action.
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+    assert set(dep.gateway_tools) == set(DEFAULT_TOOL_SPECS)
+    assert dep.gateway_tools["fetch_order_status"]["action"] == "order_status"
+    assert dep.gateway_tools["initiate_refund"]["action"] == "refund"
     assert set(dep.knowledge) == {"eta", "cancel_policy"}
     assert dep.metadata == {}
 
@@ -368,3 +371,16 @@ def test_bundle_threshold_reaches_the_policy_engine(monkeypatch, tmp_path):
     orch = build_orchestrator(env=dict(FRONTIER_URL), tenant=str(root))
     assert orch.runner.policy.high_value_refund_threshold() == 200
     assert orch.runner.policy.currency == "₹"
+
+
+def test_builtin_surface_never_drifts_from_bindings():
+    """The brain's proposal surface is DERIVED from DEFAULT_TOOL_SPECS — a new
+    tool binding must be proposeable without touching runtime.py (order_lookup
+    was invisible for a day because this used to be hand-maintained)."""
+    from voiceagent.runtime import BUILTIN_GATEWAY_TOOLS
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+
+    assert set(BUILTIN_GATEWAY_TOOLS) == set(DEFAULT_TOOL_SPECS)
+    assert BUILTIN_GATEWAY_TOOLS["order_lookup"]["action"] == "order_lookup"
+    assert BUILTIN_GATEWAY_TOOLS["escalate_to_human"]["side_effects"] is True
+    assert BUILTIN_GATEWAY_TOOLS["fetch_order_status"]["side_effects"] is False

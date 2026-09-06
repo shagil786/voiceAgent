@@ -1,16 +1,20 @@
 # src/voiceagent/agent.py
 from __future__ import annotations
 
-import re
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from voiceagent.langid import NATIVE_SCRIPT_LANGS, detect_language
+from voiceagent.memory import (CAPTURE_CONFIDENCE_THRESHOLD,
+                               classifier_exemplars)
 from voiceagent.sentiment import (candidate_phrases_from,
                                   detect_frustration)
 from voiceagent.security import detect_injection, sanitize_for_prompt
 from voiceagent.tenant import DEFAULT_CURRENCY, Tenant
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
     from voiceagent.memory import Turn
@@ -24,7 +28,32 @@ if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
 # byte-identically. Policy rule keys are NOT the vocabulary (partial coverage,
 # differing names like order_cancellation vs cancel_order): see
 # PolicyEngine.known_actions.
-from voiceagent.demo_data import DEMO_TENANT_ACTIONS
+from voiceagent.demo_data import (DEMO_TENANT_ACTIONS,  # noqa: F401
+                                  EMPATHY_PREFIXES, NOTED_REPLIES,  # noqa: F401
+                                  REPLY_TEMPLATES)  # noqa: F401
+
+# Task D1 (architecture debt): the deterministic reply-guard pipeline lives in
+# voiceagent.reply_guards (moved VERBATIM from this module — no behavior
+# change) and the demo reply TEXT TABLES live in voiceagent.demo_data. The
+# imports below re-export both surfaces, so `from voiceagent.agent import X`
+# keeps working unchanged for every existing caller.
+from voiceagent.reply_guards import (ACTION_RE,  # noqa: F401
+                                     ORDER_ID_RE,  # noqa: F401
+                                     _APOLOGY_MARKERS,  # noqa: F401
+                                     _SERVED_REPLY_LANGS,  # noqa: F401
+                                     _acceptable_reply_langs,  # noqa: F401
+                                     _already_apologetic,  # noqa: F401
+                                     _canned_reply,  # noqa: F401
+                                     _patch_reply,  # noqa: F401
+                                     _ref_for_template,  # noqa: F401
+                                     _repair_allowed_langs,  # noqa: F401
+                                     echo_spec_registry,  # noqa: F401
+                                     extract_action,  # noqa: F401
+                                     extract_required_references,  # noqa: F401
+                                     find_order_id,  # noqa: F401
+                                     find_recent_order_id,  # noqa: F401
+                                     repair_reply,  # noqa: F401
+                                     strip_action_lines)  # noqa: F401
 
 # Neutral by default: a persona is tenant data (M6a). The legacy default
 # ("...for an Indian ecommerce company") claimed a false identity for every
@@ -75,10 +104,13 @@ class AgentResult:
     latency_s: float
     decision: "Decision | None" = None
     tool_outcome: "GovernedOutcome | None" = None
-    # Task B (guardrails guide, not replace): 1 when a frontier repair
-    # re-render was attempted this turn, 0 otherwise (BASE tier, or no
-    # guardrail violation). Lightweight counter on the turn result — the
-    # Agent path has no per-turn DecisionLog record of its own to carry it.
+    # Task B / Task E (guardrails guide, not replace): 1 when the ONE
+    # governed frontier re-render was attempted this turn, 0 otherwise. The
+    # single repair covers BOTH guardrails (language + echo) in one call —
+    # the count is the per-turn repair budget spent, so it is 1 even when
+    # two constraints violated (BASE tier, or no guardrail violation: 0).
+    # Lightweight counter on the turn result — the Agent path has no
+    # per-turn DecisionLog record of its own to carry it.
     repair_attempts: int = 0
 
 
@@ -86,10 +118,35 @@ class Agent:
     def __init__(self, index, llm, classifier=None, policy=None,
                  decision_log=None, tenant=None, sentiment_store=None,
                  tool_runner=None, erp=None,
-                 actions: list[str] | None = None):
+                 actions: list[str] | None = None,
+                 intent_memory=None,
+                 capture_threshold: float = CAPTURE_CONFIDENCE_THRESHOLD):
         self._index = index
         self._llm = llm
         self._classifier = classifier
+        # ADR-002: the learned intent memory (IntentMemoryStore) — episodic
+        # capture of low-confidence / unknown turns during live calls.
+        # None = the whole memory layer is inert (opt-in via
+        # VOICEAGENT_MEMORY_DB; zero behavior change by default).
+        self._intent_memory = intent_memory
+        self._capture_threshold = capture_threshold
+        # M2 (ADR-002): live reseed state. The DECLARED exemplars are snapshotted
+        # once (they are the floor); when the memory store's version changes the
+        # classifier is reseeded in place with declared + conflict-guarded
+        # prototypes — checked at most once per turn, fail-open.
+        self._declared_exemplars = None
+        if classifier is not None:
+            declared = getattr(classifier, "_exemplars", None)
+            if isinstance(declared, dict):
+                self._declared_exemplars = {
+                    k: list(v) for k, v in declared.items()}
+        self._memory_version: int | None = None
+        if intent_memory is not None and self._declared_exemplars is not None:
+            try:
+                self._memory_version = intent_memory.version()
+            except Exception:
+                self._memory_version = None
+        self._tenant = tenant
         # M6b: the learnable frustration lexicon (None = static lexicon).
         self._sentiment = sentiment_store
         # Default to raw-completion prompt (tests use FakeLLM which has no
@@ -115,7 +172,6 @@ class Agent:
         self._decision_log = decision_log
         self._tool_runner = tool_runner
         self._erp = erp
-        self._trackers: dict[str, Any] = {}
         # Single-source the action list: a policy that declares its action
         # vocabulary (PolicyEngine.known_actions) drives the system prompt;
         # then the vocabulary the assembly seam resolved from the tenant
@@ -152,6 +208,11 @@ class Agent:
                language: str | None = None,
                customer_id: str | None = None) -> AgentResult:
         t0 = time.time()
+        # M2 (ADR-002): live reseed — if the memory store consolidated new
+        # prototypes since the last turn, swap them into the classifier in
+        # place (declared floor + conflict-guarded prototypes). At most one
+        # version() check per turn; any failure leaves the current exemplars.
+        self._maybe_reseed_classifier()
         # M5a: reply-language. Auto-detect when the caller doesn't know;
         # native-script languages get a per-turn directive appended to the
         # prompt build below (never to self._system_prompt, so en/hinglish
@@ -213,8 +274,12 @@ class Agent:
         clean = post(text) if callable(post) else text
         # The action comes from the deterministic classifier (or, if none
         # was provided — e.g. unit tests — from the LLM's ACTION line).
+        classify_confidence: float | None = None
+        classify_label: str | None = None
         if self._classifier is not None:
-            action, _ = self._classifier.classify(user_text)
+            classify_label, classify_confidence = \
+                self._classifier.classify(user_text)
+            action = classify_label
             # Deterministic promotion: a refund with an extracted amount at or
             # above the policy threshold IS a high-value refund — don't leave
             # that call to embedding similarity (which can't use the number).
@@ -235,16 +300,25 @@ class Agent:
         # never notice it went missing. The action itself was captured above
         # (classifier, or fallback extraction pre-scrub).
         clean = strip_action_lines(clean)
+        # The ECHO guardrail and the reply-language guardrail below share ONE
+        # repair budget per turn (latency discipline): at most ONE governed
+        # re-render TOTAL across both guards. Design decision: when both
+        # violate, the single repair prompt fixes both constraints in one
+        # call — reply_guards.repair_reply always carries the allowed
+        # language(s) AND the required references, so a second frontier round
+        # for the second guard would be pure waste on a live phone call.
+        # Echo guardrail: a support reply must acknowledge the customer's
+        # specific reference (order id, phone, intent keyword). The small
+        # LLM often answers generically — or its reply was scaffolding
+        # only — so a missing reference is repaired through the frontier
+        # (same .frontier marker rule as the language repair) or, on the
+        # BASE tier / after a failed repair, patched deterministically.
+        # This is the product's "the AI cannot drift from your order/
+        # account" guarantee. The keyword facts are TOOL CONTRACT data (the
+        # registry resolved in __init__ via echo_spec_registry: wired gateway
+        # specs + demo contracts in demo mode) — never a hardcoded dict.
+        required: list[str] = []
         if self._classifier is not None:
-            # Echo guardrail: a support reply must acknowledge the customer's
-            # specific reference (order id, phone, intent keyword). The small
-            # LLM often answers generically — or its reply was scaffolding
-            # only — so patch any missing reference with a deterministic
-            # confirmation. This is the product's "the AI cannot drift from
-            # your order/account" guarantee. The keyword facts are TOOL
-            # CONTRACT data (the registry resolved in __init__ via
-            # echo_spec_registry: wired gateway specs + demo contracts in
-            # demo mode) — never a hardcoded dict.
             required = extract_required_references(
                 user_text, specs=self._echo_specs, demo=self._echo_demo)
             # Reference inheritance: a follow-up like "and when will it
@@ -255,34 +329,42 @@ class Agent:
                 inherited = find_recent_order_id(history)
                 if inherited:
                     required.append(inherited)
-            clean = _patch_reply(clean, required)
+        missing = [r for r in required if r.lower() not in clean.lower()]
         # M5b-4 reply-language guardrail: the LLM's reply must be in the
         # customer's language; a 0.5B model ignores the directive often
         # enough that this is checked deterministically, not trusted.
-        # Task B: with a frontier configured the guardrail GUIDES, not
-        # replaces — ONE governed re-render asks the brain to restate its own
+        # Task B / Task E: with a frontier configured the guards GUIDE, not
+        # replace — ONE governed re-render asks the brain to restate its own
         # reply within the constraints (allowed languages, required facts,
         # persona never-say / may-promise via the compiled system prompt).
         # Only a still-violating re-render (or any repair failure — fail-open
-        # at the surface) falls back to the canned template path, and the
-        # no-frontier BASE tier keeps the canned path immediately, unchanged.
+        # at the surface) falls back to the deterministic path, and the
+        # no-frontier BASE tier keeps it immediately, unchanged.
         target_langs = _acceptable_reply_langs(language)
+        lang_violation = bool(target_langs is not None and clean.strip()
+                              and detect_language(clean) not in target_langs)
         repair_attempts = 0
-        if (target_langs is not None and clean.strip()
-                and detect_language(clean) not in target_langs):
-            repaired: str | None = None
-            if self._frontier:
-                repair_attempts = 1  # one extra frontier round, max
-                try:
-                    repaired = self._repair_reply(
-                        clean, prompt_text, language, target_langs,
-                        required if self._classifier is not None else [])
-                except Exception:
-                    repaired = None
+        repaired_ok = False
+        if self._frontier and (missing or lang_violation):
+            repair_attempts = 1  # ONE extra frontier round, max, BOTH guards
+            try:
+                repaired = self._repair_reply(
+                    clean, prompt_text, language,
+                    _repair_allowed_langs(language), required)
+            except Exception:
+                repaired = None
             if (repaired is not None and repaired.strip()
-                    and detect_language(repaired) in target_langs):
+                    and detect_language(repaired)
+                    in _repair_allowed_langs(language)
+                    and not [r for r in required
+                             if r.lower() not in repaired.lower()]):
+                # The re-render satisfies BOTH constraints: use it as-is —
+                # _patch_reply must not bolt a keyword sentence onto a
+                # compliant reply.
                 clean = repaired
-            else:
+                repaired_ok = True
+        if not repaired_ok:
+            if lang_violation:
                 clean = _canned_reply(action, language or "en",
                                       required if self._classifier is not None
                                       else [])
@@ -292,9 +374,9 @@ class Agent:
             # Safety net: a reply with no references and no content still
             # reaches the customer as something — in THEIR language when the
             # language is covered, neutral English otherwise (never an
-            # unrelated language).
-            clean = NOTED_REPLIES.get(language or "",
-                                      "Your request has been noted.")
+            # unrelated language). The English default is demo tenant data
+            # (NOTED_REPLIES["en"]) — core ships no demo text inline.
+            clean = NOTED_REPLIES.get(language or "", NOTED_REPLIES["en"])
         # Policy gate: every action passes through the deterministic policy
         # engine (ALLOW / DENY / REQUIRE_AUTH / REQUIRE_HUMAN_APPROVAL /
         # ESCALATE). No LLM in this path. Every decision is appended to the
@@ -321,287 +403,67 @@ class Agent:
         # reply already carries an apology.
         if fr.level == "high" and not _already_apologetic(clean):
             clean = EMPATHY_PREFIXES.get(language, "") + clean
+        # ADR-002 episodic capture: low-confidence or unknown-intent turns
+        # feed the learned intent memory (the classifier produces the only
+        # (label, confidence) pair in the live path, so this is THE capture
+        # site). The episode records the classifier's OWN label/confidence
+        # (pre-promotion: a refund promoted to high_value_refund by amount is
+        # still a `refund` understanding fact); the outcome is the turn's
+        # resulting action, or 'unmatched' when there was no usable label.
+        # FAIL-OPEN: any memory error (corrupt db, missing table, embedder
+        # failure) is logged and swallowed — the turn the customer is on must
+        # never break because learning did.
+        if self._intent_memory is not None and classify_confidence is not None:
+            try:
+                if (classify_confidence < self._capture_threshold
+                        or not action):
+                    self._intent_memory.capture(
+                        getattr(self._tenant, "name", None) or "default",
+                        user_text, classify_label or "", classify_confidence,
+                        outcome=action or "unmatched")
+            except Exception:
+                logger.warning("intent memory: capture failed (fail-open)",
+                               exc_info=True)
         return AgentResult(text=clean, action=action,
                            retrieved=retrieved, latency_s=time.time() - t0,
                            decision=decision,
                            repair_attempts=repair_attempts)
 
+    def _maybe_reseed_classifier(self) -> None:
+        """M2 (ADR-002): reseed the live classifier in place when the memory
+        store's prototype version changed (cheap counter check — the
+        retrieval snapshot from build time goes stale otherwise). Fail-open:
+        any error keeps the current exemplars, the turn proceeds unchanged."""
+        if (self._intent_memory is None or self._classifier is None
+                or self._declared_exemplars is None):
+            return
+        try:
+            version = self._intent_memory.version()
+        except Exception:
+            return
+        if version == self._memory_version:
+            return
+        self._memory_version = version
+        try:
+            merged = classifier_exemplars(
+                self._declared_exemplars, self._intent_memory,
+                getattr(self._tenant, "name", None) or "default")
+            self._classifier.reseed(merged)
+            logger.debug("intent memory: classifier reseeded (version %s)",
+                         version)
+        except Exception:
+            logger.warning("intent memory: reseed failed (fail-open)",
+                           exc_info=True)
+
     def _repair_reply(self, violating_reply: str, user_text: str,
                       language: str, allowed_langs: frozenset,
                       required_refs: list[str]) -> str:
         """Task B: ONE governed re-render of a guardrail-violating frontier
-        reply. The repair prompt carries the ORIGINAL frontier reply, the
-        ORIGINAL user turn, the allowed language(s) and the required
-        references (missing ones called out for verbatim inclusion); persona
-        never_say / may_promise constraints travel through the compiled
-        system prompt, same as the main turn. Sync, one extra frontier round
-        max — the caller re-checks the guards and falls back to the canned
-        path when the re-render still violates; exceptions are the caller's
-        fail-open concern and never reach the customer."""
-        missing = [r for r in required_refs
-                   if r.lower() not in violating_reply.lower()]
-        lines = [
-            "Your previous reply violated this conversation's reply "
-            "constraints. Rewrite it now.",
-            f"Previous reply that violated the constraints: {violating_reply}",
-            f"The customer said: {user_text}",
-            "- Write the reply ONLY in language code(s): "
-            + ", ".join(sorted(allowed_langs)) + ".",
-        ]
-        if required_refs:
-            lines.append("- Keep these customer references verbatim: "
-                         + ", ".join(required_refs) + ".")
-        if missing:
-            lines.append("- These required references were MISSING and must "
-                         "appear verbatim: " + ", ".join(missing) + ".")
-        lines.append("- Respect every persona constraint in your "
-                     "instructions: never say or promise anything not "
-                     "permitted there.")
-        lines.append("Reply with the rewritten reply text only.")
-        instruction = "\n".join(lines)
-        if self._use_template:
-            prompt = self._llm.chat_template(self._system_prompt, "",
-                                             instruction)
-        else:
-            prompt = (f"{self._system_prompt}\n\nContext:\n\n"
-                      f"Customer: {instruction}\nAssistant:")
-        stop = getattr(self._llm, "stop_tokens", None)
-        text = self._llm.generate(prompt, max_tokens=300, stop=stop)
-        post = getattr(self._llm, "postprocess", None)
-        clean = post(text) if callable(post) else text
-        # The re-rendered reply is judged as a customer-visible reply: ACTION
-        # scaffolding is scrubbed before the guards re-check it.
-        return strip_action_lines(clean)
-
-
-# ---------------------------------------------------------------------------
-# M5b-4: reply-language guardrail. The prompt directive ("Reply in the
-# customer's language") is unreliable on 0.5B models — the live fresh-caller
-# voice check showed hi/te customers receiving English replies, and the
-# empty-reply safety net was English-only. After generation, verify the
-# reply's language; on mismatch substitute a deterministic canned reply in
-# the customer's language (per-intent where available), then re-apply the
-# echo guardrail so the customer's reference still appears. en turns are
-# never touched — the text-path benchmark stays byte-identical.
-# ---------------------------------------------------------------------------
-
-REPLY_TEMPLATES: dict[str, dict[str, str]] = {
-    "order_status": {
-        "hi": "आपके ऑर्डर {ref} की स्थिति जाँच ली गई है। ताज़ा स्थिति जल्द ही आपके ऐप और एसएमएस पर अपडेट होगी।",
-        "te": "మీ ఆర్డర్ {ref} స్థితి తనిఖీ చేయబడింది. తాజా స్థితి త్వరలో మీ యాప్‌లో మరియు ఎస్ఎంఎస్ ద్వారా అందుతుంది.",
-        "hinglish": "Aapke order {ref} ka status check kar liya gaya hai. Latest update jald hi app aur SMS par milega.",
-        "en": "Your order {ref} has been checked. The latest status will "
-              "arrive in your app and by SMS shortly.",
-        "es": "Su pedido {ref} ha sido verificado. El estado más reciente "
-              "llegará pronto a su aplicación y por SMS.",
-        "fr": "Votre commande {ref} a été vérifiée. Le statut le plus "
-              "récent arrivera bientôt dans votre application et par SMS.",
-        "de": "Ihre Bestellung {ref} wurde überprüft. Der aktuelle Status "
-              "kommt in Kürze in Ihre App und per SMS.",
-        "pt": "Seu pedido {ref} foi verificado. O status mais recente "
-              "chegará em breve no seu aplicativo e por SMS.",
-    },
-    "refund": {
-        "hi": "आपका रिफंड अनुरोध दर्ज हो गया है। प्रक्रिया पूरी होने पर स्थिति की जानकारी दी जाएगी।",
-        "te": "మీ రీఫండ్ అభ్యర్థన నమోదైంది. ప్రక్రియ పూర్తయిన తర్వాత స్థితి తెలియజేయబడుతుంది.",
-        "hinglish": "Aapka refund request note kar liya gaya hai. Process complete hone par status update mil jayega.",
-        "en": "Your refund request has been recorded. You will be informed "
-              "once the process is complete.",
-        "es": "Su solicitud de reembolso ha sido registrada. Se le "
-              "informará cuando el proceso esté completo.",
-        "fr": "Votre demande de remboursement a été enregistrée. Vous "
-              "serez informé une fois le processus terminé.",
-        "de": "Ihre Rückerstattungsanfrage wurde aufgenommen. Sie werden "
-              "informiert, sobald der Vorgang abgeschlossen ist.",
-        "pt": "Sua solicitação de reembolso foi registrada. Você será "
-              "informado quando o processo for concluído.",
-    },
-    "refund_info": {
-        "hi": "रिफंड स्वीकृत होने के 5-7 कार्यदिवसों में आपके खाते में आ जाता है।",
-        "te": "రీఫండ్ ఆమోదించబడిన 5-7 పనిదినాల్లో మీ ఖాతాలో జమ అవుతుంది.",
-        "hinglish": "Refund approve hone ke 5-7 working days mein aapke account mein aa jata hai.",
-        "en": "Refunds reach your account within 5-7 working days of "
-              "approval.",
-        "es": "El reembolso llega a su cuenta dentro de 5-7 días hábiles "
-              "después de la aprobación.",
-        "fr": "Le remboursement arrive sur votre compte dans les 5-7 jours "
-              "ouvrés suivant l'approbation.",
-        "de": "Die Rückerstattung trifft innerhalb von 5-7 Werktagen nach "
-              "Genehmigung auf Ihrem Konto ein.",
-        "pt": "O reembolso chega à sua conta em 5-7 dias úteis após a "
-              "aprovação.",
-    },
-    "delivery_eta": {
-        "hi": "आपका ऑर्डर 3-5 कार्यदिवसों में डिलीवर होने की उम्मीद है।",
-        "te": "మీ ఆర్డర్ 3-5 పనిదినాల్లో డెలివరీ అవుతుందని భావిస్తున్నాము.",
-        "hinglish": "Aapka order 3-5 working days mein deliver hone ki expectation hai.",
-        "en": "Your order is expected to be delivered within 3-5 working "
-              "days.",
-        "es": "Se espera que su pedido llegue dentro de 3-5 días hábiles.",
-        "fr": "Votre commande devrait être livrée dans les 3-5 jours "
-              "ouvrés.",
-        "de": "Ihre Bestellung wird voraussichtlich innerhalb von 3-5 "
-              "Werktagen geliefert.",
-        "pt": "Seu pedido deve ser entregue em 3-5 dias úteis.",
-    },
-    "default": {
-        "hi": "आपका अनुरोध दर्ज कर लिया गया है। हमारी टीम जल्द ही आपकी सहायता करेगी।",
-        "te": "మీ అభ్యర్థన నమోదు చేయబడింది. మా బృందం త్వరలో మీకు సహాయం చేస్తుంది.",
-        "hinglish": "Aapka request note kar liya gaya hai. Hamari team jald hi aapki help karegi.",
-        "en": "Your request has been recorded. Our team will assist you "
-              "shortly.",
-        "es": "Su solicitud ha sido registrada. Nuestro equipo le ayudará "
-              "pronto.",
-        "fr": "Votre demande a été enregistrée. Notre équipe vous aidera "
-              "bientôt.",
-        "de": "Ihre Anfrage wurde aufgenommen. Unser Team wird Ihnen in "
-              "Kürze helfen.",
-        "pt": "Sua solicitação foi registrada. Nossa equipe irá ajudá-lo "
-              "em breve.",
-    },
-}
-
-# The es/fr/de/pt templates are LLM-authored SYNTHETIC phrasings (es: LatAm-
-# neutral; fr: EU vous-form; de: formal Sie; pt: Brazilian-neutral você) —
-# real-traffic validation pending, same as the intent exemplars.
-_SERVED_REPLY_LANGS = frozenset(REPLY_TEMPLATES["default"])
-
-NOTED_REPLIES = {
-    "hi": "आपका अनुरोध दर्ज कर लिया गया है।",
-    "te": "మీ అభ్యర్థన నమోదు చేయబడింది.",
-    "hinglish": "Aapka request note kar liya gaya hai.",
-    "en": "Your request has been noted.",
-    "es": "Su solicitud ha sido registrada.",
-    "fr": "Votre demande a été enregistrée.",
-    "de": "Ihre Anfrage wurde aufgenommen.",
-    "pt": "Sua solicitação foi registrada.",
-}
-
-# M6a: empathy lines for HIGH frustration, in the customer's language
-# (languages without an entry get no prefix — never a wrong-language one).
-EMPATHY_PREFIXES = {
-    "en": "I'm really sorry about the trouble. ",
-    "hinglish": "Mujhe khed hai ki aapko pareshani hui. ",
-    "hi": "मुझे खेद है कि आपको परेशानी हुई। ",
-    "te": "ఇబ్బంది కోసం క్షమించండి. ",
-    "es": "Lamento mucho las molestias. ",
-    "fr": "Je suis vraiment désolé pour ce désagrément. ",
-    "de": "Es tut mir wirklich leid für die Umstände. ",
-    "pt": "Sinto muito pelo inconveniente. ",
-}
-
-_APOLOGY_MARKERS = ("sorry", "apolog", "khed", "kshama", "माफ", "खेद",
-                    "క్షమించ", "lamento", "disculp", "désolé", "desole",
-                    "leid", "entschuldig")
-
-
-def _already_apologetic(text: str) -> bool:
-    low = text.lower()
-    return any(m in low for m in _APOLOGY_MARKERS)
-
-
-def _acceptable_reply_langs(language: str | None) -> frozenset | None:
-    """Reply languages a turn may legitimately come back in; None disables
-    the guardrail (every en/None turn). hinglish accepts Roman hinglish or
-    Devanagari Hindi (a Hindi speaker reads both natively); native languages
-    are strict."""
-    if not language or language == "en":
-        return None
-    if language == "hinglish":
-        return frozenset({"hinglish", "hi"})
-    return frozenset({language})
-
-
-def _ref_for_template(refs: list[str]) -> str:
-    """The customer's order-id-shaped reference (keywords are not refs)."""
-    for r in refs:
-        if r.upper().startswith("ORD") or r.isdigit():
-            return r
-    return ""
-
-
-def _canned_reply(action: str | None, language: str, refs: list[str]) -> str:
-    # A language outside the template tables gets neutral English — the old
-    # "else 'hi'" fallback served Hindi text to es/fr/de/pt customers.
-    lang_key = language if language in _SERVED_REPLY_LANGS else "en"
-    table = REPLY_TEMPLATES.get(action or "") or REPLY_TEMPLATES["default"]
-    tpl = table.get(lang_key) or REPLY_TEMPLATES["default"][lang_key]
-    return tpl.format(ref=_ref_for_template(refs))
-
-ACTION_RE = re.compile(r"ACTION:\s*([a-z_]+)", re.IGNORECASE)# Order IDs / reference numbers the customer may state (Latin or Devanagari).
-ORDER_ID_RE = re.compile(
-    r"\b(?:ORD[-#]?\s*)?(\d{4,10})\b", re.IGNORECASE
-)
-
-# Intent keywords that must appear in the reply when the customer states them
-# are TOOL-CONTRACT data now (Sprint A3): ToolSpec.facts on the deployment's
-# declared specs (DEFAULT_TOOL_SPECS + tenant tools.yaml overrides), with the
-# demo tenant contracts (voiceagent.demo_data.DEMO_TENANT_CONTRACT_SPECS) as
-# the no-bundle fallback.
-def echo_spec_registry(specs: "dict | None", demo: bool = True) -> dict:
-    """ONE shared resolution of the echo guardrail's fact groups, used by
-    Agent.__init__ and extract_required_references (single source, no
-    copy-paste). `specs` is the wired tool surface (gateway.specs) or None;
-    `demo` is True whenever no real tenant bundle is declared — the demo
-    tenant contracts are then merged in (over the code defaults, under the
-    wired specs) so the historical keyword guarantees are enforced on every
-    demo wiring. A declared tenant bundle suppresses the demo contracts
-    entirely: only the bundle's own specs apply."""
-    from voiceagent.demo_data import DEMO_TENANT_CONTRACT_SPECS
-    from voiceagent.tools import DEFAULT_TOOL_SPECS
-    registry: dict = {}
-    if demo:
-        registry.update(DEFAULT_TOOL_SPECS)
-        registry.update(DEMO_TENANT_CONTRACT_SPECS)
-    if specs:
-        registry.update(specs)
-    return registry
-
-
-def extract_required_references(user_text: str,
-                                specs: "dict | None" = None,
-                                demo: bool = True) -> list[str]:
-    """References the reply must contain: the customer's stated order id(s)
-    and any declared tool-contract fact the customer stated. Shared with
-    chat.py (turn records) and the echo guardrail. The scan is
-    FIRST-MATCH-PER-SPEC (one fact per spec, then move on) — exactly the
-    historical KEYWORD_FACTS group semantics: e.g. "my recharge failed" pins
-    only 'fail' (recharge's first fact), never both 'fail' and 'recharge'.
-    specs=None resolves the demo registry (the historical default for callers
-    with no tool surface)."""
-    registry = echo_spec_registry(specs, demo)
-    refs: list[str] = []
-    for m in ORDER_ID_RE.finditer(user_text):
-        refs.append(m.group(0))
-    lower = user_text.lower()
-    for spec in registry.values():
-        for f in spec.facts:
-            if f in lower:
-                if f not in refs:  # cross-spec duplicates stay single
-                    refs.append(f)
-                break  # first match per spec — historical group semantics
-    return refs
-
-
-def extract_action(text: str) -> str | None:
-    m = ACTION_RE.search(text)
-    return m.group(1).lower() if m else None
-
-
-def find_order_id(text: str) -> str | None:
-    """First order-id match in text ('ORD-1234' or bare digits), else None.
-    The single entry point to ORDER_ID_RE outside this module."""
-    m = ORDER_ID_RE.search(text)
-    return m.group(0) if m else None
-
-
-def find_recent_order_id(history: list["Turn"]) -> str | None:
-    """Most recent order id in a conversation (scan newest -> oldest)."""
-    for t in reversed(history):
-        oid = find_order_id(t.text)
-        if oid:
-            return oid
-    return None
+        reply (signature kept). Task D1 moved the implementation VERBATIM to
+        voiceagent.reply_guards.repair_reply — the guard pipeline module."""
+        return repair_reply(self._llm, self._system_prompt,
+                            self._use_template, violating_reply, user_text,
+                            language, allowed_langs, required_refs)
 
 
 # History replay budget: ~400 tokens at ~4 chars/token.
@@ -639,42 +501,14 @@ def render_history(turns: list["Turn"]) -> str:
     return "\n\n".join(reversed(chosen))
 
 
-def _patch_reply(reply: str, required: list[str]) -> str:
-    """Deterministic guardrail: prepend a confirmation sentence that echoes
-    any customer reference the LLM failed to include. Returns reply unchanged
-    if nothing is missing."""
-    missing = [r for r in required if r.lower() not in reply.lower()]
-    if not missing:
-        return reply
-    head = reply.split("\n\n", 1)[0]
-    confirm = (
-        f"I understand — this is regarding {', '.join(missing)}. "
-    )
-    if reply.strip().startswith(("ACTION:", "response", " thinking")):
-        return confirm.strip() + "\n\n" + reply.strip()
-    return confirm + reply
-
-
-def strip_action_lines(text: str) -> str:
-    """Remove the LLM's ACTION scaffolding lines from a customer-visible
-    reply (and collapse the blank-line runs they leave behind). The action
-    decision comes from the deterministic classifier (or fallback
-    extract_action), so the ACTION line itself must never reach the customer.
-    Call only after the action has been captured and the echo guardrail has
-    run."""
-    kept = [ln for ln in text.split("\n") if not ACTION_RE.search(ln)]
-    out = "\n".join(kept)
-    out = re.sub(r"\n{3,}", "\n\n", out)
-    return out.strip()
-
-
 def build_agent(index, llm, classifier=None, policy=None, decision_log=None,
                 tenant=None, sentiment_store=None, tool_runner=None,
-                erp=None, actions: list[str] | None = None) -> Agent:
+                erp=None, actions: list[str] | None = None,
+                intent_memory=None) -> Agent:
     agent = Agent(index, llm, classifier=classifier, policy=policy,
                   decision_log=decision_log, tenant=tenant,
                   sentiment_store=sentiment_store, tool_runner=tool_runner,
-                  erp=erp, actions=actions)
+                  erp=erp, actions=actions, intent_memory=intent_memory)
     # Real LlamaCppLLM has chat_template; FakeLLM (tests) does not.
     agent._use_template = hasattr(llm, "chat_template")
     return agent

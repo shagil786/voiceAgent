@@ -380,3 +380,35 @@ def test_campaign_turn_injects_goal_and_lead_context():
     assert result.reply.startswith("Hi Rohan")
     assert result.session_id == "camp-1"
     assert len(orch.memory.history("camp-1")) == 2
+
+
+# ---------------------------------------------------------------------------
+# Task D4: knowledge provenance. When the turn's system prompt included the
+# deployment's knowledge block, the TurnResult records WHICH knowledge ids
+# were in context — observability for tracing which KB documents informed a
+# reply (spoken citations stay out of scope by design).
+# ---------------------------------------------------------------------------
+
+def test_turn_result_records_knowledge_ids_in_context():
+    brain = ScriptedBrain([reply("Returns are accepted within 7 days.")])
+    orch = make_orchestrator(brain, None)
+    res = orch.handle_turn("s-kb", "what is your return policy?")
+    assert res.knowledge_ids == ["returns"]
+
+
+def test_knowledge_ids_preserve_declaration_order():
+    brain = ScriptedBrain([reply("Answer.")])
+    orch = make_orchestrator(brain, None)
+    orch._deployment.knowledge = {"zeta": "Z text.", "alpha": "A text.",
+                                  "mid": "M text."}
+    res = orch.handle_turn("s-order", "hello")
+    assert res.knowledge_ids == ["zeta", "alpha", "mid"]
+
+
+def test_knowledge_ids_empty_when_deployment_has_no_knowledge():
+    brain = ScriptedBrain([reply("Answer.")])
+    orch = Orchestrator(brain=FrontierAgentBridge(brain), runner=None,
+                        memory=InMemoryMemory())
+    orch.deploy(Deployment(name="bare", system_prompt="You are."))
+    res = orch.handle_turn("s-bare", "hello")
+    assert res.knowledge_ids == []

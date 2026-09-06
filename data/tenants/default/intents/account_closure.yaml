@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- close my account
+- delete my account
+- खाता बंद करो
+- how do I close my account
+- मेरा अकाउंट बंद कर दो
+- अकाउंट डिलीट कैसे करूं
+- खाता हमेशा के लिए बंद करना है
+- என் கணக்கை மூடவும்
+- கணக்கை எப்படி நீக்குவது
+- கணக்கை நிரந்தரமாக மூட வேண்டும்
+- నా ఖాతా మూసివేయండి
+- ఖాతా ఎలా డిలీట్ చేయాలి
+- ఖాతా శాశ్వతంగా మూసివేయాలి

@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- change my delivery address
+- update shipping address
+- पता बदलना है
+- my address is wrong, change it
+- मेरा डिलीवरी पता बदलना है
+- डिलीवरी एड्रेस अपडेट करो
+- गलत पते पर ऑर्डर गया है, पता बदलो
+- என் டெலிவரி முகவரியை மாற்ற வேண்டும்
+- டெலிவரி முகவரியை புதுப்பிக்கவும்
+- தவறான முகவரிக்கு ஆர்டர் சென்றது, மாற்றவும்
+- నా డెలివరీ చిరునామా మార్చాలి
+- డెలివరీ అడ్రస్ అప్‌డేట్ చేయండి
+- తప్పు చిరునామాకు ఆర్డర్ వెళ్ళింది, మార్చండి

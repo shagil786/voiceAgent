@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- network is down
+- network nahi chal raha
+- internet not working
+- no signal on my phone
+- नेटवर्क आ नहीं रहा
+- मेरे फोन में सिग्नल नहीं है
+- इंटरनेट चल नहीं रहा है
+- நெட்வொர்க் வரவில்லை
+- என் போனில் சிக்னல் இல்லை
+- இணையம் வேலை செய்யவில்லை
+- నెట్‌వర్క్ రావడం లేదు
+- నా ఫోన్‌లో సిగ్నల్ లేదు
+- ఇంటర్నెట్ పని చేయడం లేదు

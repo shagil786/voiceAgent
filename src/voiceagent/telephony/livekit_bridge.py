@@ -57,6 +57,10 @@ class BridgeSession:
             self._play.extend(chunk_frames(upsampled, 10, 48000))
             self._vad.barge_in.start_speaking(f"turn-{next(self._turn_ids)}")
 
+    def has_pending_playback(self) -> bool:
+        """True while unplayed chunks remain (barge-in clears the queue)."""
+        return bool(self._play)
+
     def take_playback(self) -> bytes | None:
         if self._stopped or not self._play:
             return None

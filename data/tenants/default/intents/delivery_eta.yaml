@@ -1,0 +1,26 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+# M5c: informational ETA questions about a pending delivery —
+# distinct from order_status ('where is it') and delivery_delay
+# ('it is late').
+- when will my order be delivered
+- order kab tak aayega
+- delivery kab hogi
+- how many days will delivery take
+- when will my order arrive
+- mera order kab milega
+- delivery date kya hai
+- when can I expect my delivery
+- मेरा ऑर्डर कितने दिन में पहुंचेगा
+- डिलीवरी कब तक होगी
+- ऑर्डर की डिलीवरी डेट क्या है
+- என் ஆர்டர் எத்தனை நாட்களில் வரும்
+- டெலிவரி எப்போது நடைபெறும்
+- ஆர்டர் டெலிவரி தேதி என்ன
+- నా ఆర్డర్ ఎన్ని రోజుల్లో వస్తుంది
+- ఆర్డర్ ఎప్పుడు డెలివరీ అవుతుంది
+- ఆర్డర్ డెలివరీ తేదీ ఏమిటి

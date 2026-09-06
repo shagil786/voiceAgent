@@ -1,0 +1,27 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+# M5b: order-status queries that carry an ORD reference were being
+# out-pulled in the latin space by the refund exemplar 'refund my
+# order ORD-12345' (70 en eval rows -> refund, en 0.859). The ORD
+# exemplars below mirror that reference pattern for order_status.
+- Where is my order?
+- Mera order abhi tak nahi aaya
+- मेरा ऑर्डर कहाँ है
+- order delivery status
+- has my order shipped
+- where is my order ORD-12345
+- my order ORD-98765 has not arrived yet
+- status of my order ORD-45678
+- मेरा ऑर्डर कहां तक पहुंचा है?
+- ऑर्डर का स्टेटस बताओ
+- मेरा ऑर्डर कब शिप होगा
+- என் ஆர்டர் எந்த நிலையில் உள்ளது?
+- என் ஆர்டர் எப்போது அனுப்பப்படும்
+- ஆர்டர் டிராக்கிங் தகவல் வேண்டும்
+- నా ఆర్డర్ ఎక్కడిది వచ్చింది?
+- నా ఆర్డర్ స్టేటస్ చెప్పండి
+- నా ఆర్డర్ ఇంకా రాలేదు

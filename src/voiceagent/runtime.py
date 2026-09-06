@@ -40,6 +40,21 @@ from voiceagent.tenant import DEFAULT_CURRENCY, Tenant, compile_persona_block
 # Deployment (system prompt, gateway tools, knowledge) per business; the policy
 # file lives in git as the company's support/compliance artifact.
 DEFAULT_POLICY_PATH = "data/policies/policies.yaml"
+
+# The platform's BUILT-IN demo tenant: a COMMITTED bundle under
+# data/tenants/default/ (unlike customer bundles such as pizzapal, which are
+# gitignored — this one IS the platform's shipped demo tenant). Task E moved
+# the demo identity/knowledge/ERP fixture out of voiceagent.demo_data into
+# this bundle, so the no-tenant path loads real tenant DATA through the same
+# Tenant machinery as any named customer instead of importing demo content.
+# Anchored to the repo root (src/voiceagent/ -> parents[2]) so resolution does
+# not depend on the process cwd.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_TENANT_BUNDLE = _REPO_ROOT / "data" / "tenants" / "default"
+
+# The default (demo) DEPLOYMENT name — domain data, a literal now that the
+# bundle itself is named "default" (the Deployment name is the historical
+# "acme_support", byte-identical by test pin).
 DEFAULT_DEPLOYMENT_NAME = "acme_support"
 
 # Platform-level governance boilerplate for the frontier system prompt: the
@@ -60,39 +75,54 @@ PLATFORM_PROMPT_BASE = (
     "human approval, human handoff) — never say you are doing something you "
     "have no tool for. If the customer is upset or asks for a human agent, "
     "propose escalate_to_human with a short reason.")
-_BUILTIN_IDENTITY = "You are Acme's voice support agent."
 
-# The built-in tool surface and knowledge: what a deployment gets when no
-# tenant bundle overrides them. Keys are code bindings (DEFAULT_TOOL_SPECS);
-# this dict only decides what the brain may PROPOSE.
-BUILTIN_GATEWAY_TOOLS: dict[str, dict] = {
-    "fetch_order_status": {"action": "order_status"},
-    "reschedule_delivery": {"action": "reschedule_delivery"},
-    "cancel_order": {"action": "cancel_order"},
-    "escalate_to_human": {
-        "action": "escalate_to_human",
-        "side_effects": True,
-        "description": "Page a human agent to take over this call. "
-                       "Provide a short reason for the handoff.",
-        "parameters": {"type": "object",
-                       "properties": {"reason": {"type": "string"}},
-                       "required": ["reason"]},
-    },
-    "initiate_return": {
-        "action": "initiate_return",
-        "side_effects": True,
-        "description": "Request a return for a shipped or delivered "
-                       "order (params: order_id, reason).",
-        "parameters": {"type": "object",
-                       "properties": {"order_id": {"type": "string"},
-                                      "reason": {"type": "string"}},
-                       "required": ["order_id", "reason"]},
-    },
-}
-BUILTIN_KNOWLEDGE: dict[str, str] = {
-    "eta": "Deliveries occur between 9:00 and 19:00 local time.",
-    "cancel_policy": "Orders that already shipped cannot be cancelled.",
-}
+
+# The built-in tool surface: DERIVED from DEFAULT_TOOL_SPECS so a new tool
+# binding is automatically proposeable by the brain — the proposal surface can
+# never drift from the execution bindings again (order_lookup was invisible
+# for a day because this used to be a hand-maintained dict). Crafted
+# descriptions below override the generic wording where the action needs one.
+
+def _auto_gateway_tools() -> dict[str, dict]:
+    """Pure derivation: every DEFAULT_TOOL_SPECS binding becomes a brain-
+    proposeable tool. ALL metadata (action, side_effects, description,
+    parameters) comes from the ToolSpec declared next to the binding — zero
+    hand-maintained entries here, so adding a tool anywhere never requires
+    touching runtime.py. Tenant tools.yaml may still override descriptions
+    (data beats defaults)."""
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+    out: dict[str, dict] = {}
+    for name, spec in DEFAULT_TOOL_SPECS.items():
+        meta: dict = {
+            "action": spec.action or name,
+            "side_effects": spec.side_effects,
+            "parameters": {
+                "type": "object",
+                "properties": {p: {"type": "string"} for p in spec.params},
+                "required": list(spec.params),
+            },
+        }
+        if spec.description:
+            meta["description"] = spec.description
+        out[name] = meta
+    return out
+
+
+BUILTIN_GATEWAY_TOOLS: dict[str, dict] = _auto_gateway_tools()
+
+
+def _load_default_bundle_knowledge() -> dict[str, str]:
+    """The default bundle's KB documents (knowledge/*.md), loaded straight
+    from the committed bundle — the historical DEMO_BUILTIN_KNOWLEDGE, now
+    tenant data. Empty when the bundle is unavailable (installed-package
+    edge): the fallback is a matter of correctness only for the repo layout
+    this module ships in."""
+    d = DEFAULT_TENANT_BUNDLE / "knowledge"
+    if not d.is_dir():
+        return {}
+    return _cap_knowledge({f.stem: f.read_text(encoding="utf-8")
+                           for f in sorted(d.glob("*.md"))})
+
 
 # Total injected knowledge is capped because deploy() joins it into the
 # system prompt — an unbounded KB would bloat every single turn.
@@ -136,6 +166,15 @@ def gateway_tools_from_yaml(path: str | Path) -> dict[str, dict]:
             from voiceagent.tools import parse_facts
             meta["facts"] = list(parse_facts(meta["facts"],
                                              f"tools.yaml '{name}'"))
+        # Task E: optional param-type / numeric-bound constraints — validated
+        # here (CI gate) AND in ToolGateway.from_yaml / specs_with_yaml_facts
+        # (enforcement), same one-contract pattern as `facts`.
+        if "param_types" in meta:
+            from voiceagent.tools import parse_param_types
+            parse_param_types(meta["param_types"], f"tools.yaml '{name}'")
+        if "param_bounds" in meta:
+            from voiceagent.tools import parse_param_bounds
+            parse_param_bounds(meta["param_bounds"], f"tools.yaml '{name}'")
         surface[name] = dict(meta)
     return surface
 
@@ -154,6 +193,9 @@ def _cap_knowledge(knowledge: dict[str, str]) -> dict[str, str]:
         capped[kid] = text
         total += len(text)
     return capped
+
+
+BUILTIN_KNOWLEDGE: dict[str, str] = _load_default_bundle_knowledge()
 
 
 def _bundle_gateway_tools(tenant: Tenant) -> dict[str, dict]:
@@ -203,15 +245,27 @@ def make_deployment(
     """Build the governed Deployment: prompt + gateway tool surface + inline
     knowledge. With a tenant bundle, identity/persona, tool surface,
     knowledge and metadata all come from data/tenants/<name>/ — onboarding a
-    customer is data, not code. tenant=None reproduces the built-in Acme
-    deployment byte-identically (policy_path is accepted for API symmetry;
-    the policy engine is wired in build_orchestrator)."""
+    customer is data, not code.
+
+    tenant=None loads the COMMITTED default bundle (data/tenants/default/)
+    through the SAME Tenant.load machinery as named tenants — the platform's
+    built-in demo tenant is a bundle, not a Python import (Task E). The
+    composed no-tenant Deployment keeps its historical byte-identical shape
+    (name `acme_support`, identity-first prompt, built-in tool surface, no
+    metadata/actions): the bundle supplies the bytes, the composition is the
+    pinned platform default. (policy_path is accepted for API symmetry; the
+    policy engine is wired in build_orchestrator.)"""
     if tenant is None:
+        tenant = Tenant.load(DEFAULT_TENANT_BUNDLE)
         return Deployment(
             name=DEFAULT_DEPLOYMENT_NAME,
-            system_prompt=_BUILTIN_IDENTITY + " " + PLATFORM_PROMPT_BASE,
+            # The identity sentence compiles from the bundle's declared
+            # persona (flat-string form -> "You are <role>.") — the same
+            # compiler named tenants go through.
+            system_prompt=compile_persona_block(tenant.config.persona)
+                          + " " + PLATFORM_PROMPT_BASE,
             gateway_tools=dict(BUILTIN_GATEWAY_TOOLS),
-            knowledge=dict(BUILTIN_KNOWLEDGE),
+            knowledge=_bundle_knowledge(tenant),
         )
     return Deployment(
         name=tenant.config.name,
@@ -219,6 +273,9 @@ def make_deployment(
                       + compile_persona_block(tenant.config.persona),
         gateway_tools=_bundle_gateway_tools(tenant),
         knowledge=_bundle_knowledge(tenant),
+        # Declared greeting: instant pickup line (tenant data); '' keeps the
+        # governed greeting-turn path.
+        greeting=str(getattr(tenant.config, "greeting", "") or ""),
         # Sprint A1: the bundle DECLARES its action vocabulary (intents/ +
         # tools.yaml + optional tenant.json extras); None when it declares
         # nothing. No business list ships in core.
@@ -226,6 +283,46 @@ def make_deployment(
         metadata={"languages": tenant.language_set(),
                   "tenant": tenant.config.name},
     )
+
+
+def _audit_log_from_env(env: dict[str, str] | None):
+    """Task D3: the audit trail is PERSISTENT when VOICEAGENT_AUDIT_DB names
+    a SQLite path (wired into BOTH the runner and the orchestrator audit
+    seams); absent config keeps the in-memory DecisionLog — zero config
+    change for existing deployments. Reads the passed env dict (falling back
+    to os.environ) with the same precedence as the frontier config."""
+    e = os.environ if env is None else env
+    audit_db = e.get("VOICEAGENT_AUDIT_DB")
+    if audit_db:
+        from voiceagent.decisionlog import SqliteDecisionLog
+        return SqliteDecisionLog(audit_db)
+    return DecisionLog()
+
+
+def _intent_memory_from_env(env: dict[str, str] | None):
+    """ADR-002: the learned intent memory is OPT-IN — VOICEAGENT_MEMORY_DB
+    naming a SQLite path builds an IntentMemoryStore (episodic fragments +
+    consolidated prototypes, wired into the live turn path like the audit
+    log); unset config returns None and the whole memory layer is inert
+    (zero behavior change for existing deployments). A unusable DB path
+    fails OPEN to None: a bad path must never take the process down. The
+    store is built EAGER-embedding (M3): the SentenceTransformer loads at
+    process start, never mid-call."""
+    e = os.environ if env is None else env
+    memory_db = e.get("VOICEAGENT_MEMORY_DB")
+    if not memory_db:
+        return None
+    from voiceagent.memory import IntentMemoryStore
+    try:
+        return IntentMemoryStore(memory_db, eager=True)
+    except Exception:
+        return None
+
+
+# Retrieval swap (ADR-001/002) lives in voiceagent.memory next to the shared
+# embedder it conflict-guards with; re-exported here so every wiring site
+# (and older imports) keeps one name: runtime.classifier_exemplars.
+from voiceagent.memory import classifier_exemplars  # noqa: E402
 
 
 def build_orchestrator(
@@ -238,6 +335,7 @@ def build_orchestrator(
     decision_log: Any | None = None,
     deployment: Deployment | None = None,
     max_tool_rounds: int = 3,
+    intent_memory: Any | None = None,
 ) -> Orchestrator | None:
     """Assemble the governed Orchestrator. Returns None when no frontier brain
     is configured (VOICEAGENT_FRONTIER_URL unset) so callers fail FAST with an
@@ -248,14 +346,17 @@ def build_orchestrator(
     by bundle PATH; when it resolves (explicit arg, else VOICEAGENT_TENANT),
     the bundle's policies.yaml and Deployment drive the brain. `erp`/`memory`/
     `decision_log` are injectable so a real backend or a test double can be
-    substituted without touching the wiring.
+    substituted without touching the wiring. `intent_memory` (ADR-002) is the
+    learned intent memory; None defers to VOICEAGENT_MEMORY_DB (opt-in —
+    unset keeps the memory layer fully inert).
     """
     cfg = config_from_env(env)
     if cfg is None:
         return None
 
     bundle = _resolve_tenant(tenant, env)
-    log = decision_log or DecisionLog()
+    log = decision_log or _audit_log_from_env(env)
+    intent_memory = intent_memory or _intent_memory_from_env(env)
     # The bundle's policy file IS the least-privilege artifact: undeclared
     # actions get a DENY fed back to the brain. Only a bundle that declares no
     # policy file falls back to the platform policy_path.
@@ -280,6 +381,7 @@ def build_orchestrator(
     orch = Orchestrator(
         brain, runner=runner, memory=memory or InMemoryMemory(),
         decision_log=log, max_tool_rounds=max_tool_rounds,
-        actions=dep.actions)  # Sprint A1: resolved vocabulary into the brain
+        actions=dep.actions,  # Sprint A1: resolved vocabulary into the brain
+        intent_memory=intent_memory)  # ADR-002: learned intent memory
     orch.deploy(dep)
     return orch

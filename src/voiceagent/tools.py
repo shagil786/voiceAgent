@@ -15,10 +15,33 @@ tenant bundle's tools.yaml; the Gateway/Runner code is identical.
 from __future__ import annotations
 
 import copy
+import json
+import math
+import re
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+
+# The default (demo) tenant's ERP fixture: a file in the COMMITTED default
+# bundle (data/tenants/default/erp_fixture.json — {"orders": ..., "customers":
+# ...}) — demo ERP data is tenant data, not a Python import (Task E). Anchored
+# to the repo root (src/voiceagent/ -> parents[2]) so resolution does not
+# depend on the process cwd.
+DEFAULT_BUNDLE_ERP_FIXTURE = (Path(__file__).resolve().parents[2]
+                              / "data" / "tenants" / "default"
+                              / "erp_fixture.json")
+
+
+def _default_erp_fixture() -> tuple[dict, dict]:
+    """(orders, customers) from the committed default bundle; empty dicts
+    when the bundle file is unavailable (never a hard import-time failure)."""
+    p = DEFAULT_BUNDLE_ERP_FIXTURE
+    if not p.exists():
+        return {}, {}
+    data = json.loads(p.read_text(encoding="utf-8"))
+    return (data.get("orders", {}) or {}, data.get("customers", {}) or {})
 
 
 # ---------------------------------------------------------------------------
@@ -50,28 +73,22 @@ class SupportBackend(Protocol):
     def record_handoff(self, reason: str) -> dict: ...
 
 
+def _id_shape(order_id: str) -> str:
+    """Comparison shape for order IDs: alphanumeric uppercase, so 'ORD4821',
+    'ord-4821' and 'ORD-4821' all match."""
+    return "".join(ch for ch in str(order_id) if ch.isalnum()).upper()
+
+
 class MockERP:
     """In-memory ERP with the demo customer's orders and failure injection."""
 
     def __init__(self) -> None:
-        self.orders: dict[str, dict] = {
-            "ORD-4821": {
-                "order_id": "ORD-4821", "customer_id": "CUST-001",
-                "status": "CONFIRMED", "amount": 1299.0,
-                "items": ["Running Shoes"], "delivery_date": "2026-09-05",
-                "address": "12 MG Road, Bangalore",
-            },
-            "ORD-7734": {
-                "order_id": "ORD-7734", "customer_id": "CUST-001",
-                "status": "SHIPPED", "amount": 6500.0,
-                "items": ["Smart Watch"], "delivery_date": "2026-09-02",
-                "tracking_url": "https://track.fake/7734",
-            },
-        }
-        self.customers: dict[str, dict] = {
-            "CUST-001": {"name": "Shagil", "phone": "+91-9876543210",
-                         "orders": ["ORD-4821", "ORD-7734"]},
-        }
+        # Demo fixture data is the committed default tenant bundle's
+        # erp_fixture.json (loaded lazily, deep-copied so one instance's
+        # mutations never leak into another).
+        orders, customers = _default_erp_fixture()
+        self.orders: dict[str, dict] = copy.deepcopy(orders)
+        self.customers: dict[str, dict] = copy.deepcopy(customers)
         self.refunds: list[dict] = []
         self.handoffs: list[dict] = []
         # Failure injection: the next mutating/reading operation raises like
@@ -86,6 +103,15 @@ class MockERP:
     def get_order(self, order_id: str) -> dict | None:
         self._check_live()
         o = self.orders.get(order_id)
+        if o is None:
+            # Callers and brains spell IDs loosely ('ORD4821' vs the stored
+            # 'ORD-4821') — match on the alphanumeric-uppercase shape, the
+            # same normalization idea as phone lookup. Exact key always wins.
+            want = _id_shape(order_id)
+            for k, v in self.orders.items():
+                if _id_shape(k) == want:
+                    return copy.deepcopy(v)
+            return None
         return copy.deepcopy(o) if o else None
 
     def lookup_orders_by_phone(self, phone: str) -> list[dict]:
@@ -165,6 +191,86 @@ class ToolSpec:
     # declared here per tool (code defaults, tools.yaml overrides), never
     # hardcoded in the guard.
     facts: tuple[str, ...] = ()
+    # Optional numeric bounds: {param: (min, max)} enforced after coercion —
+    # a rating must be 1..10, a partial refund 0..cap, etc. Declared data.
+    param_bounds: dict = field(default_factory=dict)
+    # Tool metadata the brain's proposal surface needs — declared HERE, next
+    # to the binding, so adding a tool never requires touching runtime.py:
+    # side_effects (mutating? default True = safest assumption) drives the
+    # confirmation/governance hints; description is what the frontier sees.
+    side_effects: bool = True
+    description: str = ""
+    # The POLICY/intent action name this tool is governed under (policies.yaml
+    # rules are written against actions, e.g. 'order_status', 'refund').
+    # Default: the tool name itself.
+    action: str = ""
+    # Task D2: light param-type validation at the governed boundary. Maps a
+    # declared param name to one of PARAM_TYPES ("string" | "number" |
+    # "integer" | "boolean"); params WITHOUT an entry default to "string".
+    # The gateway coerces safe cases (amount "200" -> 200.0) and rejects
+    # impossible ones with `invalid_param: <name>` before any ERP call.
+    param_types: dict[str, str] = field(default_factory=dict)
+
+
+# The only param types the boundary understands (Task D2).
+PARAM_TYPES = ("string", "number", "integer", "boolean")
+
+
+def _coerce_param(name: str, value, declared: str | None) -> tuple[bool, object]:
+    """Validate/coerce one param against its declared type (None -> the
+    "string" default). Returns (ok, coerced_value); ok=False means the value
+    can never be that type -> the caller rejects with `invalid_param: <name>`.
+
+    Safe coercions only: bool is NEVER a number/integer (it subclasses int);
+    strings parse for number/integer/boolean; anything else coerces to str
+    under the "string" default so a brain that quotes a value still works."""
+    t = declared or "string"
+    if t == "string":
+        return True, (value if isinstance(value, str) else str(value))
+    if t == "number":
+        if isinstance(value, bool):
+            return False, None
+        if isinstance(value, (int, float)):
+            f = float(value)
+            return (True, f) if math.isfinite(f) else (False, None)
+        if isinstance(value, str):
+            # reject underscore literals / nan / inf before float() accepts them
+            if not re.fullmatch(r"[+-]?(\d+(\.\d*)?|\.\d+)", value.strip()):
+                return False, None
+        if isinstance(value, str):
+            try:
+                return True, float(value)
+            except ValueError:
+                return False, None
+        return False, None
+    if t == "integer":
+        if isinstance(value, bool):
+            return False, None
+        if isinstance(value, int):
+            return True, value
+        if isinstance(value, float) and not math.isfinite(value):
+            return False, None
+        if isinstance(value, float) and value.is_integer():
+            return True, int(value)
+        if isinstance(value, str):
+            try:
+                return True, int(value)
+            except ValueError:
+                return False, None
+        return False, None
+    if t == "boolean":
+        if isinstance(value, bool):
+            return True, value
+        if isinstance(value, str):
+            low = value.strip().lower()
+            if low in ("true", "1", "yes"):
+                return True, True
+            if low in ("false", "0", "no"):
+                return True, False
+        return False, None
+    # An unknown declared type: pass through unchanged (declaration bug, not
+    # a runtime rejection — the boundary never invents constraints).
+    return True, value
 
 
 def parse_facts(value, where: str = "tools.yaml") -> tuple[str, ...]:
@@ -175,6 +281,53 @@ def parse_facts(value, where: str = "tools.yaml") -> tuple[str, ...]:
         raise ValueError(f"{where}: 'facts' must be a non-empty list of "
                          f"non-empty strings, got {value!r}")
     return tuple(value)
+
+
+def parse_param_types(value, where: str = "tools.yaml") -> dict[str, str]:
+    """Validate a `param_types` declaration: a non-empty mapping of param
+    name -> one of PARAM_TYPES (the same set the gateway boundary coerces
+    against). Raises ValueError with a deploy-gate-friendly message on bad
+    data — Task E threads these through tools.yaml."""
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{where}: 'param_types' must be a non-empty "
+                         f"mapping of param -> one of {PARAM_TYPES}, "
+                         f"got {value!r}")
+    out: dict[str, str] = {}
+    for p, t in value.items():
+        if not isinstance(p, str) or not p.strip() or t not in PARAM_TYPES:
+            raise ValueError(f"{where}: 'param_types' entries must map a "
+                             f"param name to one of {PARAM_TYPES}, got "
+                             f"{p!r}: {t!r}")
+        out[p] = t
+    return out
+
+
+def parse_param_bounds(value,
+                       where: str = "tools.yaml") -> dict[str, tuple]:
+    """Validate a `param_bounds` declaration: a non-empty mapping of param
+    name -> [lo, hi] with NUMERIC lo < hi (parsed to floats, stored as a
+    tuple the gateway enforces after coercion: lo <= value <= hi). Raises
+    ValueError with a deploy-gate-friendly message on bad data — Task E
+    threads these through tools.yaml."""
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{where}: 'param_bounds' must be a non-empty "
+                         f"mapping of param -> [lo, hi], got {value!r}")
+    out: dict[str, tuple] = {}
+    for p, b in value.items():
+        if (not isinstance(p, str) or not p.strip()
+                or not isinstance(b, (list, tuple)) or len(b) != 2):
+            raise ValueError(f"{where}: 'param_bounds' entries must be "
+                             f"param: [lo, hi], got {p!r}: {b!r}")
+        try:
+            lo, hi = float(b[0]), float(b[1])
+        except (TypeError, ValueError):
+            raise ValueError(f"{where}: param_bounds for {p!r} must be "
+                             f"numeric [lo, hi], got {b!r}") from None
+        if math.isnan(lo) or math.isnan(hi) or not lo < hi:
+            raise ValueError(f"{where}: param_bounds for {p!r} need numeric "
+                             f"lo < hi, got {b!r}")
+        out[p] = (lo, hi)
+    return out
 
 
 def spec_facts(specs: dict[str, "ToolSpec"]) -> list[str]:
@@ -206,10 +359,17 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
     # split across specs that can both match the same turn — e.g. "delivery"
     # deliberately stays inside the demo delivery_eta group ("order",
     # "delivery") instead of becoming reschedule_delivery's own fact.
-    "fetch_order_status": ToolSpec(params=("order_id",), facts=("order",)),
+    "fetch_order_status": ToolSpec(
+        params=("order_id",), facts=("order",), side_effects=False,
+        action="order_status",
+        description="Fetch the current status of an order by its order ID "
+                    "(e.g. ORD-4821)."),
     # Caller without an order ID: the agent asks for the phone number and the
     # BACKEND returns the matching orders — order IDs are never agent data.
-    "order_lookup": ToolSpec(params=("phone",), facts=("order",)),
+    "order_lookup": ToolSpec(
+        params=("phone",), facts=("order",), side_effects=False,
+        description="Find a caller's orders by the phone number they ordered "
+                    "with — use when the caller does not know their order ID."),
     "cancel_order": ToolSpec(
         params=("order_id", "reason"),
         preconditions=({"field": "status", "op": "not_in",
@@ -219,28 +379,51 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
         preconditions=({"field": "status", "op": "in",
                         "value": ["CONFIRMED", "SHIPPED"]},)),
     "initiate_refund": ToolSpec(params=("order_id", "amount", "reason"),
-                                facts=("refund",)),
+                                facts=("refund",), action="refund",
+                                param_types={"amount": "number"}),
     # Escalation is always permitted — no preconditions; the point is that
     # the handoff becomes a real, auditable governed action.
-    "escalate_to_human": ToolSpec(params=("reason",)),
+    "escalate_to_human": ToolSpec(
+        params=("reason",),
+        description="Page a human agent to take over this call. Provide a "
+                    "short reason for the handoff."),
+    # Call lifecycle: the caller's own call ends when THEY are done — the
+    # brain proposes end_call on farewell or after resolution + rating; the
+    # telephony session observes the executed action and hangs up.
+    "end_call": ToolSpec(
+        params=("reason",),
+        description="End this call politely. Propose when the caller says "
+                    "goodbye/thanks-and-bye, or after their issue is resolved "
+                    "and any feedback captured."),
+    "record_feedback": ToolSpec(
+        params=("rating",),
+        param_types={"rating": "number", "comment": "string"},
+        param_bounds={"rating": (1, 10)},
+        description="Record the caller's satisfaction rating (1-10) for this "
+                    "call. Ask for it once the issue is resolved; 0 or >10 is "
+                    "invalid."),
     # Only shipped/delivered orders can be returned.
     "initiate_return": ToolSpec(
         params=("order_id", "reason"),
         preconditions=({"field": "status", "op": "in",
-                        "value": ["SHIPPED", "DELIVERED"]},)),
+                        "value": ["SHIPPED", "DELIVERED"]},),
+        action="return",
+        description="Request a return for a shipped or delivered order "
+                    "(params: order_id, reason)."),
 }
 
 
 def specs_with_yaml_facts(path: str | Path,
                           base: dict[str, ToolSpec] | None = None
                           ) -> dict[str, ToolSpec]:
-    """Merge optional per-tool `facts:` declarations from a bundle's tools.yaml
-    into a COPY of the base specs (DEFAULT_TOOL_SPECS). Tools the file does
-    not mention keep their base spec untouched (params AND preconditions);
-    unknown tool names are rejected — bindings are code, declarations are
-    data. This is the facts-only view of the DEPLOYMENT tools.yaml shape
-    (action/description/...) — never run it through ToolGateway.from_yaml,
-    which would wipe default preconditions."""
+    """Merge optional per-tool constraint declarations from a bundle's
+    tools.yaml into a COPY of the base specs (DEFAULT_TOOL_SPECS): `facts:`
+    (Sprint A3) plus `param_types:` / `param_bounds:` (Task E). Tools the
+    file does not mention keep their base spec untouched (params AND
+    preconditions); unknown tool names are rejected — bindings are code,
+    declarations are data. This is the constraints view of the DEPLOYMENT
+    tools.yaml shape (action/description/...) — never run it through
+    ToolGateway.from_yaml, which rebuilds the execution spec shape."""
     import yaml
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     tools = raw.get("tools") or {}
@@ -248,10 +431,20 @@ def specs_with_yaml_facts(path: str | Path,
     for name, meta in tools.items():
         if name not in out:
             raise ValueError(f"tools.yaml: unknown tool '{name}'")
-        if isinstance(meta, dict) and "facts" in meta:
-            out[name] = replace(out[name],
-                                facts=parse_facts(meta["facts"],
-                                                  f"tools.yaml '{name}'"))
+        if not isinstance(meta, dict):
+            continue
+        kw: dict = {}
+        if "facts" in meta:
+            kw["facts"] = parse_facts(meta["facts"],
+                                      f"tools.yaml '{name}'")
+        if "param_types" in meta:
+            kw["param_types"] = parse_param_types(meta["param_types"],
+                                                  f"tools.yaml '{name}'")
+        if "param_bounds" in meta:
+            kw["param_bounds"] = parse_param_bounds(meta["param_bounds"],
+                                                    f"tools.yaml '{name}'")
+        if kw:
+            out[name] = replace(out[name], **kw)
     return out
 
 
@@ -289,7 +482,16 @@ class ToolGateway:
     def from_yaml(cls, path, erp: MockERP | None = None) -> "ToolGateway":
         """Load spec overrides from a tenant bundle's tools.yaml. Only known
         tool names may be overridden — bindings are code, declarations are
-        data. Unknown names are rejected rather than silently ignored."""
+        data. Unknown names are rejected rather than silently ignored.
+
+        Per-tool keys: params, preconditions, facts, param_types,
+        param_bounds. A key ABSENT from the yaml entry keeps the base spec's
+        value — most importantly preconditions: a bundle that does not
+        declare them keeps the code-default ones (relaxing a precondition
+        requires an explicit `preconditions: []`), so a tools.yaml entry can
+        never silently widen what the gateway executes. Declared keys
+        override; validation runs through the shared parse_* helpers so the
+        gateway and the CI gate accept exactly the same shapes."""
         import yaml
         raw = yaml.safe_load(Path(path).read_text()) or {}
         tools = raw.get("tools", {})
@@ -297,14 +499,33 @@ class ToolGateway:
         for name, spec in tools.items():
             if name not in DEFAULT_TOOL_SPECS:
                 raise ValueError(f"tools.yaml: unknown tool '{name}'")
-            params = tuple(spec.get("params",
-                                    list(DEFAULT_TOOL_SPECS[name].params)))
-            preconds = tuple(spec.get("preconditions", []))
-            facts = (parse_facts(spec["facts"], f"tools.yaml '{name}'")
-                     if "facts" in spec
-                     else DEFAULT_TOOL_SPECS[name].facts)
-            gw.specs[name] = ToolSpec(params=params, preconditions=preconds,
-                                      facts=facts)
+            if not isinstance(spec, dict):
+                raise ValueError(f"tools.yaml: '{name}' must be a mapping "
+                                 "of declared keys")
+            base = DEFAULT_TOOL_SPECS[name]
+            kw: dict = {}
+            if "params" in spec:
+                kw["params"] = tuple(spec["params"])
+            if "preconditions" in spec:
+                kw["preconditions"] = tuple(spec["preconditions"])
+            if "facts" in spec:
+                kw["facts"] = parse_facts(spec["facts"],
+                                          f"tools.yaml '{name}'")
+            if "param_types" in spec:
+                kw["param_types"] = parse_param_types(spec["param_types"],
+                                                      f"tools.yaml '{name}'")
+            if "param_bounds" in spec:
+                kw["param_bounds"] = parse_param_bounds(spec["param_bounds"],
+                                                        f"tools.yaml '{name}'")
+            # Deployment-facing metadata keys also override when declared
+            # (data beats defaults); anything undeclared stays base.
+            if "description" in spec:
+                kw["description"] = str(spec["description"])
+            if "action" in spec:
+                kw["action"] = str(spec["action"])
+            if "side_effects" in spec:
+                kw["side_effects"] = bool(spec["side_effects"])
+            gw.specs[name] = replace(base, **kw)
         return gw
 
     def execute(self, tool_name: str, params: dict,
@@ -315,6 +536,27 @@ class ToolGateway:
         missing = [p for p in spec.params if params.get(p) is None]
         if missing:
             return ToolResult(ok=False, error=f"missing_params: {missing}")
+
+        # Task D2: light param-type validation at the governed boundary —
+        # AFTER the presence check, BEFORE idempotency/ERP/preconditions, so
+        # a bad-typed param can never reach the backend (or poison the
+        # idempotency cache). Safe coercions are applied on a copy; the
+        # binding sees the coerced values.
+        coerced = dict(params)
+        for p in spec.params:
+            ok, cv = _coerce_param(p, params.get(p),
+                                   spec.param_types.get(p))
+            if not ok:
+                return ToolResult(ok=False, error=f"invalid_param: {p}")
+            coerced[p] = cv
+        # declared numeric bounds (e.g. rating 1..10) — after coercion
+        for p, (lo, hi) in (spec.param_bounds or {}).items():
+            v = coerced.get(p)
+            if isinstance(v, (int, float)) and not (lo <= v <= hi):
+                return ToolResult(
+                    ok=False,
+                    error=f"out_of_range: {p}={v} (expected {lo}..{hi})")
+        params = coerced
 
         if idempotency_key and idempotency_key in self._idempotency:
             replay = self._idempotency[idempotency_key]
@@ -342,6 +584,13 @@ class ToolGateway:
                 value = order
             elif tool_name == "order_lookup":
                 value = self.erp.lookup_orders_by_phone(params["phone"])
+            elif tool_name == "end_call":
+                value = {"call_ended": True,
+                         "reason": params.get("reason", "resolved")}
+            elif tool_name == "record_feedback":
+                value = {"feedback_recorded": True,
+                         "rating": params["rating"],
+                         "comment": params.get("comment", "")}
             elif tool_name == "cancel_order":
                 value = self.erp.cancel_order(params["order_id"],
                                               params["reason"])

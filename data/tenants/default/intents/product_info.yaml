@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- tell me about this product
+- product ki jankari do
+- is this item in stock
+- product specifications
+- इस प्रोडक्ट की जानकारी दो
+- यह आइटम स्टॉक में है क्या
+- प्रोडक्ट की स्पेसिफिकेशन बताओ
+- இந்த பொருள் பற்றிய தகவல் வேண்டும்
+- இந்த பொருள் கடையில் உள்ளதா
+- பொருளின் விவரக்குறிப்புகளைச் சொல்லுங்கள்
+- ఈ ప్రొడక్ట్ గురించి సమాచారం ఇవ్వండి
+- ఈ ఐటమ్ స్టాక్‌లో ఉందా
+- ప్రొడక్ట్ స్పెసిఫికేషన్స్ చెప్పండి

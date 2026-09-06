@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- I want to file a complaint
+- shikayat karni hai
+- complaint register karo
+- I am unhappy with the service
+- मैं शिकायत दर्ज करवाना चाहता हूं
+- सर्विस ठीक नहीं है, शिकायत करनी है
+- मुझे आपकी सर्विस पसंद नहीं आई
+- எனக்கு புகார் பதிவு செய்ய வேண்டும்
+- சேவை சரியில்லை, புகார் அளிக்கிறேன்
+- உங்கள் சேவை எனக்கு பிடிக்கவில்லை
+- నేను ఫిర్యాదు చేయాలనుకుంటున్నాను
+- సర్వీస్ సరిగ్గా లేదు, ఫిర్యాదు చేయాలి
+- మీ సర్వీస్ నాకు నచ్చలేదు

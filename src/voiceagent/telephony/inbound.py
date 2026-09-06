@@ -83,6 +83,45 @@ def make_turn_fn(
     """
     asr_fn = asr if asr is not None else (lambda pcm: _default_asr(pcm, language))
     tts_fn = tts if tts is not None else (lambda text: _default_tts(text, language))
+    # Phone slot (ADR-002-adjacent mechanics): callers give their number in
+    # pieces across turns; the slot accumulates digits (spoken words
+    # converted) so the brain can look orders up without re-asking.
+    phone_digits = ""
+
+    _re_phone_context = re.compile(r"number|phone|contact|\u0928\u0902\u092c\u0930", re.I)
+
+    def _absorb_phone_digits(text: str) -> None:
+        """Only PHONE-SHAPED utterances feed the slot:
+        - a phone/number keyword in the sentence, OR
+        - one long digit run (>=7 — a number read straight out), OR
+        - a continuation while the slot is already open AND the utterance is
+          purely number-ish (every word is a number word / digits).
+        'My order is 4821' must NOT poison the slot with order digits."""
+        nonlocal phone_digits
+        from voiceagent.entities import _token_value
+        digits = "".join(re.findall(r"\d+", text))
+        alpha_toks = re.findall(r"[a-z]+", text.lower())
+        numberish = (all(_token_value(t) is not None for t in alpha_toks)
+                     if alpha_toks else bool(digits))
+        if not digits and (_re_phone_context.search(text)
+                           or (phone_digits and numberish)):
+            # keyword present (first read) OR a continuation while the slot
+            # is already open: convert the number-word tokens only —
+            # "my"/"is" contribute nothing to the digits.
+            digits = "".join(str(_token_value(t) or "")
+                             for t in alpha_toks)
+        phone_shaped = (_re_phone_context.search(text)
+                        or max((len(run) for run in re.findall(r"\d+", text)),
+                               default=0) >= 7
+                        or (phone_digits and digits and numberish))
+        if digits and phone_shaped:
+            phone_digits = (phone_digits + digits)[-16:]
+
+    def _text_for_brain(user_text: str) -> str:
+        if len(phone_digits) >= 10:
+            return (f"{user_text} (caller phone digits so far — may be "
+                    f"partial: {phone_digits})")
+        return user_text
 
     _re_nonspeech = re.compile(r"^[\W一-鿿ぁ-ゟァ-ヿ]+$")
 
@@ -93,7 +132,14 @@ def make_turn_fn(
         # background noise ('的。'). Such a transcript is NO speech — skip the
         # whole governed turn (no brain call, no reply) instead of answering
         # nobody. Real words (any script) always pass.
-        if len(user_text.strip()) <= 2 and _re_nonspeech.match(user_text.strip()):
+        _absorb_phone_digits(user_text)
+        user_text = _text_for_brain(user_text)
+        stripped = user_text.strip()
+        if not stripped:
+            return "", b""  # empty ASR output is non-speech too
+        cjk_only = (stripped and re.search(r"[一-鿿ぁ-ゟァ-ヿ]", stripped)
+                    and not re.search(r"[A-Za-z0-9\u0900-\u097F]", stripped))
+        if (len(stripped) <= 2 and _re_nonspeech.match(stripped)) or cjk_only:
             logger.info("turn: skipped non-speech ASR output %r", user_text[:40])
             return "", b""
         t_asr = time.monotonic()
@@ -105,12 +151,19 @@ def make_turn_fn(
             wav_out = wav_out[1]
         wav_out = bytes(wav_out)
         t_tts = time.monotonic()
-        # Turn evidence: transcript -> reply -> per-stage timing. This is how
-        # a silent/garbled/late turn gets diagnosed after the fact.
+        # Turn evidence: transcript -> governed actions -> reply -> timing.
+        # This is how a silent/garbled/late/wrong-tool turn is diagnosed
+        # after the fact.
+        acts = getattr(result, "actions", None) or []
+        if any(a.get("action") == "end_call" and a.get("ok") for a in acts):
+            turn_fn.call_ended = True  # room loop hangs up after playback
+        act_sig = "; ".join(
+            f"{a.get('action')}={a.get('verdict')}/{'ok' if a.get('ok') else (a.get('error') or 'err')}"
+            for a in acts)
         logger.info(
-            "turn: asr=%.2fs brain=%.2fs tts=%.2fs | caller=%r | reply[%s]=%r",
+            "turn: asr=%.2fs brain=%.2fs tts=%.2fs | caller=%r | tools=[%s] | reply[%s]=%r",
             t_asr - t0, t_brain - t_asr, t_tts - t_brain,
-            user_text[:120], detect_language(reply), reply[:120],
+            user_text[:120], act_sig, detect_language(reply), reply[:120],
         )
         return reply, wav_out
 
@@ -327,10 +380,18 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
             _playback_pump(source, session, pump_stop)
         )
 
-        # Greeting: one governed turn, spoken once after subscribe.
-        greet_result = orchestrator.handle_turn(session_id, GREETING_TRANSCRIPT)
-        greet_wav = tts(greet_result.reply) if tts is not None else _default_tts(
-            greet_result.reply, language
+        # Greeting: the tenant's DECLARED greeting text is spoken instantly
+        # (no brain roundtrip — the first-second experience is declared data).
+        # No declared greeting -> one governed greeting turn (legacy path).
+        declared_greeting = _deps_get(deps, "greeting") or ""
+        if declared_greeting.strip():
+            logger.info("greeting: declared text (%d chars)", len(declared_greeting))
+            greet_text = declared_greeting
+        else:
+            greet_result = orchestrator.handle_turn(session_id, GREETING_TRANSCRIPT)
+            greet_text = greet_result.reply
+        greet_wav = tts(greet_text) if tts is not None else _default_tts(
+            greet_text, language
         )
         if isinstance(greet_wav, (tuple, list)):
             greet_wav = greet_wav[1]
@@ -346,6 +407,13 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
             while len(pending) >= 640:
                 session.feed_pcm16(pending[:640])
                 pending = pending[640:]
+            if getattr(turn_fn, "call_ended", False):
+                # The farewell must be HEARD before we hang up: wait for the
+                # session queue to drain (the pump consumes it in real time)
+                # instead of breaking on the turn that triggered end_call.
+                if not session.has_pending_playback():
+                    logger.info("call ended by agent (farewell played)")
+                    break
             if disconnected.is_set():
                 break
         return True

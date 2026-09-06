@@ -202,6 +202,131 @@ def test_yaml_loader_rejects_bad_facts_type():
             ToolGateway.from_yaml(f)
 
 
+# ---------------------------------------------------------------------------
+# Task E: param_types + param_bounds are threadable through tools.yaml, and
+# from_yaml PRESERVES base-spec fields its entries don't declare — most
+# importantly preconditions (a yaml entry without `preconditions:` keeps the
+# code-default ones; relaxing them requires an explicit `preconditions: []`).
+# ---------------------------------------------------------------------------
+
+def test_yaml_loader_preserves_base_preconditions_when_absent():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        # cancel_order's yaml entry declares NO preconditions
+        f.write_text(yaml.safe_dump({"tools": {
+            "cancel_order": {"params": ["order_id", "reason"]}}}))
+        gw = ToolGateway.from_yaml(f)
+        assert gw.specs["cancel_order"].preconditions == \
+            DEFAULT_TOOL_SPECS["cancel_order"].preconditions
+        # ...and they are still ENFORCED (ORD-7734 is SHIPPED)
+        r = gw.execute("cancel_order", {"order_id": "ORD-7734", "reason": "x"})
+        assert not r.ok and "precondition_failed" in r.error
+
+
+def test_yaml_loader_preserves_other_base_fields():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "fetch_order_status": {"description": "custom wording"}}}))
+        gw = ToolGateway.from_yaml(f)
+        spec = gw.specs["fetch_order_status"]
+        assert spec.description == "custom wording"      # declared: overridden
+        assert spec.params == DEFAULT_TOOL_SPECS["fetch_order_status"].params
+        assert spec.facts == DEFAULT_TOOL_SPECS["fetch_order_status"].facts
+        assert spec.side_effects is False                # undeclared: preserved
+        assert spec.action == "order_status"
+        assert spec.preconditions == \
+            DEFAULT_TOOL_SPECS["fetch_order_status"].preconditions
+
+
+def test_yaml_explicit_empty_preconditions_relaxes_base():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "cancel_order": {"preconditions": []}}}))
+        gw = ToolGateway.from_yaml(f)
+        assert gw.specs["cancel_order"].preconditions == ()
+        r = gw.execute("cancel_order", {"order_id": "ORD-7734", "reason": "x"})
+        assert r.ok and r.value["status"] == "CANCELLED"
+
+
+def test_yaml_loader_threads_param_types_and_bounds():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "initiate_refund": {
+                "param_types": {"amount": "number", "reason": "string"},
+                "param_bounds": {"amount": [0, 10000]}}}}))
+        gw = ToolGateway.from_yaml(f)
+        assert gw.specs["initiate_refund"].param_types == \
+            {"amount": "number", "reason": "string"}
+        assert gw.specs["initiate_refund"].param_bounds == \
+            {"amount": (0, 10000)}
+        # types are enforced through the loaded gateway...
+        r = gw.execute("initiate_refund",
+                       {"order_id": "ORD-4821", "amount": "abc", "reason": "x"})
+        assert not r.ok and r.error == "invalid_param: amount"
+        # ...and so are the bounds (after coercion "200" -> 200.0)
+        r2 = gw.execute("initiate_refund",
+                        {"order_id": "ORD-4821", "amount": "20000",
+                         "reason": "x"})
+        assert not r2.ok and "out_of_range" in r2.error
+        r3 = gw.execute("initiate_refund",
+                        {"order_id": "ORD-4821", "amount": "200", "reason": "x"})
+        assert r3.ok and r3.value["amount"] == 200.0
+
+
+def test_yaml_loader_rejects_bad_param_types():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "initiate_refund": {"param_types": {"amount": "float"}}}}))
+        with pytest.raises(ValueError, match="param_types"):
+            ToolGateway.from_yaml(f)
+
+
+def test_yaml_loader_rejects_bad_param_bounds():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        for bad in ({"amount": [10, 1]}, {"amount": ["a", "z"]},
+                    {"amount": 5}, {"amount": [1]}):
+            f.write_text(yaml.safe_dump({"tools": {
+                "initiate_refund": {"param_bounds": bad}}}))
+            with pytest.raises(ValueError, match="param_bounds"):
+                ToolGateway.from_yaml(f)
+
+
+def test_specs_with_yaml_facts_threads_types_and_bounds_too():
+    """The runtime path (specs_with_yaml_facts) also honors param_types /
+    param_bounds declarations, so a tenant bundle's constraints are enforced
+    on the deployed gateway — while everything undeclared stays base."""
+    import tempfile, yaml
+    from pathlib import Path as P
+    from voiceagent.tools import specs_with_yaml_facts
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "record_feedback": {"param_bounds": {"rating": [1, 5]}}}}))
+        specs = specs_with_yaml_facts(f)
+        assert specs["record_feedback"].param_bounds == {"rating": (1, 5)}
+        assert specs["record_feedback"].param_types == \
+            DEFAULT_TOOL_SPECS["record_feedback"].param_types
+        assert specs["record_feedback"].preconditions == ()
+        assert specs["cancel_order"] == DEFAULT_TOOL_SPECS["cancel_order"]
+
+
 def test_specs_with_yaml_facts_merges_without_touching_other_specs():
     import tempfile, yaml
     from pathlib import Path as P
@@ -256,3 +381,160 @@ def test_order_lookup_spec_declares_facts_and_params():
     spec = DEFAULT_TOOL_SPECS["order_lookup"]
     assert spec.params == ("phone",)
     assert spec.facts == ("order",)
+
+
+def test_get_order_matches_loose_id_shapes():
+    erp = MockERP()
+    assert erp.get_order("ORD4821")["order_id"] == "ORD-4821"
+    assert erp.get_order("ord-4821")["order_id"] == "ORD-4821"
+    assert erp.get_order("ORD-4821")["order_id"] == "ORD-4821"
+    assert erp.get_order("ORD9999") is None
+
+
+def test_tool_metadata_lives_on_spec_not_runtime():
+    """Adding a tool = binding + spec in ONE place. runtime.py's brain surface
+    is a pure derivation — no per-tool edits in runtime, ever."""
+    from voiceagent.tools import DEFAULT_TOOL_SPECS
+
+    assert DEFAULT_TOOL_SPECS["order_lookup"].side_effects is False
+    assert DEFAULT_TOOL_SPECS["escalate_to_human"].side_effects is True
+    assert "phone number" in DEFAULT_TOOL_SPECS["order_lookup"].description
+    assert DEFAULT_TOOL_SPECS["cancel_order"].description == ""  # generic ok
+
+
+# ---------------------------------------------------------------------------
+# Task D2: light param-type validation at the governed boundary. ToolSpec
+# carries an optional `param_types` map (values: string|number|integer|
+# boolean; undeclared params default to "string"). Safe coercions happen
+# (amount "200" -> 200.0); impossible ones are rejected with
+# `invalid_param: <name>` BEFORE the ERP is touched.
+# ---------------------------------------------------------------------------
+
+def test_refund_spec_declares_amount_as_number():
+    spec = DEFAULT_TOOL_SPECS["initiate_refund"]
+    assert spec.param_types == {"amount": "number"}
+
+
+def test_param_coercion_amount_string_to_number():
+    gw = ToolGateway()
+    r = gw.execute("initiate_refund",
+                   {"order_id": "ORD-4821", "amount": "200", "reason": "damaged"})
+    assert r.ok
+    assert r.value["amount"] == 200.0
+    assert len(gw.erp.refunds) == 1
+
+
+def test_param_bad_type_rejected_with_invalid_param_error():
+    gw = ToolGateway()
+    r = gw.execute("initiate_refund",
+                   {"order_id": "ORD-4821", "amount": "abc", "reason": "damaged"})
+    assert not r.ok
+    assert r.error == "invalid_param: amount"
+    assert gw.erp.refunds == []  # never reached the ERP
+
+
+def test_param_validation_happens_before_order_fetch():
+    """A bad-typed param must fail at the boundary, not leak an
+    order_not_found (or any ERP call) first."""
+    gw = ToolGateway()
+    r = gw.execute("initiate_refund",
+                   {"order_id": "ORD-9999", "amount": "abc", "reason": "x"})
+    assert r.error == "invalid_param: amount"
+
+
+def test_missing_params_still_flagged_when_param_types_present():
+    gw = ToolGateway()
+    r = gw.execute("initiate_refund", {"order_id": "ORD-4821",
+                                       "amount": "100", "reason": None})
+    assert not r.ok and "missing_params" in r.error
+
+
+def test_undeclared_params_default_to_string_coercion():
+    """Params without a param_types entry are treated as string: numeric
+    values are safely coerced (the brain may quote a number), never
+    rejected."""
+    gw = ToolGateway()
+    r = gw.execute("escalate_to_human", {"reason": 12345})
+    assert r.ok
+    assert gw.erp.handoffs[0]["reason"] == "12345"
+
+
+def test_integer_and_boolean_param_types_coerce():
+    from voiceagent.tools import ToolSpec
+    gw = ToolGateway(specs={
+        "initiate_refund": ToolSpec(
+            params=("order_id", "amount", "reason", "line", "waive"),
+            param_types={"amount": "number", "line": "integer",
+                         "waive": "boolean"}),
+    })
+    # number accepts ints; integer coerces "3"; boolean coerces "true" —
+    # all validated before the ERP binding runs.
+    r = gw.execute("initiate_refund",
+                   {"order_id": "ORD-4821", "amount": 5, "reason": "x",
+                    "line": "3", "waive": "true"})
+    assert r.ok and r.value["amount"] == 5.0
+    # fractional string is not an integer
+    r2 = gw.execute("initiate_refund",
+                    {"order_id": "ORD-4821", "amount": 5, "reason": "x",
+                     "line": "3.5", "waive": "true"})
+    assert not r2.ok and r2.error == "invalid_param: line"
+    # boolean rejects non-boolean strings
+    r3 = gw.execute("initiate_refund",
+                    {"order_id": "ORD-4821", "amount": 5, "reason": "x",
+                     "line": "3", "waive": "maybe"})
+    assert not r3.ok and r3.error == "invalid_param: waive"
+    # a boolean is NOT a number/integer (bool is an int subclass — exclude)
+    r4 = gw.execute("initiate_refund",
+                    {"order_id": "ORD-4821", "amount": True, "reason": "x",
+                     "line": "3", "waive": "true"})
+    assert not r4.ok and r4.error == "invalid_param: amount"
+
+
+def test_governed_runner_surfaces_invalid_param_error():
+    """The runner path (orchestrator -> GovernedToolRunner -> gateway) sees
+    the boundary rejection as a plain failed ToolResult."""
+    from voiceagent.decisionlog import DecisionLog
+    log = DecisionLog()
+    runner = GovernedToolRunner(ToolGateway(),
+                                PolicyEngine({"refund": {"allow": True}}),
+                                decision_log=log)
+    out = runner.run("refund", PolicyContext(authenticated=True),
+                     "initiate_refund",
+                     {"order_id": "ORD-4821", "amount": "abc", "reason": "x"})
+    assert out.decision_verdict == "ALLOW"
+    assert not out.executed and out.result.ok is False
+    assert out.result.error == "invalid_param: amount"
+
+
+def test_idempotency_key_not_poisoned_by_invalid_param():
+    """A failed validation must not cache against the idempotency key: the
+    same key with valid params must still execute (only ok=True is cached)."""
+    erp = MockERP()
+    gw = ToolGateway(erp=erp)
+    bad = gw.execute("initiate_refund",
+                     {"order_id": "ORD-4821", "amount": "inf", "reason": "cold"},
+                     idempotency_key="k1")
+    assert not bad.ok
+    good = gw.execute("initiate_refund",
+                      {"order_id": "ORD-4821", "amount": "200", "reason": "cold"},
+                      idempotency_key="k1")
+    assert good.ok
+    assert erp.refunds, "refund must have executed on the retry"
+
+
+def test_nonfinite_and_underscore_numbers_rejected():
+    gw = ToolGateway()
+    for v in ("inf", "-inf", "nan", "1_000"):
+        r = gw.execute("initiate_refund",
+                       {"order_id": "ORD-4821", "amount": v, "reason": "x"})
+        assert not r.ok and r.error == "invalid_param: amount", v
+
+
+def test_end_call_and_feedback_tools_governed():
+    gw = ToolGateway()
+    ok = gw.execute("end_call", {"reason": "caller said thanks and bye"})
+    assert ok.ok and ok.value["call_ended"] is True
+    r = gw.execute("record_feedback", {"rating": "8", "comment": "fast"})
+    assert r.ok and r.value["rating"] == 8.0
+    bad = gw.execute("record_feedback", {"rating": "11"})
+    assert not bad.ok and "out_of_range" in bad.error

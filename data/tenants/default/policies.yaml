@@ -1,0 +1,36 @@
+# Default (demo) tenant policies — the no-config fallback set.
+# Business rules are DECLARED DATA: tenant bundles override; this
+# file is what a no-policy deployment falls back to. The platform
+# invariants (escalate_to_human / end_call always allowed) live in
+# code (PolicyEngine.evaluate) and are NOT overridable here.
+escalate:
+- fraud
+- legal
+- chargeback
+- high_value_refund
+refund:
+  require_auth: true
+  max_without_approval: 5000
+high_value_refund:
+  require_auth: true
+  escalate: true
+order_status:
+  allow: true
+refund_info:
+  allow: true
+delivery_eta:
+  allow: true
+order_cancellation:
+  require_auth: true
+  allowed_until: shipped
+account_changes:
+  require_auth: true
+  require_otp: true
+billing:
+  allow: true
+recharge:
+  allow: true
+payment_declined:
+  allow: true
+otp:
+  require_auth: true

@@ -116,6 +116,20 @@ def validate(root: Path) -> list[str]:
                             errors.append(
                                 f"{pol}: escalate_when for '{action}' must be "
                                 f"a mapping of signal -> value")
+                        elif isinstance(when, dict):
+                            # A typo'd signal key is a SILENT DEAD GUARD — the
+                            # condition can never fire and CI would pass. The
+                            # known set is what the runtime actually injects.
+                            known = {"frustrated", "frustration_level",
+                                     "injection_suspected", "risk_tier",
+                                     "session_id"}
+                            for key in when:
+                                if key not in known:
+                                    errors.append(
+                                        f"{pol}: escalate_when for "
+                                        f"'{action}' uses unknown signal "
+                                        f"'{key}' (known: {sorted(known)}) "
+                                        f"— it would never fire")
     return errors
 
 

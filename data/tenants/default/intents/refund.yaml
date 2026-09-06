@@ -1,0 +1,22 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- I need a refund for my order
+- Can you refund my order
+- refund my order ORD-12345
+- please refund my order, it arrived damaged
+- मुझे रिफंड चाहिए
+- refund my money
+- mera paisa wapas karo
+- मेरा पैसा वापस करो
+- ऑर्डर का रिफंड चाहिए
+- रिफंड की प्रोसेस शुरू करो
+- என் பணத்தை திரும்பத் தாருங்கள்
+- ஆர்டருக்கு ரீஃபண்ட் வேண்டும்
+- ரீஃபண்ட் செய்யுங்கள்
+- నా డబ్బు వాపస్ చేయండి
+- ఆర్డర్‌కి రీఫండ్ కావాలి
+- రీఫండ్ ప్రాసెస్ చేయండి

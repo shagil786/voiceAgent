@@ -1,0 +1,47 @@
+# The default (demo) tenant's composed tool surface — ADR-003:
+# tenants DECLARE which bindings exist + description overrides here;
+# the bindings/contracts themselves are code (tools.py). Generated
+# from DEFAULT_TOOL_SPECS; hand-tunable like any tenant's.
+tools:
+  fetch_order_status:
+    action: order_status
+    side_effects: false
+    description: "Fetch the current status of an order by its order ID (e.g. ORD-4821)."
+    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}}, 'required': ['order_id']}
+  order_lookup:
+    action: order_lookup
+    side_effects: false
+    description: "Find a caller's orders by the phone number they ordered with — use when the caller does not know their order ID."
+    parameters: {'type': 'object', 'properties': {phone: {"type": "string"}}, 'required': ['phone']}
+  cancel_order:
+    action: cancel_order
+    side_effects: true
+    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}, reason: {"type": "string"}}, 'required': ['order_id', 'reason']}
+  reschedule_delivery:
+    action: reschedule_delivery
+    side_effects: true
+    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}, new_date: {"type": "string"}}, 'required': ['order_id', 'new_date']}
+  initiate_refund:
+    action: refund
+    side_effects: true
+    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}, amount: {"type": "string"}, reason: {"type": "string"}}, 'required': ['order_id', 'amount', 'reason']}
+  escalate_to_human:
+    action: escalate_to_human
+    side_effects: true
+    description: "Page a human agent to take over this call. Provide a short reason for the handoff."
+    parameters: {'type': 'object', 'properties': {reason: {"type": "string"}}, 'required': ['reason']}
+  end_call:
+    action: end_call
+    side_effects: true
+    description: "End this call politely. Propose when the caller says goodbye/thanks-and-bye, or after their issue is resolved and any feedback captured."
+    parameters: {'type': 'object', 'properties': {reason: {"type": "string"}}, 'required': ['reason']}
+  record_feedback:
+    action: record_feedback
+    side_effects: true
+    description: "Record the caller's satisfaction rating (1-10) for this call. Ask for it once the issue is resolved; 0 or >10 is invalid."
+    parameters: {'type': 'object', 'properties': {rating: {"type": "string"}}, 'required': ['rating']}
+  initiate_return:
+    action: return
+    side_effects: true
+    description: "Request a return for a shipped or delivered order (params: order_id, reason)."
+    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}, reason: {"type": "string"}}, 'required': ['order_id', 'reason']}

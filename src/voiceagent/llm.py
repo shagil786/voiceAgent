@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import time
 import urllib.error
 import urllib.request
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 
 from llama_cpp import Llama
@@ -302,6 +306,7 @@ class OpenAICompatLLM(FamilyLLM):
             },
             method="POST",
         )
+        t0 = time.monotonic()
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
@@ -312,6 +317,10 @@ class OpenAICompatLLM(FamilyLLM):
         except urllib.error.URLError as e:
             raise RuntimeError(f"cannot reach OpenAI-compatible endpoint "
                                f"{self.base_url}: {e.reason}") from e
+        elapsed = time.monotonic() - t0
+        if elapsed > 5.0:
+            logger.warning("frontier slow call: %.2fs (model %s)",
+                           elapsed, self.model)
         try:
             return body["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError, TypeError, AttributeError) as e:
@@ -342,6 +351,7 @@ def download_model(url: str, model_dir: str = "data/models") -> str:
     path = Path(model_dir) / url.rsplit("/", 1)[1]
     if not path.exists():
         import urllib.request
+
         print(f"downloading {url} ...")
         urllib.request.urlretrieve(url, path)
     return str(path)

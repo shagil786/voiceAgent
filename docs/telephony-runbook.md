@@ -4,10 +4,13 @@ Operational runbook for the first real inbound/outbound PSTN call through the
 LiveKit limb. Branch: `feat/livekit-limb`. The offline loopback drill
 (`scripts/livekit_loopback.py`) must pass before any step here that costs money.
 
-Architecture invariant: LiveKit is transport only. Every spoken turn — including
-the greeting — is one governed `Orchestrator.handle_turn` / `campaign_turn`
-through the same brain as chat and voice CLI. No LiveKit Agents framework, no
-second brain.
+Architecture invariant: LiveKit is transport only. Every conversational turn is
+one governed `Orchestrator.handle_turn` / `campaign_turn` through the same
+brain as chat and voice CLI. No LiveKit Agents framework, no second brain.
+EXCEPTION (latency): the pickup greeting is the tenant's DECLARED greeting
+text (tenant.json `greeting`) spoken instantly — a brain roundtrip there cost
+2-4s of dead air. With no declared greeting the governed greeting turn is
+the fallback.
 
 ## Prerequisites
 
@@ -162,7 +165,7 @@ before recording, and store/retain recordings under an owner-approved policy.
   Indic-routed engine). Set the trunk's language per deployment.
 - **Barge-in is session-level, not semantic**: uplink speech clears the
   playback queue; it does not understand *what* was said mid-reply.
-- **Greeting is one governed turn**: `handle_turn("(Inbound call connected —
+- **Greeting is the tenant's DECLARED greeting text when declared (instant); otherwise one governed turn**: `handle_turn("(Inbound call connected —
   greet the caller.)")` spoken once after the SIP track appears — not a canned
   file, and not multi-turn negotiation.
 - **One room = one session thread**: rooms are joined on `room_started` only;
@@ -170,3 +173,18 @@ before recording, and store/retain recordings under an owner-approved policy.
 - `run_room_session` is log-quiet by design; success is the audible greeting,
   failure modes surface as thread exit without greeting (no SIP track in 15s)
   or webhook 404s (signature/prefix mismatch).
+
+## Shadow policy report (after real calls)
+
+Once the persistent audit DB (`VOICEAGENT_AUDIT_DB`) has 25+ governed calls:
+
+```bash
+.venv/bin/python -m voiceagent.audit_report \
+  --audit-db data/out/audit.sqlite \
+  --memory-db data/out/pizzapal-memory.sqlite \
+  --out data/out/policy-report.md
+```
+
+Deterministic markdown: action verdict breakdown, deny-then-escalate
+patterns, caller ratings, learning-candidate quality, and PROPOSALS ONLY —
+nothing applies to policies.yaml without a reviewed human diff (ADR-001).

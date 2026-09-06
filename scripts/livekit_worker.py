@@ -42,8 +42,21 @@ def build_deps():
     from voiceagent.runtime import build_orchestrator
 
     orchestrator = build_orchestrator()
+    # Warm the frontier connection: the first real call must not pay TCP/TLS
+    # + provider cold-start (observed 18.8s brain spikes). Fail-open — a
+    # warmup failure means the provider is down; the call path reports it.
+    try:
+        orchestrator.brain.client.chat(
+            [{"role": "user", "content": "Reply with the single word: ready."}],
+            tools=None)
+        logger.info("frontier warmup ok")
+    except Exception:
+        logger.warning("frontier warmup failed (continuing)", exc_info=True)
     language = os.environ.get("VOICEAGENT_DEFAULT_LANG") or None
-    return {"orchestrator": orchestrator, "session_id": None, "language": language}
+    # Declared greeting (tenant data): instant pickup line, no brain roundtrip.
+    greeting = getattr(orchestrator, "greeting", "") or ""
+    return {"orchestrator": orchestrator, "session_id": None,
+            "language": language, "greeting": greeting}
 
 
 def make_server(config, join_room) -> BaseHTTPRequestHandler:

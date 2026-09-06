@@ -87,22 +87,25 @@ def test_escalate_to_human_executes_and_sets_turn_escalated():
     assert entry.conv_id == "s-esc-1"
 
 
-def test_escalate_to_human_blocked_does_not_set_escalated():
+def test_escalate_to_human_always_allowed_even_undeclared():
+    """PLATFORM INVARIANT: the human-handoff valve is always allowed, even
+    with no rule declared — a tenant must never trap a caller with an agent
+    that cannot fetch help. (Least-privilege DENY for undeclared non-safety
+    actions is pinned elsewhere.)"""
     erp = MockERP()
     brain = ScriptedBrain([
         reply(calls=[tc("t1", "escalate_to_human", reason="handover please")]),
-        reply("I can't transfer you on this line right now."),
+        reply("Connecting you to a human now."),
     ])
-    # no rule for escalate_to_human -> least-privilege DENY, nothing paged
     orch = make_orch(brain, PolicyEngine({"reschedule": {"allow": True}}),
                      {"escalate_to_human": {"action": "escalate_to_human"}},
                      erp=erp)
     result = orch.handle_turn("s-esc-2", "Transfer me to a human.",
                               profile=CallerProfile(authenticated=True))
-    assert result.escalated is False
-    assert result.actions[0]["verdict"] == "DENY"
-    assert result.actions[0]["ok"] is False
-    assert erp.handoffs == []
+    assert result.escalated is True
+    assert result.actions[0]["verdict"] == "ALLOW"
+    assert result.actions[0]["ok"] is True
+    assert erp.handoffs  # the handoff was really recorded
 
 
 # --- returns: only shipped/delivered orders can be returned ------------------

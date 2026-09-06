@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- my recharge failed
+- recharge nahi hua
+- रिचार्ज क्यों फेल हुआ
+- top up failed
+- मेरा रिचार्ज नहीं हुआ
+- रिचार्ज फेल हो गया
+- पैसे कट गए पर रिचार्ज नहीं मिला
+- என் ரீசார்ஜ் ஆகவில்லை
+- ரீசார்ஜ் தோல்வியடைந்தது
+- பணம் கழிந்தது ஆனால் ரீசார்ஜ் வரவில்லை
+- నా రీఛార్జ్ కాలేదు
+- రీఛార్జ్ ఫెయిల్ అయింది
+- డబ్బులు కట్ అయ్యాయి కానీ రీఛార్జ్ రాలేదు

@@ -10,20 +10,26 @@ from pathlib import Path
 from voiceagent.tenant import DEFAULT_CURRENCY
 
 
-DEFAULT_POLICIES = {
-    "escalate": ["fraud", "legal", "chargeback", "high_value_refund"],
-    "refund": {"require_auth": True, "max_without_approval": 5000},
-    "high_value_refund": {"require_auth": True, "escalate": True},
-    "order_status": {"allow": True},
-    "refund_info": {"allow": True},
-    "delivery_eta": {"allow": True},
-    "order_cancellation": {"require_auth": True, "allowed_until": "shipped"},
-    "account_changes": {"require_auth": True, "require_otp": True},
-    "billing": {"allow": True},
-    "recharge": {"allow": True},
-    "payment_declined": {"allow": True},
-    "otp": {"require_auth": True},
-}
+# Default policies are BUNDLE DATA (the committed default tenant's
+# policies.yaml) — business rules are declared, never platform constants.
+# If even that file is missing/broken we fall back to an empty rule set:
+# the platform invariants (escalate_to_human / end_call always allowed)
+# are enforced in evaluate() and cannot be lost.
+_DEFAULT_POLICIES_FILE = (Path(__file__).resolve().parents[2]
+                          / "data" / "tenants" / "default" / "policies.yaml")
+
+
+def _load_default_policies() -> dict:
+    try:
+        import yaml
+        loaded = yaml.safe_load(_DEFAULT_POLICIES_FILE.read_text(
+            encoding="utf-8"))
+        return loaded if isinstance(loaded, dict) else {}
+    except Exception:
+        return {}
+
+
+DEFAULT_POLICIES: dict = _load_default_policies()
 
 # Platform-default high-value-refund threshold, used ONLY when no policy file
 # declares the top-level `high_value_refund_threshold` key. A tenant declares
@@ -120,6 +126,13 @@ class PolicyEngine:
 
     def evaluate(self, action: str, ctx: PolicyContext | None = None) -> Decision:
         ctx = ctx or PolicyContext()
+        # PLATFORM INVARIANT (ADR-003): the human-handoff valve is always
+        # proposeable AND always allowed — a tenant forgetting to declare it
+        # must never trap a caller with an agent that cannot fetch help.
+        if action == "escalate_to_human":
+            return Decision("ALLOW", ["escalate_to_human is the always-allowed safety valve"])
+        if action == "end_call":
+            return Decision("ALLOW", ["end_call closes the caller's own call"])
         escalate = set(self.policies.get("escalate", []))
         if action in escalate:
             return Decision("ESCALATE", [f"action '{action}' requires human escalation"])

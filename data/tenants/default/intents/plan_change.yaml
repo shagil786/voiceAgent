@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- change my mobile plan
+- plan badalna hai
+- upgrade my plan
+- switch to a cheaper plan
+- मेरा प्लान बदलना है
+- सस्ते प्लान पर शिफ्ट करो
+- प्लान अपग्रेड करना है
+- என் திட்டத்தை மாற்ற வேண்டும்
+- மலிவான திட்டத்திற்கு மாறவும்
+- திட்டத்தை மேம்படுத்த வேண்டும்
+- నా ప్లాన్ మార్చాలి
+- తక్కువ ధర ప్లాన్‌కి మార్చండి
+- ప్లాన్ అప్‌గ్రేడ్ చేయాలి

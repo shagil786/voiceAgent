@@ -1,0 +1,18 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- I got a damaged item, send a replacement
+- replace my product
+- product kharab aaya, replace karo
+- सामान टूटा हुआ आया है, रिप्लेसमेंट दो
+- मुझे नया प्रोडक्ट भेजो
+- रिप्लेसमेंट कब आएगा
+- பொருள் உடைந்து வந்தது, மாற்று பொருள் அனுப்பவும்
+- எனக்கு புதிய பொருள் அனுப்ப வேண்டும்
+- ரீப்ளேஸ்மென்ட் எப்போது வரும்
+- వస్తువు పగిలి వచ్చింది, రీప్లేస్‌మెంట్ ఇవ్వండి
+- నాకు కొత్త ప్రొడక్ట్ పంపండి
+- రీప్లేస్‌మెంట్ ఎప్పుడు వస్తుంది
