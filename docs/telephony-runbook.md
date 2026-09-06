@@ -173,3 +173,18 @@ before recording, and store/retain recordings under an owner-approved policy.
 - `run_room_session` is log-quiet by design; success is the audible greeting,
   failure modes surface as thread exit without greeting (no SIP track in 15s)
   or webhook 404s (signature/prefix mismatch).
+
+## Shadow policy report (after real calls)
+
+Once the persistent audit DB (`VOICEAGENT_AUDIT_DB`) has 25+ governed calls:
+
+```bash
+.venv/bin/python -m voiceagent.audit_report \
+  --audit-db data/out/audit.sqlite \
+  --memory-db data/out/pizzapal-memory.sqlite \
+  --out data/out/policy-report.md
+```
+
+Deterministic markdown: action verdict breakdown, deny-then-escalate
+patterns, caller ratings, learning-candidate quality, and PROPOSALS ONLY —
+nothing applies to policies.yaml without a reviewed human diff (ADR-001).
