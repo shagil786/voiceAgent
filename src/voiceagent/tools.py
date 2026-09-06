@@ -169,6 +169,9 @@ class ToolSpec:
     # declared here per tool (code defaults, tools.yaml overrides), never
     # hardcoded in the guard.
     facts: tuple[str, ...] = ()
+    # Optional numeric bounds: {param: (min, max)} enforced after coercion —
+    # a rating must be 1..10, a partial refund 0..cap, etc. Declared data.
+    param_bounds: dict = field(default_factory=dict)
     # Tool metadata the brain's proposal surface needs — declared HERE, next
     # to the binding, so adding a tool never requires touching runtime.py:
     # side_effects (mutating? default True = safest assumption) drives the
@@ -315,6 +318,21 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
         params=("reason",),
         description="Page a human agent to take over this call. Provide a "
                     "short reason for the handoff."),
+    # Call lifecycle: the caller's own call ends when THEY are done — the
+    # brain proposes end_call on farewell or after resolution + rating; the
+    # telephony session observes the executed action and hangs up.
+    "end_call": ToolSpec(
+        params=("reason",),
+        description="End this call politely. Propose when the caller says "
+                    "goodbye/thanks-and-bye, or after their issue is resolved "
+                    "and any feedback captured."),
+    "record_feedback": ToolSpec(
+        params=("rating",),
+        param_types={"rating": "number", "comment": "string"},
+        param_bounds={"rating": (1, 10)},
+        description="Record the caller's satisfaction rating (1-10) for this "
+                    "call. Ask for it once the issue is resolved; 0 or >10 is "
+                    "invalid."),
     # Only shipped/delivered orders can be returned.
     "initiate_return": ToolSpec(
         params=("order_id", "reason"),
@@ -423,6 +441,14 @@ class ToolGateway:
             if not ok:
                 return ToolResult(ok=False, error=f"invalid_param: {p}")
             coerced[p] = cv
+        # declared numeric bounds (e.g. rating 1..10) — after coercion
+        for p, (lo, hi) in (spec.param_bounds or {}).items():
+            v = coerced.get(p)
+            if isinstance(v, (int, float)) and not (lo <= v <= hi):
+                return ToolResult(
+                    ok=False,
+                    error=f"out_of_range: {p}={v} (expected {lo}..{hi})")
+            coerced[p] = cv
         params = coerced
 
         if idempotency_key and idempotency_key in self._idempotency:
@@ -451,6 +477,13 @@ class ToolGateway:
                 value = order
             elif tool_name == "order_lookup":
                 value = self.erp.lookup_orders_by_phone(params["phone"])
+            elif tool_name == "end_call":
+                value = {"call_ended": True,
+                         "reason": params.get("reason", "resolved")}
+            elif tool_name == "record_feedback":
+                value = {"feedback_recorded": True,
+                         "rating": params["rating"],
+                         "comment": params.get("comment", "")}
             elif tool_name == "cancel_order":
                 value = self.erp.cancel_order(params["order_id"],
                                               params["reason"])

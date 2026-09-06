@@ -120,6 +120,13 @@ class PolicyEngine:
 
     def evaluate(self, action: str, ctx: PolicyContext | None = None) -> Decision:
         ctx = ctx or PolicyContext()
+        # PLATFORM INVARIANT (ADR-003): the human-handoff valve is always
+        # proposeable AND always allowed — a tenant forgetting to declare it
+        # must never trap a caller with an agent that cannot fetch help.
+        if action == "escalate_to_human":
+            return Decision("ALLOW", ["escalate_to_human is the always-allowed safety valve"])
+        if action == "end_call":
+            return Decision("ALLOW", ["end_call closes the caller's own call"])
         escalate = set(self.policies.get("escalate", []))
         if action in escalate:
             return Decision("ESCALATE", [f"action '{action}' requires human escalation"])

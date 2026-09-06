@@ -280,6 +280,22 @@ class Orchestrator:
                     call, state, session_id, frustration)
                 if entry is not None:
                     actions.append(entry)
+                    if (entry.get("action") == "record_feedback"
+                            and entry.get("ok") and self.intent_memory
+                            is not None):
+                        try:
+                            tenant = ((self._deployment.metadata or {})
+                                      .get("tenant") or "default")
+                            self.intent_memory.record_rating(
+                                tenant, session_id,
+                                float((call.arguments or {})
+                                      .get("rating", 0)),
+                                str((call.arguments or {})
+                                    .get("comment", "")))
+                        except Exception:
+                            logger.warning(
+                                "intent memory: rating record failed "
+                                "(fail-open)", exc_info=True)
                 escalated = escalated or is_escalation
                 # Task B clarify-and-dig ladder: a not-found slot lookup may
                 # emit a bounded clarify directive (re-confirm the id, offer
@@ -353,7 +369,8 @@ class Orchestrator:
         # and fail-open wrapper as the Agent path.
         if self.intent_memory is not None:
             self._capture_intent_episode(
-                user_text, primary["action"] if primary else None)
+                user_text, primary["action"] if primary else None,
+                session_id=session_id)
 
         # Task D4: the knowledge ids that entered this turn's system prompt
         # (deploy() renders the whole block) — recorded for provenance even
@@ -415,7 +432,8 @@ class Orchestrator:
     # -- internals ----------------------------------------------------------
 
     def _capture_intent_episode(self, user_text: str,
-                                outcome_action: str | None) -> None:
+                                outcome_action: str | None,
+                                session_id: str = "") -> None:
         """M4 (ADR-002): capture one episodic fragment on the frontier-brain
         path. The local (sidecar) classifier labels the utterance ONLY to
         feed the memory store — its output never touches the decision path.
@@ -435,7 +453,8 @@ class Orchestrator:
                               .get("tenant") or "default")
                 self.intent_memory.capture(
                     tenant, user_text, label or "", float(confidence),
-                    outcome=outcome_action or "unmatched")
+                    outcome=outcome_action or "unmatched",
+                    session_id=session_id)
         except Exception:
             logger.warning("intent memory: sidecar capture failed "
                            "(fail-open)", exc_info=True)

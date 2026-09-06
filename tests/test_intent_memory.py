@@ -55,8 +55,10 @@ class SpyStore:
     def __init__(self):
         self.captured = []
 
-    def capture(self, tenant, text, label, confidence, outcome=""):
-        self.captured.append((tenant, text, label, confidence, outcome))
+    def capture(self, tenant, text, label, confidence, outcome="",
+                session_id=""):
+        self.captured.append((tenant, text, label, confidence, outcome,
+                              session_id))
 
     def prototypes_for(self, tenant):
         return []
@@ -490,7 +492,7 @@ def test_low_confidence_turn_is_captured_with_outcome():
         label="order_status", confidence=0.2), intent_memory=spy)
     agent.handle("weird phrasing nobody seeded", conv_id="c1")
     assert len(spy.captured) == 1
-    tenant, text, label, conf, outcome = spy.captured[0]
+    tenant, text, label, conf, outcome, session_id = spy.captured[0]
     assert tenant == "default"
     assert text == "weird phrasing nobody seeded"
     assert label == "order_status"
@@ -712,7 +714,7 @@ def test_orchestrator_sidecar_captures_low_confidence_turn():
     res = orch.handle_turn("s1", "kssl blemf worta")
     assert "Happy to help" in res.reply          # turn completed normally
     assert len(spy.captured) == 1
-    tenant, text, label, conf, outcome = spy.captured[0]
+    tenant, text, label, conf, outcome, session_id = spy.captured[0]
     assert tenant == "acme"
     assert text == "kssl blemf worta"
     assert label == ""                           # unknown label captured

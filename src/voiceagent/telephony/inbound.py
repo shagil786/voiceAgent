@@ -112,6 +112,8 @@ def make_turn_fn(
         # This is how a silent/garbled/late/wrong-tool turn is diagnosed
         # after the fact.
         acts = getattr(result, "actions", None) or []
+        if any(a.get("action") == "end_call" and a.get("ok") for a in acts):
+            turn_fn.call_ended = True  # room loop hangs up after playback
         act_sig = "; ".join(
             f"{a.get('action')}={a.get('verdict')}/{'ok' if a.get('ok') else (a.get('error') or 'err')}"
             for a in acts)
@@ -362,6 +364,9 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
             while len(pending) >= 640:
                 session.feed_pcm16(pending[:640])
                 pending = pending[640:]
+            if getattr(turn_fn, "call_ended", False):
+                logger.info("call ended by agent (end_call executed)")
+                break
             if disconnected.is_set():
                 break
         return True

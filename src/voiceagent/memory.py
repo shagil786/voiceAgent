@@ -280,7 +280,7 @@ class IntentMemoryStore:
     captured automatically during live turns, consolidated into bounded
     intent prototypes, retrieved by the classifier as ADDITIONAL exemplars.
 
-    Schema: episodes(id, tenant, ts, text, label, confidence, outcome) and
+    Schema: episodes(id, tenant, session_id, ts, text, label, confidence, outcome) and
     prototypes(tenant, label, centroid_json, exemplars_json, hit_count,
     last_seen, confidence) — vectors are JSON float lists produced by
     default_embed (the classifier's own embedding function).
@@ -312,7 +312,15 @@ class IntentMemoryStore:
         " text TEXT NOT NULL,"
         " label TEXT NOT NULL,"
         " confidence REAL NOT NULL DEFAULT 0.0,"
-        " outcome TEXT NOT NULL DEFAULT '')",
+        " outcome TEXT NOT NULL DEFAULT '',"
+        " session_id TEXT NOT NULL DEFAULT '')",
+        "CREATE TABLE IF NOT EXISTS ratings ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " tenant TEXT NOT NULL,"
+        " session_id TEXT NOT NULL,"
+        " ts TEXT NOT NULL,"
+        " rating REAL NOT NULL,"
+        " comment TEXT NOT NULL DEFAULT '')",
         "CREATE INDEX IF NOT EXISTS idx_episodes_tenant"
         " ON episodes(tenant, label)",
         "CREATE TABLE IF NOT EXISTS prototypes ("
@@ -366,7 +374,8 @@ class IntentMemoryStore:
     # -- capture --------------------------------------------------------------
 
     def capture(self, tenant: str, text: str, label: str, confidence: float,
-                outcome: str = "", ts: str | None = None) -> None:
+                outcome: str = "", ts: str | None = None,
+                session_id: str = "") -> None:
         """Record one episodic fragment. Duplicates are acceptable (the
         consolidation averages them out). Every consolidate_every-th capture
         for this tenant triggers a consolidation pass inline — SQLite-local
@@ -374,14 +383,30 @@ class IntentMemoryStore:
         with self._lock:
             self._conn.execute(
                 "INSERT INTO episodes (tenant, ts, text, label, confidence,"
-                " outcome) VALUES (?, ?, ?, ?, ?, ?)",
+                " outcome, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (tenant, ts or now_ts(), text, label, float(confidence),
-                 outcome))
+                 outcome, session_id))
             self._conn.commit()
             count = self._captures.get(tenant, 0) + 1
             self._captures[tenant] = count
         if self._consolidate_every > 0 and count % self._consolidate_every == 0:
             self.consolidate(tenant)
+
+    def record_rating(self, tenant: str, session_id: str, rating: float,
+                      comment: str = "") -> None:
+        """Caller satisfaction for one call: a ratings row + the rating is
+        folded into every episode that session captured (outcome annotation),
+        so feedback literally re-weights what the agent learns from."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO ratings (tenant, session_id, ts, rating, comment)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (tenant, session_id, now_ts(), float(rating), comment))
+            self._conn.execute(
+                "UPDATE episodes SET outcome = outcome || ? "
+                "WHERE tenant = ? AND session_id = ?",
+                (f" | feedback:{rating:g}", tenant, session_id))
+            self._conn.commit()
 
     # -- consolidation --------------------------------------------------------
 

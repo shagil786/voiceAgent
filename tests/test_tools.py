@@ -403,3 +403,13 @@ def test_nonfinite_and_underscore_numbers_rejected():
         r = gw.execute("initiate_refund",
                        {"order_id": "ORD-4821", "amount": v, "reason": "x"})
         assert not r.ok and r.error == "invalid_param: amount", v
+
+
+def test_end_call_and_feedback_tools_governed():
+    gw = ToolGateway()
+    ok = gw.execute("end_call", {"reason": "caller said thanks and bye"})
+    assert ok.ok and ok.value["call_ended"] is True
+    r = gw.execute("record_feedback", {"rating": "8", "comment": "fast"})
+    assert r.ok and r.value["rating"] == 8.0
+    bad = gw.execute("record_feedback", {"rating": "11"})
+    assert not bad.ok and "out_of_range" in bad.error
