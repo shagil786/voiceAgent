@@ -37,14 +37,9 @@ def default_candidate_models() -> list[str]:
     from voiceagent.llm import load_model_registry
     return [m["name"] for m in load_model_registry()]
 
-# Verbatim copy of tts.VOICE_REGISTRY (src/voiceagent/tts.py): text language
-# -> piper voice name. ("hinglish" is NOT a registry key — TTSHandle routes
-# it to the "hi" voice via HINGLISH_VOICE_LANG.)
-DEFAULT_VOICES = {
-    "en": "en_US-lessac-medium",
-    "hi": "hi_IN-pratham-medium",
-    "te": "te_IN-maya-medium",
-}
+# SINGLE SOURCE: tts.VOICE_REGISTRY (a verbatim copy here drifted stale —
+# it kept the old male Hindi voice after the registry moved to priyamvada).
+from voiceagent.tts import VOICE_REGISTRY as DEFAULT_VOICES  # noqa: E402
 
 DEFAULT_MODELS_DIR = "data/models"
 DEFAULT_EMBEDDING_SPACE = "latin"  # mirrors knowledge.LATIN_SPACE
