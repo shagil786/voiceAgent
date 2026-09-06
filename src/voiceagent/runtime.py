@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from voiceagent.decisionlog import DecisionLog
+from voiceagent.demo_data import DEMO_BUILTIN_IDENTITY, DEMO_BUILTIN_KNOWLEDGE
 from voiceagent.memory import InMemoryMemory
 from voiceagent.orchestrator import Deployment, Orchestrator
 from voiceagent.policy import PolicyEngine, load_policies
@@ -60,7 +61,7 @@ PLATFORM_PROMPT_BASE = (
     "human approval, human handoff) — never say you are doing something you "
     "have no tool for. If the customer is upset or asks for a human agent, "
     "propose escalate_to_human with a short reason.")
-_BUILTIN_IDENTITY = "You are Acme's voice support agent."
+_BUILTIN_IDENTITY = DEMO_BUILTIN_IDENTITY  # demo tenant identity lives in demo_data
 
 # The built-in tool surface: DERIVED from DEFAULT_TOOL_SPECS so a new tool
 # binding is automatically proposeable by the brain — the proposal surface can
@@ -94,10 +95,7 @@ def _auto_gateway_tools() -> dict[str, dict]:
 
 
 BUILTIN_GATEWAY_TOOLS: dict[str, dict] = _auto_gateway_tools()
-BUILTIN_KNOWLEDGE: dict[str, str] = {
-    "eta": "Deliveries occur between 9:00 and 19:00 local time.",
-    "cancel_policy": "Orders that already shipped cannot be cancelled.",
-}
+BUILTIN_KNOWLEDGE: dict[str, str] = DEMO_BUILTIN_KNOWLEDGE  # demo KB lives in demo_data
 
 # Total injected knowledge is capped because deploy() joins it into the
 # system prompt — an unbounded KB would bloat every single turn.
