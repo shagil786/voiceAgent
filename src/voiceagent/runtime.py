@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 from voiceagent.decisionlog import DecisionLog
-from voiceagent.demo_data import DEMO_BUILTIN_IDENTITY, DEMO_BUILTIN_KNOWLEDGE
 from voiceagent.memory import InMemoryMemory
 from voiceagent.orchestrator import Deployment, Orchestrator
 from voiceagent.policy import PolicyEngine, load_policies
@@ -41,7 +40,22 @@ from voiceagent.tenant import DEFAULT_CURRENCY, Tenant, compile_persona_block
 # Deployment (system prompt, gateway tools, knowledge) per business; the policy
 # file lives in git as the company's support/compliance artifact.
 DEFAULT_POLICY_PATH = "data/policies/policies.yaml"
-from voiceagent.demo_data import DEMO_DEPLOYMENT_NAME as DEFAULT_DEPLOYMENT_NAME
+
+# The platform's BUILT-IN demo tenant: a COMMITTED bundle under
+# data/tenants/default/ (unlike customer bundles such as pizzapal, which are
+# gitignored — this one IS the platform's shipped demo tenant). Task E moved
+# the demo identity/knowledge/ERP fixture out of voiceagent.demo_data into
+# this bundle, so the no-tenant path loads real tenant DATA through the same
+# Tenant machinery as any named customer instead of importing demo content.
+# Anchored to the repo root (src/voiceagent/ -> parents[2]) so resolution does
+# not depend on the process cwd.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_TENANT_BUNDLE = _REPO_ROOT / "data" / "tenants" / "default"
+
+# The default (demo) DEPLOYMENT name — domain data, a literal now that the
+# bundle itself is named "default" (the Deployment name is the historical
+# "acme_support", byte-identical by test pin).
+DEFAULT_DEPLOYMENT_NAME = "acme_support"
 
 # Platform-level governance boilerplate for the frontier system prompt: the
 # spoken-aloud brevity rule, the propose-vs-policy contract, never-invent
@@ -61,7 +75,7 @@ PLATFORM_PROMPT_BASE = (
     "human approval, human handoff) — never say you are doing something you "
     "have no tool for. If the customer is upset or asks for a human agent, "
     "propose escalate_to_human with a short reason.")
-_BUILTIN_IDENTITY = DEMO_BUILTIN_IDENTITY  # demo tenant identity lives in demo_data
+
 
 # The built-in tool surface: DERIVED from DEFAULT_TOOL_SPECS so a new tool
 # binding is automatically proposeable by the brain — the proposal surface can
@@ -95,7 +109,20 @@ def _auto_gateway_tools() -> dict[str, dict]:
 
 
 BUILTIN_GATEWAY_TOOLS: dict[str, dict] = _auto_gateway_tools()
-BUILTIN_KNOWLEDGE: dict[str, str] = DEMO_BUILTIN_KNOWLEDGE  # demo KB lives in demo_data
+
+
+def _load_default_bundle_knowledge() -> dict[str, str]:
+    """The default bundle's KB documents (knowledge/*.md), loaded straight
+    from the committed bundle — the historical DEMO_BUILTIN_KNOWLEDGE, now
+    tenant data. Empty when the bundle is unavailable (installed-package
+    edge): the fallback is a matter of correctness only for the repo layout
+    this module ships in."""
+    d = DEFAULT_TENANT_BUNDLE / "knowledge"
+    if not d.is_dir():
+        return {}
+    return _cap_knowledge({f.stem: f.read_text(encoding="utf-8")
+                           for f in sorted(d.glob("*.md"))})
+
 
 # Total injected knowledge is capped because deploy() joins it into the
 # system prompt — an unbounded KB would bloat every single turn.
@@ -139,6 +166,15 @@ def gateway_tools_from_yaml(path: str | Path) -> dict[str, dict]:
             from voiceagent.tools import parse_facts
             meta["facts"] = list(parse_facts(meta["facts"],
                                              f"tools.yaml '{name}'"))
+        # Task E: optional param-type / numeric-bound constraints — validated
+        # here (CI gate) AND in ToolGateway.from_yaml / specs_with_yaml_facts
+        # (enforcement), same one-contract pattern as `facts`.
+        if "param_types" in meta:
+            from voiceagent.tools import parse_param_types
+            parse_param_types(meta["param_types"], f"tools.yaml '{name}'")
+        if "param_bounds" in meta:
+            from voiceagent.tools import parse_param_bounds
+            parse_param_bounds(meta["param_bounds"], f"tools.yaml '{name}'")
         surface[name] = dict(meta)
     return surface
 
@@ -157,6 +193,9 @@ def _cap_knowledge(knowledge: dict[str, str]) -> dict[str, str]:
         capped[kid] = text
         total += len(text)
     return capped
+
+
+BUILTIN_KNOWLEDGE: dict[str, str] = _load_default_bundle_knowledge()
 
 
 def _bundle_gateway_tools(tenant: Tenant) -> dict[str, dict]:
@@ -206,15 +245,27 @@ def make_deployment(
     """Build the governed Deployment: prompt + gateway tool surface + inline
     knowledge. With a tenant bundle, identity/persona, tool surface,
     knowledge and metadata all come from data/tenants/<name>/ — onboarding a
-    customer is data, not code. tenant=None reproduces the built-in demo tenant
-    deployment byte-identically (policy_path is accepted for API symmetry;
-    the policy engine is wired in build_orchestrator)."""
+    customer is data, not code.
+
+    tenant=None loads the COMMITTED default bundle (data/tenants/default/)
+    through the SAME Tenant.load machinery as named tenants — the platform's
+    built-in demo tenant is a bundle, not a Python import (Task E). The
+    composed no-tenant Deployment keeps its historical byte-identical shape
+    (name `acme_support`, identity-first prompt, built-in tool surface, no
+    metadata/actions): the bundle supplies the bytes, the composition is the
+    pinned platform default. (policy_path is accepted for API symmetry; the
+    policy engine is wired in build_orchestrator.)"""
     if tenant is None:
+        tenant = Tenant.load(DEFAULT_TENANT_BUNDLE)
         return Deployment(
             name=DEFAULT_DEPLOYMENT_NAME,
-            system_prompt=_BUILTIN_IDENTITY + " " + PLATFORM_PROMPT_BASE,
+            # The identity sentence compiles from the bundle's declared
+            # persona (flat-string form -> "You are <role>.") — the same
+            # compiler named tenants go through.
+            system_prompt=compile_persona_block(tenant.config.persona)
+                          + " " + PLATFORM_PROMPT_BASE,
             gateway_tools=dict(BUILTIN_GATEWAY_TOOLS),
-            knowledge=dict(BUILTIN_KNOWLEDGE),
+            knowledge=_bundle_knowledge(tenant),
         )
     return Deployment(
         name=tenant.config.name,

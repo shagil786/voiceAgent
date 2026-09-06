@@ -1,0 +1,1 @@
+Deliveries occur between 9:00 and 19:00 local time.

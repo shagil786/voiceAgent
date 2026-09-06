@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- my order is late, where is it
+- delivery bahut late ho rahi hai
+- order delay hone par kya karein
+- why is my delivery delayed
+- डिलीवरी बहुत देर से है
+- ऑर्डर लेट हो रहा है
+- इतनी देर क्यों हो रही है
+- டெலிவரி மிகவும் தாமதமாக உள்ளது
+- ஆர்டர் தாமதமாகிறது
+- இவ்வளவு நேரம் ஏன் ஆகிறது
+- డెలివరీ చాలా ఆలస్యంగా ఉంది
+- ఆర్డర్ లేట్ అవుతోంది
+- ఇంత ఆలస్యం ఎందుకు

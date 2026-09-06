@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- cancel my order
+- I want to cancel the order
+- ऑर्डर कैंसिल करो
+- cancel order before shipping
+- मेरा ऑर्डर रद्द कर दो
+- ऑर्डर कैंसिल करना है
+- यह ऑर्डर अभी रद्द करो
+- என் ஆர்டரை ரத்து செய்யுங்கள்
+- ஆர்டரை கேன்சல் செய்ய வேண்டும்
+- இந்த ஆர்டரை ரத்து செய்யவும்
+- నా ఆర్డర్ రద్దు చేయండి
+- ఆర్డర్ క్యాన్సిల్ చేయాలి
+- ఈ ఆర్డర్ వెంటనే రద్దు చేయండి

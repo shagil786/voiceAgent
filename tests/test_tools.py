@@ -202,6 +202,131 @@ def test_yaml_loader_rejects_bad_facts_type():
             ToolGateway.from_yaml(f)
 
 
+# ---------------------------------------------------------------------------
+# Task E: param_types + param_bounds are threadable through tools.yaml, and
+# from_yaml PRESERVES base-spec fields its entries don't declare — most
+# importantly preconditions (a yaml entry without `preconditions:` keeps the
+# code-default ones; relaxing them requires an explicit `preconditions: []`).
+# ---------------------------------------------------------------------------
+
+def test_yaml_loader_preserves_base_preconditions_when_absent():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        # cancel_order's yaml entry declares NO preconditions
+        f.write_text(yaml.safe_dump({"tools": {
+            "cancel_order": {"params": ["order_id", "reason"]}}}))
+        gw = ToolGateway.from_yaml(f)
+        assert gw.specs["cancel_order"].preconditions == \
+            DEFAULT_TOOL_SPECS["cancel_order"].preconditions
+        # ...and they are still ENFORCED (ORD-7734 is SHIPPED)
+        r = gw.execute("cancel_order", {"order_id": "ORD-7734", "reason": "x"})
+        assert not r.ok and "precondition_failed" in r.error
+
+
+def test_yaml_loader_preserves_other_base_fields():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "fetch_order_status": {"description": "custom wording"}}}))
+        gw = ToolGateway.from_yaml(f)
+        spec = gw.specs["fetch_order_status"]
+        assert spec.description == "custom wording"      # declared: overridden
+        assert spec.params == DEFAULT_TOOL_SPECS["fetch_order_status"].params
+        assert spec.facts == DEFAULT_TOOL_SPECS["fetch_order_status"].facts
+        assert spec.side_effects is False                # undeclared: preserved
+        assert spec.action == "order_status"
+        assert spec.preconditions == \
+            DEFAULT_TOOL_SPECS["fetch_order_status"].preconditions
+
+
+def test_yaml_explicit_empty_preconditions_relaxes_base():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "cancel_order": {"preconditions": []}}}))
+        gw = ToolGateway.from_yaml(f)
+        assert gw.specs["cancel_order"].preconditions == ()
+        r = gw.execute("cancel_order", {"order_id": "ORD-7734", "reason": "x"})
+        assert r.ok and r.value["status"] == "CANCELLED"
+
+
+def test_yaml_loader_threads_param_types_and_bounds():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "initiate_refund": {
+                "param_types": {"amount": "number", "reason": "string"},
+                "param_bounds": {"amount": [0, 10000]}}}}))
+        gw = ToolGateway.from_yaml(f)
+        assert gw.specs["initiate_refund"].param_types == \
+            {"amount": "number", "reason": "string"}
+        assert gw.specs["initiate_refund"].param_bounds == \
+            {"amount": (0, 10000)}
+        # types are enforced through the loaded gateway...
+        r = gw.execute("initiate_refund",
+                       {"order_id": "ORD-4821", "amount": "abc", "reason": "x"})
+        assert not r.ok and r.error == "invalid_param: amount"
+        # ...and so are the bounds (after coercion "200" -> 200.0)
+        r2 = gw.execute("initiate_refund",
+                        {"order_id": "ORD-4821", "amount": "20000",
+                         "reason": "x"})
+        assert not r2.ok and "out_of_range" in r2.error
+        r3 = gw.execute("initiate_refund",
+                        {"order_id": "ORD-4821", "amount": "200", "reason": "x"})
+        assert r3.ok and r3.value["amount"] == 200.0
+
+
+def test_yaml_loader_rejects_bad_param_types():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "initiate_refund": {"param_types": {"amount": "float"}}}}))
+        with pytest.raises(ValueError, match="param_types"):
+            ToolGateway.from_yaml(f)
+
+
+def test_yaml_loader_rejects_bad_param_bounds():
+    import tempfile, yaml
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        for bad in ({"amount": [10, 1]}, {"amount": ["a", "z"]},
+                    {"amount": 5}, {"amount": [1]}):
+            f.write_text(yaml.safe_dump({"tools": {
+                "initiate_refund": {"param_bounds": bad}}}))
+            with pytest.raises(ValueError, match="param_bounds"):
+                ToolGateway.from_yaml(f)
+
+
+def test_specs_with_yaml_facts_threads_types_and_bounds_too():
+    """The runtime path (specs_with_yaml_facts) also honors param_types /
+    param_bounds declarations, so a tenant bundle's constraints are enforced
+    on the deployed gateway — while everything undeclared stays base."""
+    import tempfile, yaml
+    from pathlib import Path as P
+    from voiceagent.tools import specs_with_yaml_facts
+    with tempfile.TemporaryDirectory() as d:
+        f = P(d) / "tools.yaml"
+        f.write_text(yaml.safe_dump({"tools": {
+            "record_feedback": {"param_bounds": {"rating": [1, 5]}}}}))
+        specs = specs_with_yaml_facts(f)
+        assert specs["record_feedback"].param_bounds == {"rating": (1, 5)}
+        assert specs["record_feedback"].param_types == \
+            DEFAULT_TOOL_SPECS["record_feedback"].param_types
+        assert specs["record_feedback"].preconditions == ()
+        assert specs["cancel_order"] == DEFAULT_TOOL_SPECS["cancel_order"]
+
+
 def test_specs_with_yaml_facts_merges_without_touching_other_specs():
     import tempfile, yaml
     from pathlib import Path as P

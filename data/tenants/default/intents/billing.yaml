@@ -1,0 +1,20 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- I don't understand my bill
+- bill samajh nahi aaya
+- बिल समझ नहीं आया
+- why was I charged
+- what is this charge on my bill
+- मेरा बिल समझ नहीं आ रहा
+- बिल में एक्स्ट्रा चार्ज क्यों है
+- गलत बिल आया है
+- என் பில் புரியவில்லை
+- பில்லில் கூடுதல் கட்டணம் ஏன்
+- தவறான பில் வந்துள்ளது
+- నా బిల్లు అర్థం కాలేదు
+- బిల్లులో అదనపు ఛార్జీ ఎందుకు
+- తప్పు బిల్లు వచ్చింది

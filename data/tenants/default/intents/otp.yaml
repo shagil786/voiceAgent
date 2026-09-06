@@ -1,0 +1,20 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- OTP nahi aaya mere phone pe
+- resend the OTP
+- मुझे OTP नहीं मिला
+- did not receive OTP
+- OTP not received
+- मुझे ओटीपी नहीं मिला
+- ओटीपी दोबारा भेजो
+- ओटीपी आया ही नहीं
+- எனக்கு ஓடிபி வரவில்லை
+- ஓடிபியை மீண்டும் அனுப்பவும்
+- ஓடிபி இன்னும் வரவில்லை
+- నాకు ఓటీపీ రాలేదు
+- ఓటీపీ మళ్ళీ పంపండి
+- ఓటీపీ ఇంకా రాలేదు

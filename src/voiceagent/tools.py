@@ -15,12 +15,33 @@ tenant bundle's tools.yaml; the Gateway/Runner code is identical.
 from __future__ import annotations
 
 import copy
+import json
 import math
 import re
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+
+# The default (demo) tenant's ERP fixture: a file in the COMMITTED default
+# bundle (data/tenants/default/erp_fixture.json — {"orders": ..., "customers":
+# ...}) — demo ERP data is tenant data, not a Python import (Task E). Anchored
+# to the repo root (src/voiceagent/ -> parents[2]) so resolution does not
+# depend on the process cwd.
+DEFAULT_BUNDLE_ERP_FIXTURE = (Path(__file__).resolve().parents[2]
+                              / "data" / "tenants" / "default"
+                              / "erp_fixture.json")
+
+
+def _default_erp_fixture() -> tuple[dict, dict]:
+    """(orders, customers) from the committed default bundle; empty dicts
+    when the bundle file is unavailable (never a hard import-time failure)."""
+    p = DEFAULT_BUNDLE_ERP_FIXTURE
+    if not p.exists():
+        return {}, {}
+    data = json.loads(p.read_text(encoding="utf-8"))
+    return (data.get("orders", {}) or {}, data.get("customers", {}) or {})
 
 
 # ---------------------------------------------------------------------------
@@ -62,11 +83,12 @@ class MockERP:
     """In-memory ERP with the demo customer's orders and failure injection."""
 
     def __init__(self) -> None:
-        # Demo fixture data lives in demo_data (domain-neutral core); lazy
-        # import here breaks the demo_data -> tools -> demo_data cycle.
-        from voiceagent.demo_data import DEMO_ERP_CUSTOMERS, DEMO_ERP_ORDERS
-        self.orders: dict[str, dict] = copy.deepcopy(DEMO_ERP_ORDERS)
-        self.customers: dict[str, dict] = copy.deepcopy(DEMO_ERP_CUSTOMERS)
+        # Demo fixture data is the committed default tenant bundle's
+        # erp_fixture.json (loaded lazily, deep-copied so one instance's
+        # mutations never leak into another).
+        orders, customers = _default_erp_fixture()
+        self.orders: dict[str, dict] = copy.deepcopy(orders)
+        self.customers: dict[str, dict] = copy.deepcopy(customers)
         self.refunds: list[dict] = []
         self.handoffs: list[dict] = []
         # Failure injection: the next mutating/reading operation raises like
@@ -261,6 +283,53 @@ def parse_facts(value, where: str = "tools.yaml") -> tuple[str, ...]:
     return tuple(value)
 
 
+def parse_param_types(value, where: str = "tools.yaml") -> dict[str, str]:
+    """Validate a `param_types` declaration: a non-empty mapping of param
+    name -> one of PARAM_TYPES (the same set the gateway boundary coerces
+    against). Raises ValueError with a deploy-gate-friendly message on bad
+    data — Task E threads these through tools.yaml."""
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{where}: 'param_types' must be a non-empty "
+                         f"mapping of param -> one of {PARAM_TYPES}, "
+                         f"got {value!r}")
+    out: dict[str, str] = {}
+    for p, t in value.items():
+        if not isinstance(p, str) or not p.strip() or t not in PARAM_TYPES:
+            raise ValueError(f"{where}: 'param_types' entries must map a "
+                             f"param name to one of {PARAM_TYPES}, got "
+                             f"{p!r}: {t!r}")
+        out[p] = t
+    return out
+
+
+def parse_param_bounds(value,
+                       where: str = "tools.yaml") -> dict[str, tuple]:
+    """Validate a `param_bounds` declaration: a non-empty mapping of param
+    name -> [lo, hi] with NUMERIC lo < hi (parsed to floats, stored as a
+    tuple the gateway enforces after coercion: lo <= value <= hi). Raises
+    ValueError with a deploy-gate-friendly message on bad data — Task E
+    threads these through tools.yaml."""
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{where}: 'param_bounds' must be a non-empty "
+                         f"mapping of param -> [lo, hi], got {value!r}")
+    out: dict[str, tuple] = {}
+    for p, b in value.items():
+        if (not isinstance(p, str) or not p.strip()
+                or not isinstance(b, (list, tuple)) or len(b) != 2):
+            raise ValueError(f"{where}: 'param_bounds' entries must be "
+                             f"param: [lo, hi], got {p!r}: {b!r}")
+        try:
+            lo, hi = float(b[0]), float(b[1])
+        except (TypeError, ValueError):
+            raise ValueError(f"{where}: param_bounds for {p!r} must be "
+                             f"numeric [lo, hi], got {b!r}") from None
+        if math.isnan(lo) or math.isnan(hi) or not lo < hi:
+            raise ValueError(f"{where}: param_bounds for {p!r} need numeric "
+                             f"lo < hi, got {b!r}")
+        out[p] = (lo, hi)
+    return out
+
+
 def spec_facts(specs: dict[str, "ToolSpec"]) -> list[str]:
     """Union of the contract facts across a spec registry, in declaration
     order, deduplicated — the fact list the echo guardrail scans against the
@@ -347,13 +416,14 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
 def specs_with_yaml_facts(path: str | Path,
                           base: dict[str, ToolSpec] | None = None
                           ) -> dict[str, ToolSpec]:
-    """Merge optional per-tool `facts:` declarations from a bundle's tools.yaml
-    into a COPY of the base specs (DEFAULT_TOOL_SPECS). Tools the file does
-    not mention keep their base spec untouched (params AND preconditions);
-    unknown tool names are rejected — bindings are code, declarations are
-    data. This is the facts-only view of the DEPLOYMENT tools.yaml shape
-    (action/description/...) — never run it through ToolGateway.from_yaml,
-    which would wipe default preconditions."""
+    """Merge optional per-tool constraint declarations from a bundle's
+    tools.yaml into a COPY of the base specs (DEFAULT_TOOL_SPECS): `facts:`
+    (Sprint A3) plus `param_types:` / `param_bounds:` (Task E). Tools the
+    file does not mention keep their base spec untouched (params AND
+    preconditions); unknown tool names are rejected — bindings are code,
+    declarations are data. This is the constraints view of the DEPLOYMENT
+    tools.yaml shape (action/description/...) — never run it through
+    ToolGateway.from_yaml, which rebuilds the execution spec shape."""
     import yaml
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     tools = raw.get("tools") or {}
@@ -361,10 +431,20 @@ def specs_with_yaml_facts(path: str | Path,
     for name, meta in tools.items():
         if name not in out:
             raise ValueError(f"tools.yaml: unknown tool '{name}'")
-        if isinstance(meta, dict) and "facts" in meta:
-            out[name] = replace(out[name],
-                                facts=parse_facts(meta["facts"],
-                                                  f"tools.yaml '{name}'"))
+        if not isinstance(meta, dict):
+            continue
+        kw: dict = {}
+        if "facts" in meta:
+            kw["facts"] = parse_facts(meta["facts"],
+                                      f"tools.yaml '{name}'")
+        if "param_types" in meta:
+            kw["param_types"] = parse_param_types(meta["param_types"],
+                                                  f"tools.yaml '{name}'")
+        if "param_bounds" in meta:
+            kw["param_bounds"] = parse_param_bounds(meta["param_bounds"],
+                                                    f"tools.yaml '{name}'")
+        if kw:
+            out[name] = replace(out[name], **kw)
     return out
 
 
@@ -402,7 +482,16 @@ class ToolGateway:
     def from_yaml(cls, path, erp: MockERP | None = None) -> "ToolGateway":
         """Load spec overrides from a tenant bundle's tools.yaml. Only known
         tool names may be overridden — bindings are code, declarations are
-        data. Unknown names are rejected rather than silently ignored."""
+        data. Unknown names are rejected rather than silently ignored.
+
+        Per-tool keys: params, preconditions, facts, param_types,
+        param_bounds. A key ABSENT from the yaml entry keeps the base spec's
+        value — most importantly preconditions: a bundle that does not
+        declare them keeps the code-default ones (relaxing a precondition
+        requires an explicit `preconditions: []`), so a tools.yaml entry can
+        never silently widen what the gateway executes. Declared keys
+        override; validation runs through the shared parse_* helpers so the
+        gateway and the CI gate accept exactly the same shapes."""
         import yaml
         raw = yaml.safe_load(Path(path).read_text()) or {}
         tools = raw.get("tools", {})
@@ -410,14 +499,33 @@ class ToolGateway:
         for name, spec in tools.items():
             if name not in DEFAULT_TOOL_SPECS:
                 raise ValueError(f"tools.yaml: unknown tool '{name}'")
-            params = tuple(spec.get("params",
-                                    list(DEFAULT_TOOL_SPECS[name].params)))
-            preconds = tuple(spec.get("preconditions", []))
-            facts = (parse_facts(spec["facts"], f"tools.yaml '{name}'")
-                     if "facts" in spec
-                     else DEFAULT_TOOL_SPECS[name].facts)
-            gw.specs[name] = ToolSpec(params=params, preconditions=preconds,
-                                      facts=facts)
+            if not isinstance(spec, dict):
+                raise ValueError(f"tools.yaml: '{name}' must be a mapping "
+                                 "of declared keys")
+            base = DEFAULT_TOOL_SPECS[name]
+            kw: dict = {}
+            if "params" in spec:
+                kw["params"] = tuple(spec["params"])
+            if "preconditions" in spec:
+                kw["preconditions"] = tuple(spec["preconditions"])
+            if "facts" in spec:
+                kw["facts"] = parse_facts(spec["facts"],
+                                          f"tools.yaml '{name}'")
+            if "param_types" in spec:
+                kw["param_types"] = parse_param_types(spec["param_types"],
+                                                      f"tools.yaml '{name}'")
+            if "param_bounds" in spec:
+                kw["param_bounds"] = parse_param_bounds(spec["param_bounds"],
+                                                        f"tools.yaml '{name}'")
+            # Deployment-facing metadata keys also override when declared
+            # (data beats defaults); anything undeclared stays base.
+            if "description" in spec:
+                kw["description"] = str(spec["description"])
+            if "action" in spec:
+                kw["action"] = str(spec["action"])
+            if "side_effects" in spec:
+                kw["side_effects"] = bool(spec["side_effects"])
+            gw.specs[name] = replace(base, **kw)
         return gw
 
     def execute(self, tool_name: str, params: dict,
@@ -448,7 +556,6 @@ class ToolGateway:
                 return ToolResult(
                     ok=False,
                     error=f"out_of_range: {p}={v} (expected {lo}..{hi})")
-            coerced[p] = cv
         params = coerced
 
         if idempotency_key and idempotency_key in self._idempotency:

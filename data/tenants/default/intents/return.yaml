@@ -1,0 +1,18 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- I want to return an item
+- product wapas karna hai
+- return my product
+- मुझे प्रोडक्ट वापस करना है
+- रिटर्न कैसे करूं
+- यह आइटम वापस करना चाहता हूं
+- பொருளைத் திரும்பக் கொடுக்க வேண்டும்
+- ரிட்டர்ன் எப்படி செய்வது
+- இந்த பொருளை திருப்பி அனுப்ப விரும்புகிறேன்
+- నాకు ప్రొడక్ట్ రిటర్న్ చేయాలి
+- రిటర్న్ ఎలా చేయాలి
+- ఈ ఐటమ్ తిరిగి ఇవ్వాలనుకుంటున్నాను

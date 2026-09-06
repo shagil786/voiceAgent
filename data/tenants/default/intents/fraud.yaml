@@ -1,0 +1,20 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- someone used my account, block it
+- mera account hack ho gaya
+- fraud transaction on my account
+- मेरे अकाउंट से पैसे कट गए बिना मेरी जानकारी के
+- unauthorized transaction, block now
+- मेरे खाते से बिना बताए पैसे कट गए
+- किसी ने मेरा अकाउंट हैक कर लिया, ब्लॉक करो
+- फ्रॉड ट्रांजैक्शन हुआ है, अकाउंट ब्लॉक करो
+- என் கணக்கிலிருந்து தெரியாமல் பணம் கழிந்துள்ளது
+- யாரோ என் கணக்கை ஹேக் செய்துள்ளனர், பிளாக் செய்யுங்கள்
+- மோசடி பரிவர்த்தனை நடந்துள்ளது, உடனே பிளாக் செய்யவும்
+- నా ఖాతా నుంచి తెలియకుండా డబ్బులు కట్ అయ్యాయి
+- ఎవరో నా ఖాతా హ్యాక్ చేశారు, బ్లాక్ చేయండి
+- మోసపూరిత లావాదేవీ జరిగింది, వెంటనే బ్లాక్ చేయండి

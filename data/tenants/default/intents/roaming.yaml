@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- international roaming not working
+- roaming charges kya hain
+- enable roaming
+- roaming pack activate karo
+- रोमिंग काम नहीं कर रहा
+- रोमिंग चार्ज कितने हैं
+- रोमिंग पैक चालू करो
+- ரோமிங் வேலை செய்யவில்லை
+- ரோமிங் கட்டணம் என்ன
+- ரோமிங் தொகுப்பை செயல்படுத்தவும்
+- రోమింగ్ పని చేయడం లేదు
+- రోమింగ్ ఛార్జీలు ఎంత
+- రోమింగ్ ప్యాక్ యాక్టివేట్ చేయండి

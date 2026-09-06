@@ -46,6 +46,7 @@ from voiceagent.reply_guards import (ACTION_RE,  # noqa: F401
                                      _canned_reply,  # noqa: F401
                                      _patch_reply,  # noqa: F401
                                      _ref_for_template,  # noqa: F401
+                                     _repair_allowed_langs,  # noqa: F401
                                      echo_spec_registry,  # noqa: F401
                                      extract_action,  # noqa: F401
                                      extract_required_references,  # noqa: F401
@@ -103,10 +104,13 @@ class AgentResult:
     latency_s: float
     decision: "Decision | None" = None
     tool_outcome: "GovernedOutcome | None" = None
-    # Task B (guardrails guide, not replace): 1 when a frontier repair
-    # re-render was attempted this turn, 0 otherwise (BASE tier, or no
-    # guardrail violation). Lightweight counter on the turn result — the
-    # Agent path has no per-turn DecisionLog record of its own to carry it.
+    # Task B / Task E (guardrails guide, not replace): 1 when the ONE
+    # governed frontier re-render was attempted this turn, 0 otherwise. The
+    # single repair covers BOTH guardrails (language + echo) in one call —
+    # the count is the per-turn repair budget spent, so it is 1 even when
+    # two constraints violated (BASE tier, or no guardrail violation: 0).
+    # Lightweight counter on the turn result — the Agent path has no
+    # per-turn DecisionLog record of its own to carry it.
     repair_attempts: int = 0
 
 
@@ -297,16 +301,25 @@ class Agent:
         # never notice it went missing. The action itself was captured above
         # (classifier, or fallback extraction pre-scrub).
         clean = strip_action_lines(clean)
+        # The ECHO guardrail and the reply-language guardrail below share ONE
+        # repair budget per turn (latency discipline): at most ONE governed
+        # re-render TOTAL across both guards. Design decision: when both
+        # violate, the single repair prompt fixes both constraints in one
+        # call — reply_guards.repair_reply always carries the allowed
+        # language(s) AND the required references, so a second frontier round
+        # for the second guard would be pure waste on a live phone call.
+        # Echo guardrail: a support reply must acknowledge the customer's
+        # specific reference (order id, phone, intent keyword). The small
+        # LLM often answers generically — or its reply was scaffolding
+        # only — so a missing reference is repaired through the frontier
+        # (same .frontier marker rule as the language repair) or, on the
+        # BASE tier / after a failed repair, patched deterministically.
+        # This is the product's "the AI cannot drift from your order/
+        # account" guarantee. The keyword facts are TOOL CONTRACT data (the
+        # registry resolved in __init__ via echo_spec_registry: wired gateway
+        # specs + demo contracts in demo mode) — never a hardcoded dict.
+        required: list[str] = []
         if self._classifier is not None:
-            # Echo guardrail: a support reply must acknowledge the customer's
-            # specific reference (order id, phone, intent keyword). The small
-            # LLM often answers generically — or its reply was scaffolding
-            # only — so patch any missing reference with a deterministic
-            # confirmation. This is the product's "the AI cannot drift from
-            # your order/account" guarantee. The keyword facts are TOOL
-            # CONTRACT data (the registry resolved in __init__ via
-            # echo_spec_registry: wired gateway specs + demo contracts in
-            # demo mode) — never a hardcoded dict.
             required = extract_required_references(
                 user_text, specs=self._echo_specs, demo=self._echo_demo)
             # Reference inheritance: a follow-up like "and when will it
@@ -317,34 +330,42 @@ class Agent:
                 inherited = find_recent_order_id(history)
                 if inherited:
                     required.append(inherited)
-            clean = _patch_reply(clean, required)
+        missing = [r for r in required if r.lower() not in clean.lower()]
         # M5b-4 reply-language guardrail: the LLM's reply must be in the
         # customer's language; a 0.5B model ignores the directive often
         # enough that this is checked deterministically, not trusted.
-        # Task B: with a frontier configured the guardrail GUIDES, not
-        # replaces — ONE governed re-render asks the brain to restate its own
+        # Task B / Task E: with a frontier configured the guards GUIDE, not
+        # replace — ONE governed re-render asks the brain to restate its own
         # reply within the constraints (allowed languages, required facts,
         # persona never-say / may-promise via the compiled system prompt).
         # Only a still-violating re-render (or any repair failure — fail-open
-        # at the surface) falls back to the canned template path, and the
-        # no-frontier BASE tier keeps the canned path immediately, unchanged.
+        # at the surface) falls back to the deterministic path, and the
+        # no-frontier BASE tier keeps it immediately, unchanged.
         target_langs = _acceptable_reply_langs(language)
+        lang_violation = bool(target_langs is not None and clean.strip()
+                              and detect_language(clean) not in target_langs)
         repair_attempts = 0
-        if (target_langs is not None and clean.strip()
-                and detect_language(clean) not in target_langs):
-            repaired: str | None = None
-            if self._frontier:
-                repair_attempts = 1  # one extra frontier round, max
-                try:
-                    repaired = self._repair_reply(
-                        clean, prompt_text, language, target_langs,
-                        required if self._classifier is not None else [])
-                except Exception:
-                    repaired = None
+        repaired_ok = False
+        if self._frontier and (missing or lang_violation):
+            repair_attempts = 1  # ONE extra frontier round, max, BOTH guards
+            try:
+                repaired = self._repair_reply(
+                    clean, prompt_text, language,
+                    _repair_allowed_langs(language), required)
+            except Exception:
+                repaired = None
             if (repaired is not None and repaired.strip()
-                    and detect_language(repaired) in target_langs):
+                    and detect_language(repaired)
+                    in _repair_allowed_langs(language)
+                    and not [r for r in required
+                             if r.lower() not in repaired.lower()]):
+                # The re-render satisfies BOTH constraints: use it as-is —
+                # _patch_reply must not bolt a keyword sentence onto a
+                # compliant reply.
                 clean = repaired
-            else:
+                repaired_ok = True
+        if not repaired_ok:
+            if lang_violation:
                 clean = _canned_reply(action, language or "en",
                                       required if self._classifier is not None
                                       else [])

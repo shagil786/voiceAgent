@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- I need my invoice
+- invoice kaise milega
+- send me the bill receipt
+- download my invoice
+- मुझे इनवॉइस चाहिए
+- बिल की रसीद भेजो
+- इनवॉइस डाउनलोड कैसे करूं
+- எனக்கு இன்வாய்ஸ் வேண்டும்
+- பில் ரசீதை அனுப்பவும்
+- இன்வாய்ஸை எப்படி டவுன்லோட் செய்வது
+- నాకు ఇన్వాయిస్ కావాలి
+- బిల్లు రశీదు పంపండి
+- ఇన్వాయిస్ డౌన్‌లోడ్ ఎలా చేయాలి

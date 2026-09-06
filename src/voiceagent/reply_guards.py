@@ -128,6 +128,15 @@ def _acceptable_reply_langs(language: str | None) -> frozenset | None:
     return frozenset({language})
 
 
+def _repair_allowed_langs(language: str | None) -> frozenset:
+    """The language set a repair re-render must respect — ALWAYS concrete,
+    even when the reply-language guardrail itself is disabled (en/None turns:
+    the guard never trips there, but an echo-triggered repair must still not
+    switch the customer's language). Task E: one shared language constraint
+    for the single per-turn repair, whichever guard triggered it."""
+    return _acceptable_reply_langs(language) or frozenset({"en"})
+
+
 def _ref_for_template(refs: list[str]) -> str:
     """The customer's order-id-shaped reference (keywords are not refs)."""
     for r in refs:
@@ -202,14 +211,19 @@ def repair_reply(llm, system_prompt: str, use_template: bool,
                  language: str, allowed_langs: frozenset,
                  required_refs: list[str]) -> str:
     """Task B: ONE governed re-render of a guardrail-violating frontier
-    reply. The repair prompt carries the ORIGINAL frontier reply, the
-    ORIGINAL user turn, the allowed language(s) and the required
-    references (missing ones called out for verbatim inclusion); persona
-    never_say / may_promise constraints travel through the compiled
-    system prompt, same as the main turn. Sync, one extra frontier round
-    max — the caller re-checks the guards and falls back to the canned
-    path when the re-render still violates; exceptions are the caller's
-    fail-open concern and never reach the customer."""
+    reply. Task E: this call serves BOTH guardrails — the reply-language
+    guard AND the echo guard (missing required facts) — because the repair
+    prompt always carries every constraint at once (the allowed language(s),
+    the required references with the missing ones called out for verbatim
+    inclusion, the original reply and the original user turn). Agent.handle
+    enforces the latency discipline: at most ONE repair per turn TOTAL
+    across both guards, so two simultaneous violations still cost exactly
+    one frontier round. Persona never_say / may_promise constraints travel
+    through the compiled system prompt, same as the main turn. Sync, one
+    extra frontier round max — the caller re-checks BOTH guards and falls
+    back to the deterministic path when the re-render still violates;
+    exceptions are the caller's fail-open concern and never reach the
+    customer."""
     missing = [r for r in required_refs
                if r.lower() not in violating_reply.lower()]
     lines = [

@@ -1,0 +1,26 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- I want a refund of 10000 rupees
+- my 25000 refund is pending
+- बड़ी रकम का रिफंड
+- refund of 20000
+- high value refund
+- I need a large refund of 50000
+- big amount ka refund chahiye
+- मेरी बड़ी रकम वापस करो
+- refund of 25000 rupees urgently
+- my 100000 refund is stuck
+- huge refund pending for 2 months
+- मुझे 25000 रुपये का रिफंड चाहिए
+- 50000 का रिफंड अब तक नहीं मिला
+- 30000 की बड़ी रकम वापस करो
+- எனக்கு 25000 ரூபாய் ரீஃபண்ட் வேண்டும்
+- 50000 ரீஃபண்ட் இன்னும் கிடைக்கவில்லை
+- 30000 பெரிய தொகையை திரும்பத் தாருங்கள்
+- నాకు 25000 రూపాయల రీఫండ్ కావాలి
+- 50000 రీఫండ్ ఇంకా రాలేదు
+- 30000 పెద్ద మొత్తం వాపస్ చేయండి

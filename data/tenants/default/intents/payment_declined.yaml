@@ -1,0 +1,19 @@
+# Per-intent exemplars for the default (built-in demo) tenant —
+# the file NAME is the intent, the list is the exemplars the
+# embedding classifier matches against (same schema as
+# data/tenants/example-acme/intents/). NOTE: the non-en exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real
+# customers — real-traffic validation is still pending.
+- why was my payment declined
+- payment fail ho gaya
+- payment failed
+- मेरा पेमेंट फेल हो गया
+- मेरा पेमेंट डिक्लाइन हो गया
+- पेमेंट क्यों रद्द हो गया
+- कार्ड से पेमेंट नहीं हुआ
+- என் பேமெண்ட் நிராகரிக்கப்பட்டது
+- பேமெண்ட் ஏன் தோல்வியடைந்தது
+- கார்டு மூலம் பணம் செலுத்த முடியவில்லை
+- నా పేమెంట్ డిక్లైన్ అయింది
+- పేమెంట్ ఎందుకు ఫెయిల్ అయింది
+- కార్డుతో పేమెంట్ కాలేదు

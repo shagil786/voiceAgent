@@ -1,0 +1,1 @@
+Orders that already shipped cannot be cancelled.

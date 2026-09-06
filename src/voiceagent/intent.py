@@ -24,14 +24,43 @@ validation is still pending (quality caveat).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from voiceagent.demo_data import DEMO_INTENT_EXEMPLARS
 from voiceagent.knowledge import (DEFAULT_EMBEDDER, LATIN_SPACE, NATIVE_SPACE,
                                   SPACE_EMBEDDERS, route_space)
 
-INTENT_EXEMPLARS: dict[str, list[str]] = DEMO_INTENT_EXEMPLARS
+# The built-in default tenant's intent exemplars are BUNDLE DATA (Task E):
+# they load from the COMMITTED default bundle (data/tenants/default/intents/ —
+# file NAME = intent label, YAML list = exemplars, the same schema any tenant
+# bundle declares). This module ships no demo business vocabulary.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_EXEMPLARS_DIR = (_REPO_ROOT / "data" / "tenants" / "default"
+                         / "intents")
+
+
+def load_default_exemplars(directory: str | Path = DEFAULT_EXEMPLARS_DIR
+                           ) -> dict[str, list[str]]:
+    """Exemplars from a bundle's intents/ directory (per-intent YAML lists,
+    filename = intent label). The no-bundle Agent path (scripts/chat.py's
+    build_agent, memory.py's default classifier, the benchmark) seeds its
+    classifier from the committed default bundle through here."""
+    import yaml
+    d = Path(directory)
+    exemplars: dict[str, list[str]] = {}
+    if not d.is_dir():
+        return exemplars
+    for f in sorted(d.glob("*.yaml")):
+        data = yaml.safe_load(f.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            raise ValueError(f"{f}: expected a YAML list of exemplars")
+        exemplars[f.stem] = [str(x) for x in data]
+    return exemplars
+
+
+INTENT_EXEMPLARS: dict[str, list[str]] = load_default_exemplars()
 
 
 class IntentClassifier:
