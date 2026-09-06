@@ -21,3 +21,23 @@ invisible to the brain for their first day).
 + Adding a tool anywhere = one place.
 − Tool authors must declare metadata once at the binding (acceptable:
   contracts belong to their owners).
+
+## Adding tools for a NON-default business
+
+A new business's tools arrive as **code + declaration, two halves of one
+tool**:
+1. **Binding + ToolSpec** — a backend adapter module implementing the
+   `SupportBackend` protocol (or extending `tools.py`), with the ToolSpec
+   carrying params/preconditions/facts/action/side_effects/description.
+   This is developer code by design: it executes real side effects against
+   a real system.
+2. **Declaration** — the tenant's `tools.yaml` composes the surface: which
+   of the available bindings this tenant exposes, plus description/
+   parameter overrides. See `data/tenants/default/tools.yaml` (generated
+   from the bindings) and `data/tenants/example-acme/tools.yaml` for both
+   shapes.
+
+Tenants never invent bindings at runtime; developers never hand-edit the
+brain's surface. The default bundle's tools.yaml is the worked example of
+the composition mechanism, and its equivalence to the derived builtin
+surface is the drift tripwire.
