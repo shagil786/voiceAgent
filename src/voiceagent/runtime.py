@@ -247,6 +247,32 @@ def _audit_log_from_env(env: dict[str, str] | None):
     return DecisionLog()
 
 
+def _intent_memory_from_env(env: dict[str, str] | None):
+    """ADR-002: the learned intent memory is OPT-IN — VOICEAGENT_MEMORY_DB
+    naming a SQLite path builds an IntentMemoryStore (episodic fragments +
+    consolidated prototypes, wired into the live turn path like the audit
+    log); unset config returns None and the whole memory layer is inert
+    (zero behavior change for existing deployments). A unusable DB path
+    fails OPEN to None: a bad path must never take the process down. The
+    store is built EAGER-embedding (M3): the SentenceTransformer loads at
+    process start, never mid-call."""
+    e = os.environ if env is None else env
+    memory_db = e.get("VOICEAGENT_MEMORY_DB")
+    if not memory_db:
+        return None
+    from voiceagent.memory import IntentMemoryStore
+    try:
+        return IntentMemoryStore(memory_db, eager=True)
+    except Exception:
+        return None
+
+
+# Retrieval swap (ADR-001/002) lives in voiceagent.memory next to the shared
+# embedder it conflict-guards with; re-exported here so every wiring site
+# (and older imports) keeps one name: runtime.classifier_exemplars.
+from voiceagent.memory import classifier_exemplars  # noqa: E402
+
+
 def build_orchestrator(
     env: dict[str, str] | None = None,
     policy_path: str = DEFAULT_POLICY_PATH,
@@ -257,6 +283,7 @@ def build_orchestrator(
     decision_log: Any | None = None,
     deployment: Deployment | None = None,
     max_tool_rounds: int = 3,
+    intent_memory: Any | None = None,
 ) -> Orchestrator | None:
     """Assemble the governed Orchestrator. Returns None when no frontier brain
     is configured (VOICEAGENT_FRONTIER_URL unset) so callers fail FAST with an
@@ -267,7 +294,9 @@ def build_orchestrator(
     by bundle PATH; when it resolves (explicit arg, else VOICEAGENT_TENANT),
     the bundle's policies.yaml and Deployment drive the brain. `erp`/`memory`/
     `decision_log` are injectable so a real backend or a test double can be
-    substituted without touching the wiring.
+    substituted without touching the wiring. `intent_memory` (ADR-002) is the
+    learned intent memory; None defers to VOICEAGENT_MEMORY_DB (opt-in —
+    unset keeps the memory layer fully inert).
     """
     cfg = config_from_env(env)
     if cfg is None:
@@ -275,6 +304,7 @@ def build_orchestrator(
 
     bundle = _resolve_tenant(tenant, env)
     log = decision_log or _audit_log_from_env(env)
+    intent_memory = intent_memory or _intent_memory_from_env(env)
     # The bundle's policy file IS the least-privilege artifact: undeclared
     # actions get a DENY fed back to the brain. Only a bundle that declares no
     # policy file falls back to the platform policy_path.
@@ -299,6 +329,7 @@ def build_orchestrator(
     orch = Orchestrator(
         brain, runner=runner, memory=memory or InMemoryMemory(),
         decision_log=log, max_tool_rounds=max_tool_rounds,
-        actions=dep.actions)  # Sprint A1: resolved vocabulary into the brain
+        actions=dep.actions,  # Sprint A1: resolved vocabulary into the brain
+        intent_memory=intent_memory)  # ADR-002: learned intent memory
     orch.deploy(dep)
     return orch

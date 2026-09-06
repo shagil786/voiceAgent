@@ -1,15 +1,20 @@
 # src/voiceagent/agent.py
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from voiceagent.langid import NATIVE_SCRIPT_LANGS, detect_language
+from voiceagent.memory import (CAPTURE_CONFIDENCE_THRESHOLD,
+                               classifier_exemplars)
 from voiceagent.sentiment import (candidate_phrases_from,
                                   detect_frustration)
 from voiceagent.security import detect_injection, sanitize_for_prompt
 from voiceagent.tenant import DEFAULT_CURRENCY, Tenant
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
     from voiceagent.memory import Turn
@@ -109,10 +114,35 @@ class Agent:
     def __init__(self, index, llm, classifier=None, policy=None,
                  decision_log=None, tenant=None, sentiment_store=None,
                  tool_runner=None, erp=None,
-                 actions: list[str] | None = None):
+                 actions: list[str] | None = None,
+                 intent_memory=None,
+                 capture_threshold: float = CAPTURE_CONFIDENCE_THRESHOLD):
         self._index = index
         self._llm = llm
         self._classifier = classifier
+        # ADR-002: the learned intent memory (IntentMemoryStore) — episodic
+        # capture of low-confidence / unknown turns during live calls.
+        # None = the whole memory layer is inert (opt-in via
+        # VOICEAGENT_MEMORY_DB; zero behavior change by default).
+        self._intent_memory = intent_memory
+        self._capture_threshold = capture_threshold
+        # M2 (ADR-002): live reseed state. The DECLARED exemplars are snapshotted
+        # once (they are the floor); when the memory store's version changes the
+        # classifier is reseeded in place with declared + conflict-guarded
+        # prototypes — checked at most once per turn, fail-open.
+        self._declared_exemplars = None
+        if classifier is not None:
+            declared = getattr(classifier, "_exemplars", None)
+            if isinstance(declared, dict):
+                self._declared_exemplars = {
+                    k: list(v) for k, v in declared.items()}
+        self._memory_version: int | None = None
+        if intent_memory is not None and self._declared_exemplars is not None:
+            try:
+                self._memory_version = intent_memory.version()
+            except Exception:
+                self._memory_version = None
+        self._tenant = tenant
         # M6b: the learnable frustration lexicon (None = static lexicon).
         self._sentiment = sentiment_store
         # Default to raw-completion prompt (tests use FakeLLM which has no
@@ -175,6 +205,11 @@ class Agent:
                language: str | None = None,
                customer_id: str | None = None) -> AgentResult:
         t0 = time.time()
+        # M2 (ADR-002): live reseed — if the memory store consolidated new
+        # prototypes since the last turn, swap them into the classifier in
+        # place (declared floor + conflict-guarded prototypes). At most one
+        # version() check per turn; any failure leaves the current exemplars.
+        self._maybe_reseed_classifier()
         # M5a: reply-language. Auto-detect when the caller doesn't know;
         # native-script languages get a per-turn directive appended to the
         # prompt build below (never to self._system_prompt, so en/hinglish
@@ -236,8 +271,12 @@ class Agent:
         clean = post(text) if callable(post) else text
         # The action comes from the deterministic classifier (or, if none
         # was provided — e.g. unit tests — from the LLM's ACTION line).
+        classify_confidence: float | None = None
+        classify_label: str | None = None
         if self._classifier is not None:
-            action, _ = self._classifier.classify(user_text)
+            classify_label, classify_confidence = \
+                self._classifier.classify(user_text)
+            action = classify_label
             # Deterministic promotion: a refund with an extracted amount at or
             # above the policy threshold IS a high-value refund — don't leave
             # that call to embedding similarity (which can't use the number).
@@ -344,10 +383,57 @@ class Agent:
         # reply already carries an apology.
         if fr.level == "high" and not _already_apologetic(clean):
             clean = EMPATHY_PREFIXES.get(language, "") + clean
+        # ADR-002 episodic capture: low-confidence or unknown-intent turns
+        # feed the learned intent memory (the classifier produces the only
+        # (label, confidence) pair in the live path, so this is THE capture
+        # site). The episode records the classifier's OWN label/confidence
+        # (pre-promotion: a refund promoted to high_value_refund by amount is
+        # still a `refund` understanding fact); the outcome is the turn's
+        # resulting action, or 'unmatched' when there was no usable label.
+        # FAIL-OPEN: any memory error (corrupt db, missing table, embedder
+        # failure) is logged and swallowed — the turn the customer is on must
+        # never break because learning did.
+        if self._intent_memory is not None and classify_confidence is not None:
+            try:
+                if (classify_confidence < self._capture_threshold
+                        or not action):
+                    self._intent_memory.capture(
+                        getattr(self._tenant, "name", None) or "default",
+                        user_text, classify_label or "", classify_confidence,
+                        outcome=action or "unmatched")
+            except Exception:
+                logger.warning("intent memory: capture failed (fail-open)",
+                               exc_info=True)
         return AgentResult(text=clean, action=action,
                            retrieved=retrieved, latency_s=time.time() - t0,
                            decision=decision,
                            repair_attempts=repair_attempts)
+
+    def _maybe_reseed_classifier(self) -> None:
+        """M2 (ADR-002): reseed the live classifier in place when the memory
+        store's prototype version changed (cheap counter check — the
+        retrieval snapshot from build time goes stale otherwise). Fail-open:
+        any error keeps the current exemplars, the turn proceeds unchanged."""
+        if (self._intent_memory is None or self._classifier is None
+                or self._declared_exemplars is None):
+            return
+        try:
+            version = self._intent_memory.version()
+        except Exception:
+            return
+        if version == self._memory_version:
+            return
+        self._memory_version = version
+        try:
+            merged = classifier_exemplars(
+                self._declared_exemplars, self._intent_memory,
+                getattr(self._tenant, "name", None) or "default")
+            self._classifier.reseed(merged)
+            logger.debug("intent memory: classifier reseeded (version %s)",
+                         version)
+        except Exception:
+            logger.warning("intent memory: reseed failed (fail-open)",
+                           exc_info=True)
 
     def _repair_reply(self, violating_reply: str, user_text: str,
                       language: str, allowed_langs: frozenset,
@@ -397,11 +483,12 @@ def render_history(turns: list["Turn"]) -> str:
 
 def build_agent(index, llm, classifier=None, policy=None, decision_log=None,
                 tenant=None, sentiment_store=None, tool_runner=None,
-                erp=None, actions: list[str] | None = None) -> Agent:
+                erp=None, actions: list[str] | None = None,
+                intent_memory=None) -> Agent:
     agent = Agent(index, llm, classifier=classifier, policy=policy,
                   decision_log=decision_log, tenant=tenant,
                   sentiment_store=sentiment_store, tool_runner=tool_runner,
-                  erp=erp, actions=actions)
+                  erp=erp, actions=actions, intent_memory=intent_memory)
     # Real LlamaCppLLM has chat_template; FakeLLM (tests) does not.
     agent._use_template = hasattr(llm, "chat_template")
     return agent

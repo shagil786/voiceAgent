@@ -13,9 +13,10 @@ def build_live_agent():
     from voiceagent.knowledge import load_docs, build_index
     from voiceagent.llm import list_available_models, load_llm
     from voiceagent.agent import build_agent
-    from voiceagent.intent import IntentClassifier, INTENT_EXEMPLARS
+    from voiceagent.intent import IntentClassifier
     from voiceagent.policy import load_policies
     from voiceagent.decisionlog import DecisionLog
+    from voiceagent.runtime import _intent_memory_from_env, classifier_exemplars
     from voiceagent.sentiment import SentimentStore
     from voiceagent.tenant import Tenant
 
@@ -30,7 +31,12 @@ def build_live_agent():
         sys.exit("no models in data/models/ — run scripts/smoke_llm.py qwen2.5-0.5b-q4 first")
     m = next((x for x in models if x["name"] == "qwen2.5-0.5b-q4"), models[0])
     llm = load_llm(m["model_path"], params=m["params"], size_mb=m["size_mb"])
-    clf = IntentClassifier(exemplars=tenant.intent_exemplars())
+    # ADR-002: learned intent memory is opt-in (VOICEAGENT_MEMORY_DB). The
+    # declared tenant exemplars are the FLOOR; prototypes only ADD candidates
+    # after them.
+    intent_memory = _intent_memory_from_env(None)
+    clf = IntentClassifier(exemplars=classifier_exemplars(
+        tenant.intent_exemplars(), intent_memory, tenant.config.name))
     policy = load_policies(tenant.policy_file() or "data/policies/policies.yaml")
     log = DecisionLog()
     # M6b: the learnable frustration lexicon — novel expressions are
@@ -38,7 +44,8 @@ def build_live_agent():
     sentiment = SentimentStore("data/out/sentiment.db")
     return build_agent(index, llm, classifier=clf, policy=policy,
                        decision_log=log, tenant=tenant.config,
-                       sentiment_store=sentiment), log
+                       sentiment_store=sentiment,
+                       intent_memory=intent_memory), log
 
 
 def main():

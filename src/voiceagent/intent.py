@@ -458,6 +458,16 @@ class IntentClassifier:
                              dtype=np.float32)
             self._matrices[space] = (emb, list(labels))
 
+    def reseed(self, exemplars: dict[str, list[str]]) -> None:
+        """M2 (ADR-002): swap the exemplar set and rebuild BOTH space
+        matrices IN PLACE — the live Agent's classifier learns new memory
+        prototypes without being rebuilt. Cost is bounded (the matrices are
+        tiny exemplar x dim products; the encoders are reused). Callers get
+        the exemplar set from runtime.classifier_exemplars (declared floor +
+        conflict-guarded prototypes)."""
+        self._exemplars = exemplars
+        self._build()
+
     def classify(self, text: str, k: int = 1) -> tuple[str, float]:
         """Return (best_intent, cosine_score), comparing the query against
         the exemplar matrix of the space matched to its script."""
