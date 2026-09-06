@@ -15,6 +15,8 @@ tenant bundle's tools.yaml; the Gateway/Runner code is identical.
 from __future__ import annotations
 
 import copy
+import math
+import re
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -209,6 +211,73 @@ class ToolSpec:
     # rules are written against actions, e.g. 'order_status', 'refund').
     # Default: the tool name itself.
     action: str = ""
+    # Task D2: light param-type validation at the governed boundary. Maps a
+    # declared param name to one of PARAM_TYPES ("string" | "number" |
+    # "integer" | "boolean"); params WITHOUT an entry default to "string".
+    # The gateway coerces safe cases (amount "200" -> 200.0) and rejects
+    # impossible ones with `invalid_param: <name>` before any ERP call.
+    param_types: dict[str, str] = field(default_factory=dict)
+
+
+# The only param types the boundary understands (Task D2).
+PARAM_TYPES = ("string", "number", "integer", "boolean")
+
+
+def _coerce_param(name: str, value, declared: str | None) -> tuple[bool, object]:
+    """Validate/coerce one param against its declared type (None -> the
+    "string" default). Returns (ok, coerced_value); ok=False means the value
+    can never be that type -> the caller rejects with `invalid_param: <name>`.
+
+    Safe coercions only: bool is NEVER a number/integer (it subclasses int);
+    strings parse for number/integer/boolean; anything else coerces to str
+    under the "string" default so a brain that quotes a value still works."""
+    t = declared or "string"
+    if t == "string":
+        return True, (value if isinstance(value, str) else str(value))
+    if t == "number":
+        if isinstance(value, bool):
+            return False, None
+        if isinstance(value, (int, float)):
+            f = float(value)
+            return (True, f) if math.isfinite(f) else (False, None)
+        if isinstance(value, str):
+            # reject underscore literals / nan / inf before float() accepts them
+            if not re.fullmatch(r"[+-]?(\d+(\.\d*)?|\.\d+)", value.strip()):
+                return False, None
+        if isinstance(value, str):
+            try:
+                return True, float(value)
+            except ValueError:
+                return False, None
+        return False, None
+    if t == "integer":
+        if isinstance(value, bool):
+            return False, None
+        if isinstance(value, int):
+            return True, value
+        if isinstance(value, float) and not math.isfinite(value):
+            return False, None
+        if isinstance(value, float) and value.is_integer():
+            return True, int(value)
+        if isinstance(value, str):
+            try:
+                return True, int(value)
+            except ValueError:
+                return False, None
+        return False, None
+    if t == "boolean":
+        if isinstance(value, bool):
+            return True, value
+        if isinstance(value, str):
+            low = value.strip().lower()
+            if low in ("true", "1", "yes"):
+                return True, True
+            if low in ("false", "0", "no"):
+                return True, False
+        return False, None
+    # An unknown declared type: pass through unchanged (declaration bug, not
+    # a runtime rejection — the boundary never invents constraints).
+    return True, value
 
 
 def parse_facts(value, where: str = "tools.yaml") -> tuple[str, ...]:
@@ -270,7 +339,8 @@ DEFAULT_TOOL_SPECS: dict[str, ToolSpec] = {
         preconditions=({"field": "status", "op": "in",
                         "value": ["CONFIRMED", "SHIPPED"]},)),
     "initiate_refund": ToolSpec(params=("order_id", "amount", "reason"),
-                                facts=("refund",), action="refund"),
+                                facts=("refund",), action="refund",
+                                param_types={"amount": "number"}),
     # Escalation is always permitted — no preconditions; the point is that
     # the handoff becomes a real, auditable governed action.
     "escalate_to_human": ToolSpec(
@@ -372,6 +442,20 @@ class ToolGateway:
         missing = [p for p in spec.params if params.get(p) is None]
         if missing:
             return ToolResult(ok=False, error=f"missing_params: {missing}")
+
+        # Task D2: light param-type validation at the governed boundary —
+        # AFTER the presence check, BEFORE idempotency/ERP/preconditions, so
+        # a bad-typed param can never reach the backend (or poison the
+        # idempotency cache). Safe coercions are applied on a copy; the
+        # binding sees the coerced values.
+        coerced = dict(params)
+        for p in spec.params:
+            ok, cv = _coerce_param(p, params.get(p),
+                                   spec.param_types.get(p))
+            if not ok:
+                return ToolResult(ok=False, error=f"invalid_param: {p}")
+            coerced[p] = cv
+        params = coerced
 
         if idempotency_key and idempotency_key in self._idempotency:
             replay = self._idempotency[idempotency_key]

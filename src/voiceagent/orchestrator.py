@@ -82,6 +82,11 @@ class TurnResult:
     session_id: str
     raw_tool_calls: int
     escalated: bool = False
+    # Task D4 (knowledge provenance): WHICH knowledge ids from the deployed
+    # knowledge block were in this turn's system prompt context — so the
+    # telephony turn logger and tests can trace which KB documents informed a
+    # reply. (Spoken citations stay out of scope; this is observability.)
+    knowledge_ids: list[str] = field(default_factory=list)
 
 
 # --- contact memory block ----------------------------------------------------
@@ -315,9 +320,17 @@ class Orchestrator:
             self.metrics.record(
                 latency, primary["verdict"] if primary else "none")
 
+        # Task D4: the knowledge ids that entered this turn's system prompt
+        # (deploy() renders the whole block) — recorded for provenance even
+        # when the reply needs none of it. Declaration order == prompt order.
+        knowledge_ids = (list(self._deployment.knowledge)
+                         if (self._deployment is not None
+                             and self._deployment.knowledge) else [])
+
         return TurnResult(reply=final_text, actions=actions,
                           brain_latency_s=latency, session_id=session_id,
-                          raw_tool_calls=raw_tool_calls, escalated=escalated)
+                          raw_tool_calls=raw_tool_calls, escalated=escalated,
+                          knowledge_ids=knowledge_ids)
 
     def campaign_turn(self, session_id: str, lead: dict, script_goal: str, *,
                       profile: CallerProfile | None = None) -> TurnResult:

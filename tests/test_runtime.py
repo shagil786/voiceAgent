@@ -76,3 +76,18 @@ class _FakeMem:
 class _FakeLog:
     def record(self, *a, **k):
         pass
+
+
+def test_turn_result_carries_knowledge_provenance():
+    """Task D4: the governed turn result records WHICH knowledge ids were in
+    the system prompt's knowledge block — the telephony turn logger can trace
+    which KB documents informed a reply."""
+    fake = _FakeLLM()
+    orch = build_orchestrator(
+        env={"VOICEAGENT_FRONTIER_URL": "https://fake/v1"},
+        erp=_FakeERP(), memory=_FakeMem(), decision_log=_FakeLog())
+    orch.brain.client = fake
+    res = orch.handle_turn("s1", "what is the refund policy?")
+    dep = make_deployment()
+    assert dep.knowledge  # the built-in deployment ships a knowledge block
+    assert res.knowledge_ids == list(dep.knowledge.keys())

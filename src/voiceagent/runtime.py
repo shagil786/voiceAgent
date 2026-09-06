@@ -233,6 +233,20 @@ def make_deployment(
     )
 
 
+def _audit_log_from_env(env: dict[str, str] | None):
+    """Task D3: the audit trail is PERSISTENT when VOICEAGENT_AUDIT_DB names
+    a SQLite path (wired into BOTH the runner and the orchestrator audit
+    seams); absent config keeps the in-memory DecisionLog — zero config
+    change for existing deployments. Reads the passed env dict (falling back
+    to os.environ) with the same precedence as the frontier config."""
+    e = os.environ if env is None else env
+    audit_db = e.get("VOICEAGENT_AUDIT_DB")
+    if audit_db:
+        from voiceagent.decisionlog import SqliteDecisionLog
+        return SqliteDecisionLog(audit_db)
+    return DecisionLog()
+
+
 def build_orchestrator(
     env: dict[str, str] | None = None,
     policy_path: str = DEFAULT_POLICY_PATH,
@@ -260,7 +274,7 @@ def build_orchestrator(
         return None
 
     bundle = _resolve_tenant(tenant, env)
-    log = decision_log or DecisionLog()
+    log = decision_log or _audit_log_from_env(env)
     # The bundle's policy file IS the least-privilege artifact: undeclared
     # actions get a DENY fed back to the brain. Only a bundle that declares no
     # policy file falls back to the platform policy_path.
