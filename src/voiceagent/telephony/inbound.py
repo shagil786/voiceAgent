@@ -335,10 +335,18 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
             _playback_pump(source, session, pump_stop)
         )
 
-        # Greeting: one governed turn, spoken once after subscribe.
-        greet_result = orchestrator.handle_turn(session_id, GREETING_TRANSCRIPT)
-        greet_wav = tts(greet_result.reply) if tts is not None else _default_tts(
-            greet_result.reply, language
+        # Greeting: the tenant's DECLARED greeting text is spoken instantly
+        # (no brain roundtrip — the first-second experience is declared data).
+        # No declared greeting -> one governed greeting turn (legacy path).
+        declared_greeting = _deps_get(deps, "greeting") or ""
+        if declared_greeting.strip():
+            logger.info("greeting: declared text (%d chars)", len(declared_greeting))
+            greet_text = declared_greeting
+        else:
+            greet_result = orchestrator.handle_turn(session_id, GREETING_TRANSCRIPT)
+            greet_text = greet_result.reply
+        greet_wav = tts(greet_text) if tts is not None else _default_tts(
+            greet_text, language
         )
         if isinstance(greet_wav, (tuple, list)):
             greet_wav = greet_wav[1]

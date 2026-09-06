@@ -70,6 +70,9 @@ class Deployment:
     # through GovernedToolRunner.
     gateway_tools: dict[str, dict] = field(default_factory=dict)
     knowledge: dict[str, str] = field(default_factory=dict)  # id -> text
+    # Declared greeting (tenant data): spoken instantly on pickup, no brain
+    # roundtrip. Empty -> greeting is one governed brain turn (legacy path).
+    greeting: str = ""
     # The deployment's declared action vocabulary (Sprint A1): resolved from
     # the tenant bundle (intents/ + tools.yaml `action:` + tenant.json
     # extras) by the runtime assembly. None = nothing declared — consumers
@@ -163,6 +166,11 @@ class Orchestrator:
         self._gateway_tools: dict[str, dict] = {}
         self._deployment: Deployment | None = None
         self._sessions: dict[str, BlackboardState] = {}
+
+    @property
+    def greeting(self) -> str:
+        """The deployment's declared greeting (tenant data); '' when none."""
+        return self._deployment.greeting if self._deployment else ""
 
     # -- deployment ---------------------------------------------------------
 

@@ -224,6 +224,9 @@ def make_deployment(
                       + compile_persona_block(tenant.config.persona),
         gateway_tools=_bundle_gateway_tools(tenant),
         knowledge=_bundle_knowledge(tenant),
+        # Declared greeting: instant pickup line (tenant data); '' keeps the
+        # governed greeting-turn path.
+        greeting=str(getattr(tenant.config, "greeting", "") or ""),
         # Sprint A1: the bundle DECLARES its action vocabulary (intents/ +
         # tools.yaml + optional tenant.json extras); None when it declares
         # nothing. No business list ships in core.

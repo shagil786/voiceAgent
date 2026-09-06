@@ -90,17 +90,44 @@ _RE_NONSPEECH = __import__("re").compile(
     "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\u2190-\u21FF\u2B00-\u2BFF]")
 
 
+_RE_MD_BOLD = re.compile(r"\*\*|__|\*|`|#")
+_RE_MD_BULLET = re.compile(r"(?m)^\s*[-*+]\s+")
+_TYPO = {
+    "\u2019": "'", "\u2018": "'", "\u201c": '"', "\u201d": '"',
+    "\u2011": "-", "\u2013": "-", "\u2014": "-", "\u2026": "...",
+    "\u202f": " ", "\u00a0": " ",
+}
+# Order-ID-shaped tokens: 2-4 letters (+optional separators) then >=3 digits —
+# ALWAYS spelled letter-by-letter + digit-by-digit ("ORD-9021" -> "O R D,
+# nine zero two one"), never as words/magnitudes.
+_RE_ALNUM_ID = re.compile(r"\b([A-Za-z]{2,4})[ -]?((?:(?:[ -]?\d){3,}))\b")
+
+
 def speech_text(text: str) -> str:
-    """Make model text speakable: long digit runs (phone/order numbers) are
-    read digit-by-digit — never as magnitudes ("9 billion") — and emoji /
-    symbol codepoints (which the phonemizer gurgles on) are dropped. This is
-    a UNIVERSAL reading rule (like pluralization), not per-number data:
-    domain specifics still arrive via memory/knowledge."""
-    def _spell(m: "re.Match[str]") -> str:
+    """Make model text speakable — UNIVERSAL reading mechanics, not domain
+    data (domain specifics still arrive via memory/knowledge):
+    - markdown syntax (**bold**, bullets, backticks, #) is stripped — the
+      brain writes markdown and the phonemizer gurgles on it;
+    - typographic characters (curly quotes, non-breaking hyphen, narrow
+      spaces, ellipsis) are folded to their plain equivalents;
+    - order-ID-shaped tokens are spelled letter-by-letter + digit-by-digit;
+    - long digit runs (phone numbers) are read digit-by-digit — never as
+      magnitudes ("9 billion");
+    - emoji / symbol codepoints are dropped."""
+    def _spell_digits(m: "re.Match[str]") -> str:
         return " ".join(m.group(0))
-    out = _RE_NONSPEECH.sub(" ", text)
-    out = _RE_DIGIT_RUN.sub(_spell, out)
-    return out
+    def _spell_id(m: "re.Match[str]") -> str:
+        letters = " ".join(m.group(1).upper())
+        digits = " ".join(m.group(2).replace(" ", "").replace("-", ""))
+        return f"{letters}, {digits}"
+    for bad, good in _TYPO.items():
+        text = text.replace(bad, good)
+    text = _RE_NONSPEECH.sub(" ", text)
+    text = _RE_MD_BOLD.sub("", text)
+    text = _RE_MD_BULLET.sub("", text)
+    text = _RE_DIGIT_RUN.sub(_spell_digits, text)
+    text = _RE_ALNUM_ID.sub(_spell_id, text)
+    return re.sub(r"\s{2,}", " ", text).strip()
 
 
 class TTSHandle:

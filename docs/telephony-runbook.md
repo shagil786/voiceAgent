@@ -4,10 +4,13 @@ Operational runbook for the first real inbound/outbound PSTN call through the
 LiveKit limb. Branch: `feat/livekit-limb`. The offline loopback drill
 (`scripts/livekit_loopback.py`) must pass before any step here that costs money.
 
-Architecture invariant: LiveKit is transport only. Every spoken turn — including
-the greeting — is one governed `Orchestrator.handle_turn` / `campaign_turn`
-through the same brain as chat and voice CLI. No LiveKit Agents framework, no
-second brain.
+Architecture invariant: LiveKit is transport only. Every conversational turn is
+one governed `Orchestrator.handle_turn` / `campaign_turn` through the same
+brain as chat and voice CLI. No LiveKit Agents framework, no second brain.
+EXCEPTION (latency): the pickup greeting is the tenant's DECLARED greeting
+text (tenant.json `greeting`) spoken instantly — a brain roundtrip there cost
+2-4s of dead air. With no declared greeting the governed greeting turn is
+the fallback.
 
 ## Prerequisites
 

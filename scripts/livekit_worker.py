@@ -43,7 +43,10 @@ def build_deps():
 
     orchestrator = build_orchestrator()
     language = os.environ.get("VOICEAGENT_DEFAULT_LANG") or None
-    return {"orchestrator": orchestrator, "session_id": None, "language": language}
+    # Declared greeting (tenant data): instant pickup line, no brain roundtrip.
+    greeting = getattr(orchestrator, "greeting", "") or ""
+    return {"orchestrator": orchestrator, "session_id": None,
+            "language": language, "greeting": greeting}
 
 
 def make_server(config, join_room) -> BaseHTTPRequestHandler:

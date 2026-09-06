@@ -62,6 +62,10 @@ class TenantConfig:
     # The vocabulary itself is DERIVED (see Tenant.action_vocabulary) — this
     # only adds.
     actions: list[str] | None = None
+    # Declared greeting: spoken INSTANTLY on call pickup (no brain roundtrip —
+    # the caller's first-second experience is declared data, like the persona).
+    # Empty -> the governed greeting turn (brain) is used as today.
+    greeting: str = ""
 
     @classmethod
     def load(cls, path: str | Path = TENANT_CONFIG_PATH) -> "TenantConfig":
@@ -88,6 +92,7 @@ class TenantConfig:
             persona=persona,
             currency=data.get("currency", DEFAULT_CURRENCY),
             actions=_str_list_or_none(data.get("actions")),
+            greeting=str(data.get("greeting", "") or ""),
         )
 
 
