@@ -587,3 +587,6 @@ DEMO_ERP_CUSTOMERS: dict = {
                          "phone": "+91-9828379313",
                          "orders": ["ORD-9021", "ORD-9022"]},
         }
+
+# The default (demo) deployment name — domain data, not core config.
+DEMO_DEPLOYMENT_NAME = "acme_support"

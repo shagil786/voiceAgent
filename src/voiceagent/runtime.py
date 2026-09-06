@@ -41,7 +41,7 @@ from voiceagent.tenant import DEFAULT_CURRENCY, Tenant, compile_persona_block
 # Deployment (system prompt, gateway tools, knowledge) per business; the policy
 # file lives in git as the company's support/compliance artifact.
 DEFAULT_POLICY_PATH = "data/policies/policies.yaml"
-DEFAULT_DEPLOYMENT_NAME = "acme_support"
+from voiceagent.demo_data import DEMO_DEPLOYMENT_NAME as DEFAULT_DEPLOYMENT_NAME
 
 # Platform-level governance boilerplate for the frontier system prompt: the
 # spoken-aloud brevity rule, the propose-vs-policy contract, never-invent
@@ -206,7 +206,7 @@ def make_deployment(
     """Build the governed Deployment: prompt + gateway tool surface + inline
     knowledge. With a tenant bundle, identity/persona, tool surface,
     knowledge and metadata all come from data/tenants/<name>/ — onboarding a
-    customer is data, not code. tenant=None reproduces the built-in Acme
+    customer is data, not code. tenant=None reproduces the built-in demo tenant
     deployment byte-identically (policy_path is accepted for API symmetry;
     the policy engine is wired in build_orchestrator)."""
     if tenant is None:
