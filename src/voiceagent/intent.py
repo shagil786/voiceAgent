@@ -95,6 +95,8 @@ class IntentClassifier:
         labels: list[str] = []
         for intent, exs in self._exemplars.items():
             for ex in exs:
+                if not ex.strip():
+                    continue  # empty text embeds as NaN -> poisons the matmul
                 queries.append(ex)
                 labels.append(intent)
         self._intents = list(self._exemplars.keys())
@@ -102,7 +104,8 @@ class IntentClassifier:
                              (LATIN_SPACE, self._latin_model)):
             emb = np.asarray(model.encode(queries, normalize_embeddings=True),
                              dtype=np.float32)
-            self._matrices[space] = (emb, list(labels))
+            self._matrices[space] = (np.nan_to_num(emb, nan=0.0),
+                                     list(labels))
 
     def reseed(self, exemplars: dict[str, list[str]]) -> None:
         """M2 (ADR-002): swap the exemplar set and rebuild BOTH space
@@ -123,6 +126,7 @@ class IntentClassifier:
                  else self._latin_model)
         q = np.asarray(model.encode([text], normalize_embeddings=True),
                        dtype=np.float32)
+        q = np.nan_to_num(q, nan=0.0)
         scores = embs @ q.T  # (n_exemplars, 1)
         scores = scores[:, 0]
         order = np.argsort(-scores)[:k]

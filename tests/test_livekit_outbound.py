@@ -86,3 +86,35 @@ def test_factory_api_constructed_inside_loop_and_closed():
                        poll=lambda r: "active")
     assert outcome == "connected"
     assert created and events == ["constructed", "created", "closed"]
+
+
+def test_create_uses_raw_e164_no_tel_prefix():
+    """Telnyx's SBC 404s (silently, no CDR) on 'tel:'-prefixed SIP users.
+    The request-URI user must be raw E.164 — pinned so the convention
+    never creeps back into the binding."""
+    import asyncio
+    from voiceagent.telephony import outbound
+
+    captured = {}
+
+    class FakeSip:
+        async def create_sip_participant(self, req):
+            captured["req"] = req
+
+    class FakeClient:
+        sip = FakeSip()
+
+        async def aclose(self):
+            pass
+
+    class FakeAPI:
+        def __call__(self):
+            return FakeClient()
+
+    outbound._default_create(api=FakeAPI(), room_name="r",
+                             to_number="+17744815949",
+                             trunk_id="ST_test", from_number="+17853299745")
+    req = captured["req"]
+    assert req.sip_call_to == "+17744815949"
+    assert not req.sip_call_to.startswith("tel:")
+    assert req.sip_number == "+17853299745"

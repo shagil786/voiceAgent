@@ -83,6 +83,26 @@ def make_turn_fn(
     """
     asr_fn = asr if asr is not None else (lambda pcm: _default_asr(pcm, language))
     tts_fn = tts if tts is not None else (lambda text: _default_tts(text, language))
+    # Phone slot (ADR-002-adjacent mechanics): callers give their number in
+    # pieces across turns; the slot accumulates digits (spoken words
+    # converted) so the brain can look orders up without re-asking.
+    phone_digits = ""
+
+    def _absorb_phone_digits(text: str) -> None:
+        nonlocal phone_digits
+        digits = "".join(re.findall(r"\d+", text))
+        if not digits:
+            from voiceagent.entities import _token_value
+            words = "".join(
+                str(_token_value(tok) or "") for tok in re.findall(r"[a-z]+", text.lower()))
+            digits = words
+        if digits:
+            phone_digits = (phone_digits + digits)[-16:]
+
+    def _text_for_brain(user_text: str) -> str:
+        if len(phone_digits) >= 10:
+            return f"{user_text} (caller phone number on file: {phone_digits})"
+        return user_text
 
     _re_nonspeech = re.compile(r"^[\W一-鿿ぁ-ゟァ-ヿ]+$")
 
@@ -93,6 +113,8 @@ def make_turn_fn(
         # background noise ('的。'). Such a transcript is NO speech — skip the
         # whole governed turn (no brain call, no reply) instead of answering
         # nobody. Real words (any script) always pass.
+        _absorb_phone_digits(user_text)
+        user_text = _text_for_brain(user_text)
         stripped = user_text.strip()
         cjk_only = (stripped and re.search(r"[一-鿿ぁ-ゟァ-ヿ]", stripped)
                     and not re.search(r"[A-Za-z0-9\u0900-\u097F]", stripped))

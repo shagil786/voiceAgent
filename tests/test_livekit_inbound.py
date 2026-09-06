@@ -179,3 +179,29 @@ def test_declared_greeting_skips_governed_turn():
     from voiceagent.telephony.inbound import _deps_get
     assert _deps_get(cfg, "greeting") == "Hi, thanks for calling PizzaPal!"
     assert not brains  # nothing called the brain
+
+
+def test_phone_slot_accumulates_across_turns():
+    """Callers give their number in pieces; the slot accumulates digits
+    (spoken words converted) and the brain's prompt carries the full number
+    once >=10 digits are on file — no more repeat-asking."""
+    utterances = iter(["my number is nine eight two eight",
+                       "three seven nine three one three"])
+    seen = []
+
+    class R:
+        reply = "ok"
+
+    class Orch:
+        def handle_turn(self, sid, text):
+            seen.append(text)
+            return R()
+
+    turn = make_turn_fn(Orch(), "s1",
+                        asr=lambda pcm: next(utterances),
+                        tts=lambda text: b"")
+    turn(b"\x00" * 640)   # 3 digits so far -> no annotation yet
+    assert "caller phone number on file" not in seen[0]
+    turn(b"\x00" * 640)   # completes to 10 digits -> annotated
+    assert "caller phone number on file: 9828379313" in seen[1]
+    assert "982" in seen[1]

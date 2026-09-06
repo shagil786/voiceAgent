@@ -181,3 +181,15 @@ def test_classify_routes_by_script_to_matching_encoder(classifier):
             orig_latin, orig_native
     assert latin_calls == ["mera order kab aayega"]
     assert native_calls == ["मेरा ऑर्डर कहाँ है", "என் ஆர்டர் எங்கே இருக்கிறது?"]
+
+
+def test_empty_exemplar_does_not_poison_matmul():
+    """An empty exemplar string embeds as NaN and turns every matmul into
+    'invalid value encountered' — sanitized, not warned-and-wrong."""
+    import warnings
+    clf = IntentClassifier(exemplars={"order_status": ["where is my order", ""],
+                                      "refund": ["i want a refund"]})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        label, conf = clf.classify("where is my order")
+    assert label == "order_status"
