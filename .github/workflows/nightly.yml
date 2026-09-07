@@ -1,0 +1,78 @@
+# Nightly CI: the model-downloading suites (real ASR/TTS/embedder/LLM paths
+# that ci.yml must never run on every push) live here — daily on schedule plus
+# manual dispatch. The split contract with ci.yml: ci = fast stub-only suites,
+# explicit list, push/PR only, no network, no model downloads; nightly = every
+# test file NOT in ci.yml's list (union of both lists covers tests/ exactly).
+# Like ci.yml, this file must never use a `tests/` blanket — every suite is
+# listed explicitly so adding a file is a reviewed decision. Env-gated suites
+# (paid API keys / external services) self-skip when their env is absent.
+name: nightly
+
+on:
+  schedule:
+    - cron: "30 2 * * *"  # 02:30 UTC daily
+  workflow_dispatch:
+
+jobs:
+  nightly-suites:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -r requirements.txt
+      - run: >-
+          python -m pytest
+          tests/test_agent.py
+          tests/test_asr.py
+          tests/test_asr_routing.py
+          tests/test_audit_report.py
+          tests/test_benchmark.py
+          tests/test_billing.py
+          tests/test_bridge.py
+          tests/test_chat.py
+          tests/test_chat_server.py
+          tests/test_dataset.py
+          tests/test_decisionlog.py
+          tests/test_default_bundle.py
+          tests/test_demo_warning.py
+          tests/test_dialogue.py
+          tests/test_entities.py
+          tests/test_entities_snapping.py
+          tests/test_escalation.py
+          tests/test_evaluator.py
+          tests/test_finetune_data.py
+          tests/test_frontier.py
+          tests/test_guardrail_repair.py
+          tests/test_handoff.py
+          tests/test_index_cache.py
+          tests/test_intent.py
+          tests/test_intent_memory.py
+          tests/test_knowledge.py
+          tests/test_knowledge_rag.py
+          tests/test_langid.py
+          tests/test_livekit_audio.py
+          tests/test_livekit_inbound.py
+          tests/test_livekit_outbound.py
+          tests/test_llm.py
+          tests/test_llm_adapters.py
+          tests/test_loopback.py
+          tests/test_memory.py
+          tests/test_outbound.py
+          tests/test_rag_eval.py
+          tests/test_reply_guards.py
+          tests/test_runtime.py
+          tests/test_runtime_tenant.py
+          tests/test_sentiment.py
+          tests/test_specialist.py
+          tests/test_stream.py
+          tests/test_tts.py
+          tests/test_tts_handle.py
+          tests/test_vad.py
+          tests/test_voice.py
+          tests/test_voice_agent.py
+          -q
