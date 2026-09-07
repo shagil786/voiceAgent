@@ -64,6 +64,11 @@ class RuntimeConfig:
     livekit_number: str | None = None
     livekit_trunk_id: str | None = None
     livekit_room_prefix: str = "call-"
+    # Real ERP adapter (erp_http.HttpERP) — all optional; HttpERP fails fast
+    # when explicitly built without erp_url, and erp=None keeps MockERP.
+    erp_url: str | None = None
+    erp_token: str | None = field(default=None, repr=False)
+    erp_timeout: float = 5.0
 
 
 def _parse_list(raw: str | None) -> list[str] | None:
@@ -121,6 +126,9 @@ def _tenant_voices(tenant) -> dict[str, str] | None:
     return None
 
 
+_DEFAULT_ERP_TIMEOUT_S = 5.0  # erp_http adapter default (seconds)
+
+
 def load_config(env: Mapping[str, str] | None = None,
                 tenant=None) -> RuntimeConfig:
     """Resolve a RuntimeConfig: env vars override tenant JSON voices, which
@@ -164,6 +172,17 @@ def load_config(env: Mapping[str, str] | None = None,
     livekit_trunk_id = e.get("LIVEKIT_TRUNK_ID") or None
     livekit_room_prefix = e.get("LIVEKIT_ROOM_PREFIX") or "call-"
 
+    # Real ERP adapter: URL/token/timeout for erp_http.HttpERP. Timeout is
+    # float-coerced with the code default as fallback (a malformed value
+    # must not crash config resolution).
+    erp_url = e.get("VOICEAGENT_ERP_URL") or None
+    erp_token = e.get("VOICEAGENT_ERP_TOKEN") or None
+    try:
+        erp_timeout = float(e.get("VOICEAGENT_ERP_TIMEOUT")
+                            or _DEFAULT_ERP_TIMEOUT_S)
+    except (TypeError, ValueError):
+        erp_timeout = _DEFAULT_ERP_TIMEOUT_S
+
     return RuntimeConfig(
         models_dir=models_dir,
         candidate_models=candidate_models,
@@ -179,4 +198,7 @@ def load_config(env: Mapping[str, str] | None = None,
         livekit_number=livekit_number,
         livekit_trunk_id=livekit_trunk_id,
         livekit_room_prefix=livekit_room_prefix,
+        erp_url=erp_url,
+        erp_token=erp_token,
+        erp_timeout=erp_timeout,
     )
