@@ -15,9 +15,11 @@ import pytest
 from voiceagent.policy import PolicyContext
 from voiceagent.runtime import (
     MAX_KNOWLEDGE_CHARS,
-    PLATFORM_PROMPT_BASE,
+    PLATFORM_GOVERNANCE,
+    BUILTIN_GATEWAY_TOOLS,
     build_orchestrator,
     make_deployment,
+    platform_prompt,
 )
 from voiceagent.tenant import Persona, Tenant, compile_persona_block
 
@@ -26,24 +28,26 @@ ACME = ROOT / "data" / "tenants" / "example-acme"
 VALIDATOR = ROOT / "scripts" / "validate_tenant.py"
 FRONTIER_URL = {"VOICEAGENT_FRONTIER_URL": "https://fake/v1"}
 
-# The pre-tenant built-in prompt, pinned byte-for-byte: the no-tenant path must
-# keep serving exactly what shipped before bundles existed.
+# The built-in prompt, pinned byte-for-byte: identity + domain-agnostic
+# governance + the action examples DERIVED from the builtin composed surface
+# (sorted, capped). Deliberate pin update: the platform prompt no longer
+# hardcodes ecommerce tool names or a WhatsApp channel assumption — the
+# examples are the same derivation every deployment gets from its surface.
 BUILTIN_ACME_PROMPT = (
     "You are Acme's voice support agent. Be concise and warm — your "
-    "replies are spoken aloud. You may propose governed actions "
-    "(fetch_order_status, reschedule_delivery, cancel_order, "
-    "initiate_return, escalate_to_human) — the policy layer decides; "
-    "if a verdict blocks you, explain it plainly to the customer. "
-    "Authenticate context comes from the session; never invent order "
-    "details — fetch them. Never invent URLs, tracking links, or "
-    "reference numbers: if the customer asks for a tracking link, "
-    "offer to send it over WhatsApp instead of reading one out. "
-    "Only promise actions that exist in your tool surface (order "
-    "status, reschedule, cancel, return, refund via human approval, "
-    "human handoff) — never say you are doing something you have no "
-    "tool for. If the customer is upset or asks for a human agent, "
-    "propose escalate_to_human with a short reason."
-)
+    "replies are spoken aloud. You may propose governed actions from "
+    "your tool surface — the policy layer decides; if a verdict blocks "
+    "you, explain it plainly to the customer. Authenticate context comes "
+    "from the session; never invent facts — fetch or verify them with "
+    "your tools. Never invent URLs, tracking links, or reference "
+    "numbers: if the customer asks for a tracking link, offer to send "
+    "it through an available channel instead of reading one out. Only "
+    "promise actions that exist in your tool surface — never say you "
+    "are doing something you have no tool for. If the customer is upset "
+    "or asks for a human agent, propose escalate_to_human with a short "
+    "reason. Governed actions you may propose include: cancel_order, "
+    "end_call, escalate_to_human, fetch_order_status, initiate_refund, "
+    "initiate_return, order_lookup, record_feedback.")
 
 
 class _FakeLLM:
@@ -89,11 +93,13 @@ def test_no_tenant_deployment_is_byte_identical():
 
 
 def test_platform_prompt_composes_builtin_identity():
-    # The built-in prompt is the platform governance base + the Acme identity
-    # sentence — composition, not a second prompt source.
+    # The built-in prompt is the platform governance base (with its derived
+    # action examples) + the Acme identity sentence — composition, not a
+    # second prompt source. Examples come from the same BUILTIN_GATEWAY_TOOLS
+    # surface the deployment wires.
     dep = make_deployment()
     assert dep.system_prompt == ("You are Acme's voice support agent. "
-                                 + PLATFORM_PROMPT_BASE)
+                                 + platform_prompt(BUILTIN_GATEWAY_TOOLS))
 
 
 # --- 2. example-acme bundle drives the Deployment -----------------------------
@@ -101,7 +107,11 @@ def test_platform_prompt_composes_builtin_identity():
 def test_example_acme_bundle_drives_the_deployment():
     dep = make_deployment(tenant=Tenant.load(ACME))
     assert dep.name == "example-acme"
-    assert dep.system_prompt.startswith(PLATFORM_PROMPT_BASE)
+    assert dep.system_prompt.startswith(PLATFORM_GOVERNANCE)
+    # Examples are derived from the tenant's OWN composed surface — the same
+    # {fetch_order_status, escalate_to_human} dict wired as gateway_tools.
+    assert ("Governed actions you may propose include: "
+            "escalate_to_human, fetch_order_status.") in dep.system_prompt
     assert ("a customer-support voice assistant for Acme (example tenant)"
             in dep.system_prompt)
     assert "Tone: warm and concise." in dep.system_prompt
@@ -422,3 +432,68 @@ def test_builtin_surface_never_drifts_from_bindings():
     assert BUILTIN_GATEWAY_TOOLS["order_lookup"]["action"] == "order_lookup"
     assert BUILTIN_GATEWAY_TOOLS["escalate_to_human"]["side_effects"] is True
     assert BUILTIN_GATEWAY_TOOLS["fetch_order_status"]["side_effects"] is False
+
+
+# --- 11. governance is domain-agnostic; examples follow the composed surface --
+
+def _clinic_bundle(root: Path) -> Path:
+    """Synthetic NON-ecommerce tenant: clinic persona + intents, composed
+    surface of only the domain-agnostic bindings (bindings are code —
+    DEFAULT_TOOL_SPECS — a clinic declares the generic ones). Its intents/
+    and tenant.json action extras widen the DECLARED vocabulary (dep.actions)
+    but must not leak into the prompt: only the composed gateway surface is
+    proposeable, so only that is advertised."""
+    root.mkdir(parents=True)
+    (root / "tenant.json").write_text(json.dumps({
+        "name": "clinic",
+        "persona": {"role": "a clinic appointment assistant",
+                    "tone": "calm and patient"},
+        "actions": ["book_appointment"],
+    }))
+    (root / "intents").mkdir()
+    (root / "intents" / "book_appointment.yaml").write_text(
+        "- book me an appointment\n")
+    (root / "tools.yaml").write_text(
+        "tools:\n"
+        "  record_feedback:\n    action: record_feedback\n"
+        "  escalate_to_human:\n    action: escalate_to_human\n")
+    return root
+
+
+def test_non_ecommerce_tenant_prompt_carries_no_ecommerce_vocabulary(tmp_path):
+    from voiceagent.runtime import PLATFORM_GOVERNANCE
+    dep = make_deployment(tenant=Tenant.load(_clinic_bundle(tmp_path / "clinic")))
+    prompt = dep.system_prompt
+    # Governance leads; the action examples are derived from the tenant's OWN
+    # composed surface (record_feedback + the safety valve), never a hardcoded
+    # ecommerce demo list.
+    assert prompt.startswith(PLATFORM_GOVERNANCE)
+    assert "record_feedback" in prompt
+    for banned in ("fetch_order_status", "cancel_order", "WhatsApp",
+                   "order details", "refund"):
+        assert banned not in prompt
+
+
+def test_escalate_to_human_guidance_in_every_compiled_prompt(tmp_path):
+    # The safety valve is platform GOVERNANCE: its guidance survives in every
+    # compiled prompt — builtin demo deployment and any named tenant alike.
+    assert "propose escalate_to_human" in make_deployment().system_prompt
+    dep = make_deployment(
+        tenant=Tenant.load(_clinic_bundle(tmp_path / "clinic")))
+    assert "propose escalate_to_human" in dep.system_prompt
+
+
+def test_platform_prompt_examples_sorted_capped_or_absent():
+    from voiceagent.runtime import (
+        PLATFORM_GOVERNANCE,
+        _MAX_ACTION_EXAMPLES,
+        platform_prompt,
+    )
+    wide = {f"tool_{i:02d}" for i in range(_MAX_ACTION_EXAMPLES + 4)}
+    sentence = platform_prompt(wide)
+    listed = sentence.rsplit(": ", 1)[1].rstrip(".").split(", ")
+    assert len(listed) == _MAX_ACTION_EXAMPLES       # capped, never unbounded
+    assert listed == sorted(listed)                  # stable prompts / CI diffs
+    assert "tool_08" not in sentence and "tool_11" not in sentence
+    # Nothing proposeable -> governance-only: examples are never invented.
+    assert platform_prompt(set()) == PLATFORM_GOVERNANCE

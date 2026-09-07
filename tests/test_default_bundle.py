@@ -91,15 +91,19 @@ def test_mockerp_fixture_loads_from_the_bundle_file():
 def test_make_deployment_serves_the_default_bundle():
     # Byte-identity with the historical built-in deployment is pinned in
     # test_runtime_tenant.py; here we pin that the DATA comes from the bundle
-    # (identity compiled from the bundle persona, knowledge from knowledge/).
-    from voiceagent.runtime import PLATFORM_PROMPT_BASE, make_deployment
+    # (identity compiled from the bundle persona, knowledge from knowledge/)
+    # and that the platform block composes governance + the action examples
+    # derived from the builtin composed surface.
+    from voiceagent.runtime import BUILTIN_GATEWAY_TOOLS, make_deployment
+    from voiceagent.runtime import platform_prompt
     from voiceagent.tenant import compile_persona_block
     dep = make_deployment()
     assert dep.system_prompt.startswith(IDENTITY)
     assert dep.knowledge == KNOWLEDGE
     tenant = Tenant.load(BUNDLE)
     assert dep.system_prompt == (compile_persona_block(tenant.config.persona)
-                                 + " " + PLATFORM_PROMPT_BASE)
+                                 + " "
+                                 + platform_prompt(BUILTIN_GATEWAY_TOOLS))
 
 
 # --- dependency flow: core modules no longer import demo_data ------------------

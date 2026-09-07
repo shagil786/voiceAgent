@@ -274,10 +274,12 @@ def test_live_runner_deployment_imports_and_compiles(monkeypatch):
     assert {"fetch_order_status", "reschedule_delivery", "cancel_order",
             "escalate_to_human", "initiate_return"} <= names
     # hardened prompt: no invented URLs; only real actions promised; upset
-    # customers are routed to escalate_to_human
+    # customers are routed to escalate_to_human. (Pin update: the tracking-
+    # link guidance is channel-agnostic now — "available channel", not a
+    # hardcoded WhatsApp assumption.)
     system = orch.brain._system_prompt
     assert "never invent" in system.lower()
-    assert "WhatsApp" in system
+    assert "available channel" in system
     assert "escalate_to_human" in system
     # the runner is governed by the real policy file (new rules present)
     rules = orch.runner.policy.policies

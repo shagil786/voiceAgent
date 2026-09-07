@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from voiceagent.decisionlog import DecisionLog
 from voiceagent.memory import InMemoryMemory
@@ -58,24 +58,60 @@ DEFAULT_TENANT_BUNDLE = _REPO_ROOT / "data" / "tenants" / "default"
 # "acme_support", byte-identical by test pin).
 DEFAULT_DEPLOYMENT_NAME = "acme_support"
 
-# Platform-level governance boilerplate for the frontier system prompt: the
-# spoken-aloud brevity rule, the propose-vs-policy contract, never-invent
-# rules, promise-only-what-your-tools-do, and the escalation guidance. This is
-# platform code-level policy — tenant bundles supply identity/persona AROUND
-# it, never instead of it.
-PLATFORM_PROMPT_BASE = (
+# Platform-level GOVERNANCE for the frontier system prompt — domain-agnostic
+# by design: no tool names, no channel names, no business vocabulary. The
+# spoken-aloud brevity rule, the propose-vs-policy contract, authenticate-
+# context-from-session, never-invent facts / URLs / tracking links / reference
+# numbers, promise-only-what-your-tools-do, and the escalation guidance
+# (escalate_to_human is the platform-owned safety valve, always proposeable —
+# ADR-003). This is platform code-level policy — tenant bundles supply
+# identity/persona AROUND it, never instead of it. The ACTION EXAMPLES are
+# deliberately NOT here: they are derived at deployment-compile time from each
+# deployment's actual composed surface (platform_prompt below), so a
+# non-ecommerce tenant never inherits another business's vocabulary.
+PLATFORM_GOVERNANCE = (
     "Be concise and warm — your replies are spoken aloud. You may propose "
-    "governed actions (fetch_order_status, reschedule_delivery, cancel_order, "
-    "initiate_return, escalate_to_human) — the policy layer decides; if a "
-    "verdict blocks you, explain it plainly to the customer. Authenticate "
-    "context comes from the session; never invent order details — fetch "
-    "them. Never invent URLs, tracking links, or reference numbers: if the "
-    "customer asks for a tracking link, offer to send it over WhatsApp "
-    "instead of reading one out. Only promise actions that exist in your "
-    "tool surface (order status, reschedule, cancel, return, refund via "
-    "human approval, human handoff) — never say you are doing something you "
-    "have no tool for. If the customer is upset or asks for a human agent, "
-    "propose escalate_to_human with a short reason.")
+    "governed actions from your tool surface — the policy layer decides; if "
+    "a verdict blocks you, explain it plainly to the customer. Authenticate "
+    "context comes from the session; never invent facts — fetch or verify "
+    "them with your tools. Never invent URLs, tracking links, or reference "
+    "numbers: if the customer asks for a tracking link, offer to send it "
+    "through an available channel instead of reading one out. Only promise "
+    "actions that exist in your tool surface — never say you are doing "
+    "something you have no tool for. If the customer is upset or asks for a "
+    "human agent, propose escalate_to_human with a short reason.")
+
+# The action-examples sentence is CAPPED: it is illustrative guidance, not the
+# proposal surface (that is computed from the tool specs — ADR-003), and an
+# unbounded list would bloat every turn of a wide-surface deployment.
+_MAX_ACTION_EXAMPLES = 8
+
+
+def _action_examples_sentence(gateway_surface: Iterable[str]) -> str | None:
+    """Sorted, capped tool names from a deployment's COMPOSED gateway surface.
+    Sorted for stable prompts and CI diffs; capped at _MAX_ACTION_EXAMPLES
+    (the "include" wording keeps the truncation honest). Returns None when the
+    surface yields nothing proposeable — the caller emits governance-only and
+    never invents example actions."""
+    names = sorted(set(gateway_surface))[:_MAX_ACTION_EXAMPLES]
+    if not names:
+        return None
+    return ("Governed actions you may propose include: "
+            + ", ".join(names) + ".")
+
+
+def platform_prompt(gateway_surface: Iterable[str] = ()) -> str:
+    """The platform block of a frontier system prompt: PLATFORM_GOVERNANCE
+    plus the action-examples sentence DERIVED from the deployment's composed
+    gateway surface (a gateway-tools mapping passes as its keys, so the exact
+    dict wired into the Deployment can be handed in unchanged). Callers must
+    pass the same surface the Deployment wires as gateway_tools — the prompt
+    may illustrate the surface, never out-promise it. Empty surface ->
+    governance-only."""
+    examples = _action_examples_sentence(gateway_surface)
+    if examples is None:
+        return PLATFORM_GOVERNANCE
+    return PLATFORM_GOVERNANCE + " " + examples
 
 
 # The built-in tool surface: DERIVED from DEFAULT_TOOL_SPECS so a new tool
@@ -320,9 +356,13 @@ def make_deployment(
             name=DEFAULT_DEPLOYMENT_NAME,
             # The identity sentence compiles from the bundle's declared
             # persona (flat-string form -> "You are <role>.") — the same
-            # compiler named tenants go through.
+            # compiler named tenants go through. Action examples derive from
+            # BUILTIN_GATEWAY_TOOLS — the exact surface wired as gateway_tools
+            # below (the composed-surface source of truth for the builtin
+            # deployment), so the demo prompt lists what the demo brain may
+            # actually propose.
             system_prompt=compile_persona_block(tenant.config.persona)
-                          + " " + PLATFORM_PROMPT_BASE,
+                          + " " + platform_prompt(BUILTIN_GATEWAY_TOOLS),
             gateway_tools=dict(BUILTIN_GATEWAY_TOOLS),
             knowledge=knowledge,
             chunked_knowledge=chunked,
@@ -330,11 +370,19 @@ def make_deployment(
     knowledge, chunked = _bundle_knowledge(
         tenant, embedder=knowledge_embedder,
         cache_path=knowledge_cache_path)
+    gateway_tools = _bundle_gateway_tools(tenant)
     return Deployment(
         name=tenant.config.name,
-        system_prompt=PLATFORM_PROMPT_BASE + "\n\n"
+        # Action examples derive from the COMPOSED GATEWAY SURFACE — this
+        # exact dict is wired as gateway_tools below. NOT
+        # Tenant.action_vocabulary(): ADR-003 makes the tool-spec-derived
+        # surface the brain's proposal surface, while the vocabulary is the
+        # wider declared taxonomy (intents/ + info-only extras) — advertising
+        # it would name actions no tool can execute, out-promising the
+        # surface the governance text itself forbids.
+        system_prompt=platform_prompt(gateway_tools) + "\n\n"
                       + compile_persona_block(tenant.config.persona),
-        gateway_tools=_bundle_gateway_tools(tenant),
+        gateway_tools=gateway_tools,
         knowledge=knowledge,
         chunked_knowledge=chunked,
         # Declared greeting: instant pickup line (tenant data); '' keeps the
