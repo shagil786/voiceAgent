@@ -137,3 +137,70 @@ def test_rupee_word_path_unchanged_with_rupee_currency():
     e = extract_entities("rupees four thousand eight hundred twenty one",
                          currency="₹")
     assert e.amount == 4821.0
+
+
+# --------------------------------------------------------------------------
+# Additive currency-word coverage: Tamil/Telugu rupee forms, £ and ¥ word
+# forms. Existing alternations stay byte-identical (the hi/Devanagari pins
+# above are untouched); every new form mints amounts ONLY for its own
+# currency (words are scoped to the ACTIVE currency, same as $/€ above).
+# --------------------------------------------------------------------------
+
+def test_tamil_rupee_word_forms_extract_amounts():
+    e = extract_entities("ரூபாய் five thousand refund", currency="₹")
+    assert e.amount == 5000.0
+    e = extract_entities("refund of 2000 ரூ. please", currency="₹")
+    assert e.amount == 2000.0
+    e = extract_entities("ரூ. 2000 refund", currency="₹")
+    assert e.amount == 2000.0
+    e = extract_entities("five thousand ரூபாய் refund", currency="₹")
+    assert e.amount == 5000.0
+
+def test_telugu_rupee_word_forms_extract_amounts():
+    e = extract_entities("రూపాయలు five thousand refund", currency="₹")
+    assert e.amount == 5000.0
+    e = extract_entities("refund of 3000 రూపాయలు", currency="₹")
+    assert e.amount == 3000.0
+    e = extract_entities("రూ. 3000 refund", currency="₹")
+    assert e.amount == 3000.0
+
+def test_pound_word_forms_extract_amounts():
+    e = extract_entities("I want a refund of five thousand pounds",
+                         currency="£")
+    assert e.amount == 5000.0
+    e = extract_entities("pounds five thousand refund", currency="£")
+    assert e.amount == 5000.0
+    e = extract_entities("refund of 2500 sterling", currency="£")
+    assert e.amount == 2500.0
+    e = extract_entities("refund gbp 2500", currency="£")
+    assert e.amount == 2500.0
+    e = extract_entities("refund of £2,500 please", currency="£")
+    assert e.amount == 2500.0
+
+def test_yen_yuan_word_forms_extract_amounts():
+    e = extract_entities("refund of three thousand yuan", currency="¥")
+    assert e.amount == 3000.0
+    e = extract_entities("renminbi 1500 refund", currency="¥")
+    assert e.amount == 1500.0
+    e = extract_entities("refund of 1500 yen", currency="¥")
+    assert e.amount == 1500.0
+    e = extract_entities("yen 1800 refund", currency="¥")
+    assert e.amount == 1800.0
+
+def test_new_currency_words_isolated_across_tenants():
+    # "pounds"/"sterling" must never mint a ₹/$/¥ amount, "yuan"/"yen" must
+    # never mint a ₹/£ amount, and rupee words must not mint £/¥ amounts.
+    assert extract_entities("refund of five thousand pounds please",
+                            currency="₹").amount is None
+    assert extract_entities("refund of three thousand yen please",
+                            currency="₹").amount is None
+    assert extract_entities("refund of five thousand pounds please",
+                            currency="$").amount is None
+    assert extract_entities("refund of five thousand pounds please",
+                            currency="¥").amount is None
+    assert extract_entities("refund of five thousand rupees please",
+                            currency="£").amount is None
+    assert extract_entities("refund of five thousand rupees please",
+                            currency="¥").amount is None
+    assert extract_entities("refund of five thousand dollars please",
+                            currency="£").amount is None

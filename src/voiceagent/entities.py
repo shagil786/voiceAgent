@@ -228,11 +228,16 @@ def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
 # the words that may introduce or follow a money amount for THAT currency.
 # Scoped to the active currency only — "dollars" must not create amounts for
 # a ₹ tenant. Keep the rupee alternation byte-identical (hi/Devanagari
-# behaviour is pinned by tests).
+# behaviour is pinned by tests). Later entries are additive extensions:
+# Tamil/Telugu rupee forms (South-Indian tenants) and £/¥ word forms —
+# each form mints amounts only for its own currency.
 _CURRENCY_WORDS: dict[str, tuple[str, ...]] = {
-    "₹": (r"rs\.?", r"rupees?", r"रुपये?", r"रु\.?"),
+    "₹": (r"rs\.?", r"rupees?", r"रुपये?", r"रु\.?",
+          r"ரூபாய்", r"ரூ\.?", r"రూపాయలు", r"రూ\.?"),
     "$": (r"dollars?", r"usd?"),
     "€": (r"euros?", r"eur"),
+    "£": (r"pounds?", r"gbp?", r"sterling"),
+    "¥": (r"yuan?", r"renminbi?", r"yen"),
 }
 
 
