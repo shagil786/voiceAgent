@@ -178,26 +178,41 @@ def _ts_shift(ts: str, days: int) -> str:
     return (dt + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def default_embed(texts: list[str]) -> "np.ndarray":
-    """THE shared embedding function for learned memory (ADR-002): the SAME
-    model and the SAME normalized-encode call the intent classifier uses for
-    its primary (native-script) matrix — knowledge.DEFAULT_EMBEDDER via
-    SentenceTransformer.encode(..., normalize_embeddings=True), exactly like
-    IntentClassifier._build in voiceagent.intent. Prototype centroid vectors
-    therefore live in the same space as classifier queries; no new embedding
-    model is introduced. The heavy import is lazy so this module stays
-    importable with zero heavy deps."""
-    global _SHARED_EMBEDDER
-    if _SHARED_EMBEDDER is None:
+# Shared per-space encoders (M5b dual-space): one lazy SentenceTransformer
+# per knowledge embedding space, process-wide — an extension of the old
+# single-model _SHARED_EMBEDDER singleton, not a second cache.
+_SHARED_EMBEDDERS: dict[str, "SentenceTransformer"] = {}
+
+
+def space_embed(texts: list[str], space: str) -> "np.ndarray":
+    """THE shared per-space embedding function (M5b dual-space): knowledge's
+    SPACE_EMBEDDERS[space] via SentenceTransformer.encode(...,
+    normalize_embeddings=True), exactly like IntentClassifier._build's
+    per-space matrices. 'native' (LaBSE) is the historical default_embed
+    below; 'latin' (MiniLM) serves en/hinglish queries. One lazy model per
+    space, shared process-wide; the heavy import stays lazy so this module
+    stays importable with zero heavy deps."""
+    model = _SHARED_EMBEDDERS.get(space)
+    if model is None:
         from sentence_transformers import SentenceTransformer
-        from voiceagent.knowledge import DEFAULT_EMBEDDER
-        _SHARED_EMBEDDER = SentenceTransformer(DEFAULT_EMBEDDER)
+        from voiceagent.knowledge import SPACE_EMBEDDERS
+        model = SentenceTransformer(SPACE_EMBEDDERS[space])
+        _SHARED_EMBEDDERS[space] = model
     return np.asarray(
-        _SHARED_EMBEDDER.encode(list(texts), normalize_embeddings=True),
+        model.encode(list(texts), normalize_embeddings=True),
         dtype=np.float32)
 
 
-_SHARED_EMBEDDER = None
+def default_embed(texts: list[str]) -> "np.ndarray":
+    """THE shared embedding function for learned memory (ADR-002): the
+    native (LaBSE) space — the SAME model and the SAME normalized-encode
+    call the intent classifier uses for its primary (native-script) matrix
+    (knowledge.DEFAULT_EMBEDDER, kept under the historical name so every
+    existing entry point keeps meaning "LaBSE"; see space_embed for the
+    latin counterpart). Prototype centroid vectors therefore live in the
+    same space as classifier queries; no new embedding model is introduced."""
+    from voiceagent.knowledge import NATIVE_SPACE
+    return space_embed(texts, NATIVE_SPACE)
 
 # M1 conflict guard: a prototype exemplar this close to a DECLARED exemplar
 # of a DIFFERENT label would outrank the seed at argmax cosine (insertion

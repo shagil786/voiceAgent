@@ -1,6 +1,7 @@
 # tests/test_knowledge_rag.py — RAG phase 1: chunked knowledge retrieval with
 # per-claim provenance.
-"""Covers the four seams of the phase-1 RAG path:
+"""Covers the seams of the phase-1 RAG path plus its phase-2 dual-space
+retrieval:
 
 1. Chunking (deterministic, heading-bounded, no mid-sentence splits).
 2. The retrieval switch (small KB -> byte-identical whole-file behavior;
@@ -9,8 +10,11 @@
    fail-open to whole files on embedder error).
 4. Provenance + gap detection (TurnResult.retrieved_chunk_ids /
    knowledge_gaps).
+5. Dual space (phase 2): script-routed search over per-space matrices,
+   per-space floors, per-space dim guard, (space, query)-keyed query cache,
+   stale-cache invalidation across the shared cache-version bump.
 
-Everything runs on an injected deterministic embedder except one
+Everything runs on injected deterministic embedders except one
 real-encoder test (the shared LaBSE via memory.default_embed).
 """
 from __future__ import annotations
@@ -183,7 +187,9 @@ def test_cache_hit_skips_reembedding(tmp_path):
     emb1 = FakeEmbedder()
     ck1 = build_chunked_index(big_kb(), embedder=emb1, model_name="fake",
                               cache_path=cache)
-    assert emb1.calls == 1
+    # phase 2: the corpus is embedded once PER SPACE (one batch each) — the
+    # injected encoder drives both spaces when no latin_embedder is given
+    assert emb1.calls == 2
     emb2 = FakeEmbedder()
     ck2 = build_chunked_index(big_kb(), embedder=emb2, model_name="fake",
                               cache_path=cache)
@@ -210,7 +216,7 @@ def test_cache_invalidated_when_corpus_changes(tmp_path):
     emb2 = FakeEmbedder()
     build_chunked_index(files, embedder=emb2, model_name="fake",
                         cache_path=cache)
-    assert emb2.calls == 1  # stale hash -> rebuilt
+    assert emb2.calls == 2  # stale hash -> rebuilt (one batch per space)
 
 
 def test_build_with_failing_embedder_raises_for_switch_to_catch():
@@ -255,6 +261,180 @@ def test_query_embedding_cached_per_turn():
     assert emb.calls == before
     retrieve_chunks(ck, "delivery")
     assert emb.calls == before + 1
+
+
+# --- 4b. phase 2: dual-space script-routed retrieval -------------------------
+
+class SpaceFake:
+    """Deterministic per-space embedder: each mark word maps to its own axis
+    (unrecognized text lands on a shared trailing axis). Fixed per-instance
+    dim, so a query encoded by the WRONG space's encoder cannot pass the dim
+    guard; records every text it encodes (build + query) for routing spies."""
+
+    def __init__(self, marks: dict[str, int], dim: int):
+        self.marks = marks
+        self.dim = dim
+        self.encoded: list[str] = []
+
+    def __call__(self, texts: list[str]) -> np.ndarray:
+        self.encoded.extend(texts)
+        out = np.zeros((len(texts), self.dim), dtype=np.float32)
+        for i, t in enumerate(texts):
+            low = t.lower()
+            for word, axis in self.marks.items():
+                if word in low:
+                    out[i, axis] = 1.0
+                    break
+            else:
+                out[i, -1] = 1.0
+        return out
+
+
+# Bilingual tenant KB chunks (realistic for an Indian tenant): each chunk
+# carries a romanized-hinglish marker AND a Devanagari marker, so the same
+# chunk is reachable in both spaces.
+DUAL_FILES = {
+    "eta": ("## Delivery\n\n"
+            "Deliveries kab hoti hain — डिलीवरी 9:00 se 19:00 baje tak. "
+            "Deliveries occur between 9:00 and 19:00 local time."),
+    "cancel_policy": ("## Cancellation\n\n"
+                      "Ship ho gaya hai to order kaise cancel karein — रद्द "
+                      "karne ki policy. Orders that already shipped cannot "
+                      "be cancelled."),
+}
+
+
+def _dual_index(native_fake, latin_fake) -> ChunkedKnowledge:
+    return build_chunked_index(DUAL_FILES, embedder=native_fake,
+                               latin_embedder=latin_fake, cache_path=None)
+
+
+def test_dual_space_routes_latin_and_native_queries_to_their_space():
+    nat = SpaceFake({"डिलीवरी": 0, "रद्द": 1}, dim=8)
+    lat = SpaceFake({"kab": 0, "cancel": 1}, dim=6)
+    ck = _dual_index(nat, lat)
+    from voiceagent.knowledge import LATIN_SPACE, NATIVE_SPACE
+    assert ck.space_for("delivery kab hoti hai") == LATIN_SPACE
+    assert ck.space_for("डिलीवरी कब होगी") == NATIVE_SPACE
+    nat.encoded.clear()
+    lat.encoded.clear()
+    # the hinglish query is encoded ONLY by the latin-space encoder
+    hits = retrieve_chunks(ck, "delivery kab hoti hai", top_k=6)
+    assert lat.encoded == ["delivery kab hoti hai"]
+    assert nat.encoded == []
+    # ... and it reaches the eta chunk through the LATIN matrix
+    assert [c.source_file_id for c, _ in hits] == ["eta"]
+    lat.encoded.clear()
+    # the Devanagari query is encoded ONLY by the native-space encoder
+    hits = retrieve_chunks(ck, "डिलीवरी कब होगी", top_k=6)
+    assert nat.encoded == ["डिलीवरी कब होगी"]
+    assert lat.encoded == []
+    assert [c.source_file_id for c, _ in hits] == ["eta"]
+
+
+def test_dual_space_dim_guard_names_the_offending_space():
+    nat = SpaceFake({"डिलीवरी": 0, "रद्द": 1}, dim=8)
+    lat = SpaceFake({"kab": 0, "cancel": 1}, dim=6)
+    ck = _dual_index(nat, lat)
+    # force the native encoder onto a query routed to the latin space
+    with pytest.raises(ValueError, match="latin-space"):
+        retrieve_chunks(ck, "delivery kab hoti hai", embedder=nat)
+    with pytest.raises(ValueError, match="native-space"):
+        retrieve_chunks(ck, "डिलीवरी कब होगी", embedder=lat)
+
+
+def test_dual_space_query_cache_keyed_by_space_and_query():
+    nat = SpaceFake({"डिलीवरी": 0, "रद्द": 1}, dim=8)
+    lat = SpaceFake({"kab": 0, "cancel": 1}, dim=6)
+    ck = _dual_index(nat, lat)
+    nat.encoded.clear()
+    lat.encoded.clear()
+    retrieve_chunks(ck, "delivery kab hoti hai")       # latin encode
+    retrieve_chunks(ck, "delivery kab hoti hai")       # same (space, query): cached
+    assert lat.encoded == ["delivery kab hoti hai"]
+    retrieve_chunks(ck, "डिलीवरी कब होगी")             # other space: encodes (native)
+    assert nat.encoded == ["डिलीवरी कब होगी"]
+    # one-slot cache: the native query overwrote the slot, so the hinglish
+    # query encodes again — the slot is keyed, not per-space multi-slot
+    retrieve_chunks(ck, "delivery kab hoti hai")
+    assert lat.encoded == ["delivery kab hoti hai", "delivery kab hoti hai"]
+
+
+def test_dual_space_cache_never_serves_stale_payloads(tmp_path, monkeypatch):
+    from voiceagent import knowledge as kb
+    from voiceagent.knowledge import LATIN_SPACE, NATIVE_SPACE
+    cache = tmp_path / "chunks.pkl"
+
+    def build() -> None:
+        build_chunked_index(
+            DUAL_FILES, embedder=SpaceFake({"डिलीवरी": 0}, 8),
+            latin_embedder=SpaceFake({"kab": 0}, 6),
+            model_name="fake-native", latin_model_name="fake-latin",
+            cache_path=cache)
+
+    build()
+    payload = pickle.loads(cache.read_bytes())
+    assert payload["version"] == KB_CACHE_VERSION + 1  # bumped with the shared constant
+    assert payload["model_name"] == "fake-native"      # top-level = primary space
+    assert set(payload["spaces"]) == {NATIVE_SPACE, LATIN_SPACE}
+    assert payload["spaces"][LATIN_SPACE]["model_name"] == "fake-latin"
+
+    # a phase-1 single-space payload at the CURRENT version (no 'spaces'
+    # record) must never serve as a dual-space cache: both spaces rebuild
+    corpus_hash = chunks_hash(chunk_files(DUAL_FILES))
+    single = {"version": KB_CACHE_VERSION + 1, "model_name": "fake-native",
+              "chunks_hash": corpus_hash, "dim": 8,
+              "embeddings": payload["spaces"][NATIVE_SPACE]["embeddings"]}
+    with open(cache, "wb") as f:
+        pickle.dump(single, f)
+    n1 = SpaceFake({"डिलीवरी": 0}, 8)
+    l1 = SpaceFake({"kab": 0}, 6)
+    build_chunked_index(DUAL_FILES, embedder=n1, latin_embedder=l1,
+                        model_name="fake-native", latin_model_name="fake-latin",
+                        cache_path=cache)
+    assert n1.encoded and l1.encoded          # both spaces re-embedded
+
+    # a bump of the SHARED constant invalidates even a well-formed payload
+    monkeypatch.setattr(kb, "CACHE_VERSION", kb.CACHE_VERSION + 1)
+    n2 = SpaceFake({"डिलीवरी": 0}, 8)
+    l2 = SpaceFake({"kab": 0}, 6)
+    build_chunked_index(DUAL_FILES, embedder=n2, latin_embedder=l2,
+                        model_name="fake-native", latin_model_name="fake-latin",
+                        cache_path=cache)
+    assert n2.encoded and l2.encoded          # version mismatch -> rebuilt
+
+
+def test_legacy_single_space_index_searches_without_routing():
+    # Directly-constructed ChunkedKnowledge (no space_embeddings) is a
+    # legacy single-space index: EVERY query searches the one matrix,
+    # whatever its script (IndexHandle's legacy constructor semantics).
+    emb = SpaceFake({"deliver": 0, "रद्द": 1}, dim=6)
+    chunks = chunk_files(DUAL_FILES)
+    mat = np.asarray(emb([c.text for c in chunks]), dtype=np.float32)
+    mat = mat / np.linalg.norm(mat, axis=1, keepdims=True)
+    ck = ChunkedKnowledge(chunks=chunks, embeddings=mat, model_name="fake",
+                          source_texts=dict(DUAL_FILES), embedder=emb)
+    emb.encoded.clear()
+    hits = retrieve_chunks(ck, "delivery kab hoti hai", top_k=6)   # hinglish
+    assert [c.source_file_id for c, _ in hits] == ["eta"]
+    hits = retrieve_chunks(ck, "रद्द करना है", top_k=6)             # Devanagari
+    assert [c.source_file_id for c, _ in hits] == ["cancel_policy"]
+    assert len(emb.encoded) == 2      # both queries: same matrix, same encoder
+
+
+def test_rag_eval_applies_per_space_floors_on_dual_index():
+    # evaluate() with floor=None (the default) must use the calibrated
+    # per-space floors, not one shared floor.
+    from voiceagent.rag_eval import evaluate
+    nat = SpaceFake({"डिलीवरी": 0, "रद्द": 1}, dim=8)
+    lat = SpaceFake({"kab": 0, "cancel": 1}, dim=6)
+    suite = [
+        ("delivery kab hoti hai", "eta", "hinglish"),
+        ("डिलीवरी कब होगी", "eta", "devanagari"),
+        ("mazak kar raha tha", None, "gap"),
+    ]
+    r = evaluate(DUAL_FILES, suite, build=lambda f: _dual_index(nat, lat))
+    assert r.hits == 2 and r.gaps_correct == 1 and r.gaps_total == 1
 
 
 # --- orchestrator integration --------------------------------------------------
@@ -362,6 +542,10 @@ def test_real_encoder_retrieval_ranks_matching_section_first():
     # Focused single-fact sections (the shape the 600-900 char chunking
     # produces for a real FAQ): the real encoder must rank the refund chunk
     # first AND clear the 0.35 floor, while unrelated queries do not.
+    # min_similarity pins the NATIVE-space (LaBSE) floor: the single injected
+    # encoder drives BOTH spaces here (an offline composition — the real
+    # latin space is MiniLM with its own 0.20 floor), and LaBSE's
+    # unrelated-query sims (~0.20 on this corpus) sit above the latin floor.
     files = {
         "faq": ("## Refunds\n\n"
                 "Refunds are processed within 5-7 business days after we "
@@ -374,10 +558,11 @@ def test_real_encoder_retrieval_ranks_matching_section_first():
                    "manufacturing defects only."),
     }
     ck = build_chunked_index(files, embedder=default_embed, cache_path=None)
-    hits = retrieve_chunks(ck, "how long do refunds take?", top_k=6)
+    hits = retrieve_chunks(ck, "how long do refunds take?", top_k=6,
+                           min_similarity=0.35)
     assert hits and "Refunds" in hits[0][0].text
     assert hits[0][1] >= 0.35
     assert retrieve_chunks(ck, "what is the capital of France?",
-                           top_k=6) == []
+                           top_k=6, min_similarity=0.35) == []
 
 

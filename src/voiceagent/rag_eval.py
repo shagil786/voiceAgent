@@ -64,10 +64,13 @@ class EvalResult:
 
 
 def evaluate(files: dict[str, str], suite: list[tuple[str, str | None, str]],
-             k: int = 6, floor: float = 0.35,
+             k: int = 6, floor: float | None = None,
              build=None, retrieve=None) -> EvalResult:
     """Score `suite` against the chunked index built from `files`.
-    build/retrieve injectable for tests; defaults are the real functions."""
+    build/retrieve injectable for tests; defaults are the real functions.
+    floor=None (default) applies the per-space module floors (the calibrated
+    ones — the honest production configuration); an explicit float overrides
+    the routed space's floor for experiments."""
     from voiceagent.knowledge_rag import build_chunked_index, retrieve_chunks
     build = build or build_chunked_index
     retrieve = retrieve or retrieve_chunks

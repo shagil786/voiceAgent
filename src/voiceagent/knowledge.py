@@ -46,7 +46,12 @@ EMBEDDER_DIMS = {
 }
 
 DEFAULT_CACHE_PATH = "data/index/handle.pkl"
-CACHE_VERSION = 3  # v2 pickles (M5a-2) carried ONE space; v3 carries both
+CACHE_VERSION = 4  # v3 pickles carried the dual-space FAISS handle; v4 is the
+# shared bump point for the RAG-phase-2 dual-space CHUNK cache payload
+# (knowledge_rag: chunks now embedded in BOTH spaces). Effect: a v3 handle
+# cache also invalidates and rebuilds once, harmlessly — the shared constant
+# is the established bump point so any payload-shape change invalidates every
+# downstream cache that derives its version from it.
 
 
 def route_space(query: str) -> str:
