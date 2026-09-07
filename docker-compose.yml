@@ -1,0 +1,77 @@
+# docker-compose.yml — VoiceAgent on Docker/VPS: two services, ONE image.
+#
+#   chat   — scripts/chat_server.py on :8000. The governed demo HTTP agent
+#            (GET / UI, POST /api/turn). Needs VOICEAGENT_FRONTIER_URL (+
+#            _MODEL/_KEY) or it fails fast and restart-loops by design.
+#
+#   worker — scripts/livekit_worker.py on :8080. LiveKit telephony limb:
+#            inbound webhook + one session thread per call room. ADDITIONALLY
+#            requires LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET and
+#            a PUBLICLY REACHABLE webhook URL registered in the LiveKit
+#            console — see docs/telephony-runbook.md (webhook signature
+#            validation fails closed; a wrong key/secret 404s every event).
+#
+# Config: `.env` (gitignored, NEVER baked into the image) is loaded via
+# env_file when present; variables passed through from the host shell (e.g.
+# `VOICEAGENT_TENANT=example-clinic docker compose up chat`) take precedence.
+# Empty-string passthroughs are safe: every VOICEAGENT_*/LIVEKIT_* reader
+# treats "" as unset (`... or None`).
+#
+# State: named volumes hold the mutable paths — /app/data/out (chat memory
+# DB, and any VOICEAGENT_AUDIT_DB / VOICEAGENT_MEMORY_DB you point here) and
+# /app/data/index (RAG chunk cache). Tenant/policy data is baked into the
+# image read-only; update it by rebuilding.
+
+services:
+  chat:
+    build: .
+    image: voiceagent:latest
+    command: ["python", "scripts/chat_server.py", "8000", "0.0.0.0"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - VOICEAGENT_FRONTIER_URL
+      - VOICEAGENT_FRONTIER_MODEL
+      - VOICEAGENT_FRONTIER_KEY
+      - VOICEAGENT_TENANT
+      - VOICEAGENT_AUDIT_DB
+      - VOICEAGENT_MEMORY_DB
+    volumes:
+      - voiceagent_state:/app/data/out
+      - voiceagent_index:/app/data/index
+    restart: unless-stopped
+
+  worker:
+    build: .
+    image: voiceagent:latest
+    command: ["python", "scripts/livekit_worker.py", "--port", "8080"]
+    ports:
+      - "8080:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - VOICEAGENT_FRONTIER_URL
+      - VOICEAGENT_FRONTIER_MODEL
+      - VOICEAGENT_FRONTIER_KEY
+      - VOICEAGENT_TENANT
+      - VOICEAGENT_DEFAULT_LANG
+      - VOICEAGENT_AUDIT_DB
+      - VOICEAGENT_MEMORY_DB
+      - LIVEKIT_URL
+      - LIVEKIT_API_KEY
+      - LIVEKIT_API_SECRET
+      - LIVEKIT_NUMBER
+      - LIVEKIT_TRUNK_ID
+      - LIVEKIT_ROOM_PREFIX
+    volumes:
+      - voiceagent_state:/app/data/out
+      - voiceagent_index:/app/data/index
+    restart: unless-stopped
+
+volumes:
+  voiceagent_state:
+  voiceagent_index:

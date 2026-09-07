@@ -1,6 +1,7 @@
 """VoiceAgent demo HTTP server (stdlib only).
-Usage: python scripts/chat_server.py [port]   (default 8000)
-Open http://127.0.0.1:8000 in a browser.
+Usage: python scripts/chat_server.py [port] [host]   (default 8000, 127.0.0.1)
+Open http://127.0.0.1:8000 in a browser. Containers pass 0.0.0.0 as host so a
+published port is reachable from outside the container namespace.
 """
 import json
 import os
@@ -75,6 +76,9 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    # Loopback-only by default; containers pass 0.0.0.0 so a published port
+    # maps through (a 127.0.0.1 bind inside a container is unreachable).
+    host = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1"
     Path("data/out").mkdir(parents=True, exist_ok=True)
     MEMORY = SQLiteMemory("data/out/memory.db")
     ORCH = _build_live_orchestrator()
@@ -89,5 +93,5 @@ if __name__ == "__main__":
               "the governed Orchestrator; set a frontier (see .env.example).",
               file=sys.stderr)
         sys.exit(2)
-    print(f"VoiceAgent governed demo at http://127.0.0.1:{port}  (Ctrl-C to stop)")
-    HTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    print(f"VoiceAgent governed demo at http://{host}:{port}  (Ctrl-C to stop)")
+    HTTPServer((host, port), Handler).serve_forever()

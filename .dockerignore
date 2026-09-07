@@ -1,0 +1,27 @@
+# Keep the build context small and secret-free. The Dockerfile also COPYs
+# only specific paths — this file is the second line of defense (and the
+# first for context upload size: data/models is GB-scale).
+.git
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+
+# GB-scale local model cache, derived indexes, run output — never baked in.
+data/models/
+data/index/
+data/out/
+data/eval/
+data/packs/
+data/deployments/
+
+# Secrets and machine-local state — NEVER enter the image.
+.env
+*.ses
+
+# CI / tooling / tests / large non-runtime docs.
+.github/
+.superpowers/
+docs/superpowers/
+tests/
