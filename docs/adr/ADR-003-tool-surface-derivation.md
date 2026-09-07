@@ -41,3 +41,19 @@ Tenants never invent bindings at runtime; developers never hand-edit the
 brain's surface. The default bundle's tools.yaml is the worked example of
 the composition mechanism, and its equivalence to the derived builtin
 surface is the drift tripwire.
+
+### Worked example: a second domain on the unchanged core
+
+`src/voiceagent/demo_clinic.py` + `data/tenants/example-clinic/` are the
+second-domain worked example: a CLINIC runs end-to-end (backend adapter →
+ToolGateway → policy → brain prompt) with ZERO changes to the domain-neutral
+core (`tools.py` execute chain, `runtime.py`, `policy.py`). The adapter maps
+clinic semantics onto the seven generic `SupportBackend` verbs; the domain
+language ("appointment") enters only as DATA — intents/ exemplars, tools.yaml
+`action:` renames + description overrides, persona, knowledge. Known
+limitation (not fixed here): a domain verb with NO generic-binding
+equivalent (e.g. booking a new appointment) cannot be composed at all —
+tools.yaml rejects unknown names by design — so such intents resolve through
+the governed handoff/policy path, and a real first-class binding would
+require the deliberate core seam (a new `SupportBackend` verb + ToolGateway
+binding), exactly the "bindings are code" trade-off this ADR accepts.
