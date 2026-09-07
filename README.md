@@ -43,7 +43,7 @@ LEARNING LOOPS
 | **Governance** (policy DSL + validator 7/7, decision log, injection guard, frustration detector) | ✅ enforced |
 | **Voice I/O** (Qwen3-ASR primary + whisper fallback + Indic routing, Piper TTS, barge-in/VAD) | ✅ built, needs fresh e2e latency run |
 | **Outbound** (dialer with DND scrub + window, sub-600ms AMD logic, swarm organs) | ✅ built, synthetic-only validation |
-| **Tests** | ✅ 774 collected, 771 / 2 skipped / 1 xfailed |
+| **Tests** | ✅ 786 collected, 783 / 2 skipped / 1 xfailed |
 | **Batch-learn job** | ✅ on `main` |
 | **Operator packs, adversarial harness, onboarding drill** | ✅ on `feat/operator-packs-harness` |
 | **Telephony limb** (SIP/WebRTC + real number) | ⏳ built on `feat/livekit-limb` — loopback-verified, first PSTN drill pending (docs/telephony-runbook.md) |
