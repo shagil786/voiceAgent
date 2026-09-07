@@ -1,0 +1,12 @@
+# Per-tenant intent exemplars — the file NAME is the intent, the list is
+# the exemplars the embedding classifier matches against (same schema as
+# data/tenants/default/intents/). Author these from the tenant's real
+# historical front-desk calls (the data flywheel). Non-English exemplars
+# are LLM-authored SYNTHETIC phrasings, not transcripts of real patients.
+- what is the status of my appointment
+- is my appointment confirmed for tomorrow
+- when is my appointment APT-1042
+- did the doctor confirm my visit
+- mera appointment kab hai
+- मेरा अपॉइंटमेंट कब है
+- मेरे अपॉइंटमेंट की स्थिति बताओ

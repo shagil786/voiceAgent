@@ -1,0 +1,10 @@
+# Per-tenant intent exemplars — medical emergencies. The clinic policy puts
+# this action in the top-level `escalate:` list: it ALWAYS routes to the
+# paged on-call handoff, never to self-service. The brain's platform
+# governance already keeps escalate_to_human proposeable at all times.
+- I have severe chest pain right now
+- my father collapsed and is not responding
+- there is heavy bleeding that will not stop
+- saans lene mein takleef ho rahi hai
+- सांस लेने में तकलीफ हो रही है
+- बहुत तेज़ दर्द हो रहा है

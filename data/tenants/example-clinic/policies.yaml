@@ -1,0 +1,59 @@
+# Example-clinic policies — same schema as the platform default
+# (data/policies/policies.yaml) and data/tenants/example-acme/policies.yaml.
+# Only actions the tenant declares exist; everything else is least-privilege
+# DENY. The action NAMES are clinic domain language — they are bound to the
+# platform's generic tool bindings via tools.yaml `action:` overrides.
+
+# Emergencies ALWAYS route to the paged human handoff (the platform
+# invariant keeps escalate_to_human proposeable; this list routes the
+# clinic's emergency ACTION to that valve).
+escalate:
+  - medical_emergency
+
+# Read-only/informational actions.
+appointment_status:
+  allow: true
+
+appointment_lookup:
+  allow: true
+
+clinic_hours:
+  allow: true
+
+billing_question:
+  allow: true
+
+prescription_refill:
+  allow: true
+  # An agitated refill caller goes to a human before anything else.
+  escalate_when:
+    frustrated: true
+
+# Side-effectful actions, gated sensibly for a clinic front desk.
+cancel_appointment:
+  require_auth: true
+
+reschedule_appointment:
+  allow: true
+
+complaint:
+  allow: true
+  escalate_when:
+    frustrated: true
+
+# Billing adjustments (the generic refund binding) need an authenticated
+# caller, and anything above ₹1,000 needs human approval.
+billing_adjustment:
+  require_auth: true
+  max_without_approval: 1000
+
+# Task B: the clarify-and-dig ladder for not-found slot lookups
+# (appointment id). On a not-found fetch the agent asks the caller to
+# re-confirm the id, then offers the declared alternate lookups (the phone
+# lookup), and only after the retries are exhausted does the governed
+# escalate_to_human remain.
+not_found_ladder:
+  max_retries: 2
+  offer_alternates: true
+  alternates:
+    - check the appointments booked on this phone number

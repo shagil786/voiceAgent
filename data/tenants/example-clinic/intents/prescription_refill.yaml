@@ -1,0 +1,8 @@
+# Per-tenant intent exemplars — repeat-medicine refill requests. This is an
+# info-plus-routing intent: the platform has no refill binding, so the
+# governed outcome is a paged handoff or a callback promise (least privilege).
+- I need a refill for my blood pressure medicine
+- can I get my prescription refilled before it runs out
+- my course finishes this week, I need a repeat prescription
+- meri dawa ka refill chahiye
+- मुझे अपनी दवा का रिफिल चाहिए

@@ -1,0 +1,8 @@
+# Per-tenant intent exemplars — rescheduling a booked appointment maps to
+# the generic reschedule binding (clinic tools.yaml action: reschedule_appointment).
+- I need to move my appointment to next week
+- can you reschedule my appointment to friday evening
+- change my appointment to a later slot
+- mera appointment agli hafte shift kar do
+- मेरा अपॉइंटमेंट बदलना है
+- मुझे अपॉइंटमेंट का समय बदलना है
