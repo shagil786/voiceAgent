@@ -48,7 +48,8 @@ LEARNING LOOPS
 | **Batch-learn job** | ✅ on `main` |
 | **Operator packs, adversarial harness, onboarding drill** | ✅ on `feat/operator-packs-harness` |
 | **Telephony limb** (SIP/WebRTC + real number) | ⏳ built on `feat/livekit-limb` — loopback-verified, first PSTN drill pending (docs/telephony-runbook.md) |
-| **Real ERP adapter**, **packaging** (Docker/VPS) | ❌ the remaining organs — MockERP, stub sidecars only |
+| **Real ERP adapter** (`erp_http.HttpERP` — HTTP connector, opt-in via `ToolGateway(erp=...)`; contract: `docs/erp-http-api.md`) | ✅ built; MockERP stays the offline demo default |
+| **Packaging** (Docker/VPS) | ⏳ Dockerfile + compose + DEPLOY.md on `main`; first container build pending |
 
 Design: `docs/superpowers/specs/2026-09-03-global-adaptive-agent-design.md`.
 Plans: `docs/superpowers/plans/2026-09-04-instant-learn-profiles.md` (done),
