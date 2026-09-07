@@ -26,9 +26,14 @@ SUITE_DEFAULT: list[tuple[str, str | None, str]] = [
     ("can I cancel after it shipped", "cancel_policy", "policy question"),
     ("my order already shipped, cancel it", "cancel_policy", "constraint"),
     ("delivery kab hoti hai", "eta", "hindi paraphrase"),
+    ("order kab aayega", "eta", "hinglish paraphrase (eta domain)"),
+    ("ship ho gaya hai cancel karna hai", "cancel_policy",
+     "hinglish constraint (cancel domain)"),
     ("क्या शिप होने के बाद रद्द कर सकते हैं", "cancel_policy", "devanagari"),
+    ("ऑर्डर कब डिलीवर होगा", "eta", "devanagari paraphrase"),
     ("what is the capital of France", None, "gap: unrelated must not hit"),
     ("tell me a joke", None, "gap: chit-chat must not hit"),
+    ("mazak kar raha tha", None, "gap: hinglish chit-chat must not hit"),
 ]
 
 
