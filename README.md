@@ -40,10 +40,11 @@ LEARNING LOOPS
 | **Runtime** (`orchestrator.py`, `swarm/frontier.py`) — bounded turn loop, native function-calling, governed tools, escalation as auditable action | ✅ live (text), 0.3–1.5s/turn on Groq (dev runs) |
 | **Deploy foundation** (`deploy/`: bundle schema v1, scoped crawl, compiler, gate + dry-run, runnable self-checks, mechanical go-live) | ✅ on `main` |
 | **Learn loops** (`learn/`: correction classifier, instant patches, E.164+alias profiles with TTL + delete/export, orchestrator seam, anonymous-contact isolation) | ✅ on `main` |
+| **RAG** (`knowledge_rag.py` — chunked retrieval with per-claim provenance, dual-space script-routed MiniLM/LaBSE search, per-space floors, fail-open to the whole-file cap) | ✅ phase-2 dual-space on `main` (eval gate: `voiceagent.rag_eval`) |
 | **Governance** (policy DSL + validator 7/7, decision log, injection guard, frustration detector) | ✅ enforced |
 | **Voice I/O** (Qwen3-ASR primary + whisper fallback + Indic routing, Piper TTS, barge-in/VAD) | ✅ built, needs fresh e2e latency run |
 | **Outbound** (dialer with DND scrub + window, sub-600ms AMD logic, swarm organs) | ✅ built, synthetic-only validation |
-| **Tests** | ✅ 786 collected, 783 / 2 skipped / 1 xfailed |
+| **Tests** | ✅ 792 collected, 789 / 2 skipped / 1 xfailed |
 | **Batch-learn job** | ✅ on `main` |
 | **Operator packs, adversarial harness, onboarding drill** | ✅ on `feat/operator-packs-harness` |
 | **Telephony limb** (SIP/WebRTC + real number) | ⏳ built on `feat/livekit-limb` — loopback-verified, first PSTN drill pending (docs/telephony-runbook.md) |

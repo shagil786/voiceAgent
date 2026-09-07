@@ -23,6 +23,16 @@ of the text it cut. This module adds the retrieval path:
    per-space similarity floor detects knowledge gaps; any retrieval error
    fails open to the historical whole-file cap (cap_knowledge).
 
+Phase-2 status: dual-space script-routed chunk retrieval is LANDED (this
+module; measured on rag_eval — hit_rate 0.67 -> 0.89 on the expanded suite,
+gaps unchanged). The remaining phase-2 lever is lexical/second-stage
+scoring (BM25 blend or rerank over the top-K): the one residual eval miss
+('order kab aayega') is a ranking failure, not a routing one — the query
+cosine-ranks a lexically-overlapping wrong chunk above the right one.
+Deliberately deferred: dense-only retrieval clears the quality gate, and
+BM25/rerank add an index + a latency/complexity budget that should be paid
+against measured failures, not speculatively.
+
 Importable with zero heavy deps: numpy is light (memory.py already needs
 it); sentence-transformers/faiss load lazily (build path, and the first
 retrieval resolving the shared routing rule).

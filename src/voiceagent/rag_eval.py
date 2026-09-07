@@ -7,6 +7,19 @@ encoder. Metrics: hit@k (expected id among the top-k retrieved) and MRR
 rerank, floor changes) must beat — no retrieval change ships without a
 before/after score here.
 
+The ruler deliberately includes romanized-hinglish and Devanagari questions
+plus hinglish chit-chat gap probes: the single-space (LaBSE-only) chunk
+path failed exactly there (Latin-script hinglish retrieved 0 hits).
+
+Baseline history (real encoders, k=6, per-space floors):
+  single-space chunk index : hit_rate=0.83 mrr=0.83 gap=2/2 (original
+                             8-fixture suite); hit_rate=0.67 mrr=0.61
+                             gap=3/3 on the expanded suite below
+  dual-space (phase-2 step): hit_rate=0.89 mrr=0.78 gap=3/3 (expanded
+                             suite) — remaining miss 'order kab aayega'
+                             ranks a lexically-overlapping wrong chunk
+                             first (the deferred BM25/rerank lever's job)
+
 CLI:  .venv/bin/python -m voiceagent.rag_eval [--k 6] [--suite default]
 """
 from __future__ import annotations
