@@ -1,0 +1,70 @@
+# Docker build CI: verifies the container image builds on every push to main.
+# Rationale: the image carries torch+CUDA wheels; a 2 GiB local colima VM
+# OOM-killed the llama-cpp-python compile and corrupted its image store on
+# export — GitHub runners (7 GiB RAM / ~14 GB free disk) are the smallest
+# environment that builds it reliably. The Dockerfile caps compile
+# parallelism (CMAKE_BUILD_PARALLEL_LEVEL/MAX_JOBS=1) so small builders can
+# still succeed; CI also proves that cap doesn't time out hosted runners.
+# Smoke: boot the chat server inside the built image and require the
+# governed contract (GET / -> 200; POST /api/turn without a frontier ->
+# graceful ESCALATE, never an ungoverned success).
+name: docker-build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".dockerignore"
+      - "requirements.txt"
+      - "scripts/chat_server.py"
+      - "scripts/livekit_worker.py"
+      - "src/**"
+      - ".github/workflows/docker-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: voiceagent:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot smoke — chat server (governed contract)
+        run: |
+          docker run -d --name smoke -p 8000:8000 voiceagent:ci
+          # container boots and serves
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/ >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/ >/dev/null
+          echo "GET / -> 200 OK"
+          # fail-closed brain: no frontier configured -> ESCALATE, executed:false
+          RESP=$(curl -fsS -X POST http://127.0.0.1:8000/api/turn \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"cancel my order"}')
+          echo "$RESP"
+          echo "$RESP" | grep -q '"executed": *false'
+          echo "POST /api/turn without frontier -> governed ESCALATE (executed:false) OK"
+
+      - name: Image size
+        run: |
+          docker images voiceagent:ci --format 'image size: {{.Size}}'
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f smoke || true

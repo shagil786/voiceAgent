@@ -21,6 +21,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
+# Cap compile parallelism: llama-cpp-python's llama.cpp TU is memory-hungry
+# (cc1plus peaks > 1 GiB); on a 2-core/2 GB builder (small colima VM, small
+# VPS) the default one-job-per-core OOM-kills the compiler mid-build. -j1 is
+# slower but always finishes; bigger builders can override these back.
+ENV CMAKE_BUILD_PARALLEL_LEVEL=1 \
+    MAX_JOBS=1 \
+    MAKEFLAGS=-j1
 COPY requirements.txt .
 # pip fetches wheels for everything that has one; llama-cpp-python builds
 # from sdist here (needs cmake + g++, present above).
