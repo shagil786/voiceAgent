@@ -3,6 +3,9 @@
 policy-relevant questions ("aur refund kitne din me aata hai?") stop
 misrouting to high_value_refund -> ESCALATE. Uses the real multilingual
 embedding model (same convention as test_knowledge.py)."""
+import warnings
+
+import numpy as np
 import pytest
 from voiceagent.intent import IntentClassifier
 from voiceagent.policy import PolicyContext, PolicyEngine, load_policies
@@ -193,3 +196,25 @@ def test_empty_exemplar_does_not_poison_matmul():
         warnings.simplefilter("error", RuntimeWarning)
         label, conf = clf.classify("where is my order")
     assert label == "order_status"
+
+
+def test_full_classifier_matmul_emits_no_runtime_warnings(classifier):
+    """Regression for the repeated 'divide by zero / overflow / invalid value
+    encountered in matmul' RuntimeWarnings at intent.py's `embs @ q.T`.
+
+    Mechanism (NOT a degenerate-input bug — see
+    test_empty_exemplar_does_not_poison_matmul for that path): numpy's macOS
+    arm64 build links Apple Accelerate BLAS, and for matmuls above its
+    dispatch threshold (a 2-row matrix is clean; the full 328-row default
+    exemplar matrix warns) Accelerate raises the CPU divide-by-zero/overflow/
+    invalid FP flags on entirely FINITE operands; numpy's post-op flag check
+    then misattributes them to the matmul line. The pathological input is
+    therefore the ordinary full-classifier classify() below: matrices and
+    query are already sanitized and unit-norm, yet the warnings fired on
+    every call. classify() now scopes np.errstate around that single op.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        label, score = classifier.classify("when will I get my refund back")
+    assert label == "refund_info"
+    assert np.isfinite(score) and -1.0 <= score <= 1.0

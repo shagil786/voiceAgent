@@ -127,7 +127,17 @@ class IntentClassifier:
         q = np.asarray(model.encode([text], normalize_embeddings=True),
                        dtype=np.float32)
         q = np.nan_to_num(q, nan=0.0)
-        scores = embs @ q.T  # (n_exemplars, 1)
+        # np.errstate on this one op: numpy's default macOS arm64 build links
+        # Apple Accelerate BLAS, which raises the CPU divide-by-zero/overflow/
+        # invalid FP flags on large finite f32 matmuls; numpy's post-op flag
+        # check then misattributes them as RuntimeWarnings here even though
+        # every input is already sanitized (nan_to_num above and in _build)
+        # and the result is finite (verified: an all-ones matmul of the same
+        # shape warns identically). Clamping cannot fix flags raised inside
+        # BLAS on finite operands, so silence the FP check for this op only —
+        # the scores it produces are bit-identical.
+        with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+            scores = embs @ q.T  # (n_exemplars, 1)
         scores = scores[:, 0]
         order = np.argsort(-scores)[:k]
         best = int(order[0])
