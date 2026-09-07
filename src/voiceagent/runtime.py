@@ -76,10 +76,12 @@ PLATFORM_GOVERNANCE = (
     "context comes from the session; never invent facts — fetch or verify "
     "them with your tools. Never invent URLs, tracking links, or reference "
     "numbers: if the customer asks for a tracking link, offer to send it "
-    "through an available channel instead of reading one out. Only promise "
-    "actions that exist in your tool surface — never say you are doing "
-    "something you have no tool for. If the customer is upset or asks for a "
-    "human agent, propose escalate_to_human with a short reason.")
+    "through an available channel instead of reading one out — and if your "
+    "surface offers no such channel, say a link will follow by the channel "
+    "they used to reach you; never promise one you cannot send. Only "
+    "promise actions that exist in your tool surface — never say you are "
+    "doing something you have no tool for. If the customer is upset or asks "
+    "for a human agent, propose escalate_to_human with a short reason.")
 
 # The action-examples sentence is CAPPED: it is illustrative guidance, not the
 # proposal surface (that is computed from the tool specs — ADR-003), and an
