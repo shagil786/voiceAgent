@@ -501,8 +501,14 @@ class Orchestrator:
                 f"- [{kid}] {text}" for kid, text in capped.items())
             return block, [], [], list(capped)
         if hits:
-            block = "## Knowledge\n" + "\n".join(
-                f"- [{chunk.chunk_id}] {chunk.text}" for chunk, _ in hits)
+            # Grounding instruction: retrieved context outranks the model's
+            # priors — answer from these chunks, never beyond them.
+            block = (
+                "## Knowledge (retrieved for this question — answer ONLY "
+                "from these entries; if they do not cover it, say so and "
+                "offer a human)\n" + "\n".join(
+                    f"- [{chunk.chunk_id}] {chunk.text}"
+                    for chunk, _ in hits))
             chunk_ids = [chunk.chunk_id for chunk, _ in hits]
             # per-turn file provenance: source files of the injected chunks,
             # first-appearance order (== prompt order)
