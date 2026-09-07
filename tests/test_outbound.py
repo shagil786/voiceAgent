@@ -102,6 +102,49 @@ def test_regulatory_dnd_scrubber():
     assert reason3 == "BLOCKED_OUTSIDE_LEGAL_CALLING_HOURS"
 
 
+def test_regulatory_scrubber_jurisdiction_config():
+    """Country-configurable windows/DND seeds (default stays byte-identical).
+
+    The default (no country_code) seeds the union of all known registries and
+    keeps the 09:00-20:00 window — the pre-configuration behavior. Country
+    selection swaps in that jurisdiction's seed registry and window; explicit
+    dnd_numbers/ bounds always win; unknown jurisdictions seed empty + warn
+    and fall back to the historical window (they must be operator-verified)."""
+    import datetime as _dt
+
+    # Default: union registry + historical window (back-compat pin)
+    default = RegulatoryDNDScrubber()
+    assert default.is_dnd_registered("+919999999999")  # IN seed
+    assert default.is_dnd_registered("+18005550199")   # US seed
+    assert default.is_within_calling_window(_dt.time(14, 0))
+    assert not default.is_within_calling_window(_dt.time(23, 0))
+
+    # Country selection: IN gets only IN seeds, US only US seeds
+    india = RegulatoryDNDScrubber(country_code="IN")
+    assert india.is_dnd_registered("+919800000000")
+    assert not india.is_dnd_registered("+18005550199")
+    usa = RegulatoryDNDScrubber(country_code="US")
+    assert usa.is_dnd_registered("+18005550199")
+    assert not usa.is_dnd_registered("+919999999999")
+
+    # Explicit dnd_numbers replaces the seed registry entirely
+    explicit = RegulatoryDNDScrubber(dnd_numbers={"+15550001"})
+    assert explicit.is_dnd_registered("+15550001")
+    assert not explicit.is_dnd_registered("+919999999999")
+
+    # Partial window override fills the other bound from the jurisdiction
+    shifted = RegulatoryDNDScrubber(country_code="IN",
+                                    allowed_end=_dt.time(18, 0))
+    assert shifted.is_within_calling_window(_dt.time(17, 0))
+    assert not shifted.is_within_calling_window(_dt.time(19, 0))
+    assert shifted.is_within_calling_window(_dt.time(10, 0))  # start intact
+
+    # Unverified jurisdiction: empty seed, historical window fallback
+    unverified = RegulatoryDNDScrubber(country_code="DE")
+    assert not unverified.is_dnd_registered("+49170000000")
+    assert unverified.is_within_calling_window(_dt.time(14, 0))
+
+
 def test_predictive_dialer_handoff_lifecycle():
     """Verify dialer executes DND scrub, AMD analysis, and proper action dispatch."""
     async def _run():

@@ -6,11 +6,14 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine
 
 from voiceagent.outbound.amd import CallParty, Sub600msAMD
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -27,15 +30,73 @@ class Lead:
 
 
 class RegulatoryDNDScrubber:
-    """Regulatory shield validating Do-Not-Call (DND) status and calling hours."""
+    """Regulatory shield validating Do-Not-Call (DND) status and calling hours.
 
-    def __init__(self, dnd_numbers: set[str] | None = None):
-        # Known registered DND numbers
-        self._dnd_registry: set[str] = dnd_numbers or {
-            "+919999999999",
-            "+919800000000",
-            "+18005550199",
-        }
+    Jurisdiction model: calling windows and seed DND lists are per-jurisdiction
+    CONFIGURATION, not code. CALLING_WINDOWS carries the windows this platform
+    has actually operated under (IN TRAI / US TCPA — both 09:00-20:00 local);
+    any other jurisdiction MUST be configured explicitly by the operator after
+    verifying local law — the platform deliberately does NOT invent windows
+    for jurisdictions it has not verified. Default behavior (no country_code)
+    is byte-identical to the pre-configuration behavior."""
+
+    # Jurisdiction code -> (window_start, window_end), local customer time.
+    # ONLY verified jurisdictions belong in this table. TRAI (India) and
+    # TCPA (US) both use 09:00-20:00; do not add entries without a source.
+    CALLING_WINDOWS: dict[str, tuple[datetime.time, datetime.time]] = {
+        "IN": (datetime.time(9, 0), datetime.time(20, 0)),   # TRAI
+        "US": (datetime.time(9, 0), datetime.time(20, 0)),   # TCPA
+    }
+
+    # Seed DND entries by jurisdiction (demo/known-registered numbers the
+    # platform has actually seen). Operators supply the real registry per
+    # deployment via dnd_numbers=.
+    SEED_DND: dict[str, set[str]] = {
+        "IN": {"+919999999999", "+919800000000"},
+        "US": {"+18005550199"},
+    }
+
+    def __init__(
+        self,
+        dnd_numbers: set[str] | None = None,
+        country_code: str | None = None,
+        allowed_start: datetime.time | None = None,
+        allowed_end: datetime.time | None = None,
+    ):
+        """dnd_numbers replaces the seed registry entirely when given.
+        country_code selects seed DND + calling window from the verified
+        tables (unknown code = empty seed + 09:00-20:00 fallback + a warning
+        that the jurisdiction is unverified). Explicit allowed_start/end
+        override the table window (operator-verified custom windows)."""
+        if dnd_numbers is not None:
+            self._dnd_registry: set[str] = set(dnd_numbers)
+        elif country_code:
+            seeds = self.SEED_DND.get(country_code, set())
+            self._dnd_registry = set(seeds)
+            if not seeds:
+                logger.warning(
+                    "unverified jurisdiction %r: no seed DND registry; "
+                    "supply dnd_numbers= for production use", country_code)
+        else:
+            # No jurisdiction given: historical default = union of all seeds
+            # (byte-identical to the pre-configuration hardcoded registry).
+            self._dnd_registry = set().union(*self.SEED_DND.values())
+        self.country_code = country_code
+        if allowed_start is not None or allowed_end is not None:
+            # Partial override: fill the missing bound from the jurisdiction
+            # table (or the historical default), so callers can shift just one
+            # bound without silently dropping the other.
+            base = self.CALLING_WINDOWS.get(
+                country_code or "", (datetime.time(9, 0), datetime.time(20, 0)))
+            self._window = (
+                allowed_start if allowed_start is not None else base[0],
+                allowed_end if allowed_end is not None else base[1],
+            )
+        elif country_code in self.CALLING_WINDOWS:
+            self._window = self.CALLING_WINDOWS[country_code]
+        else:
+            # Historical default (IN/US share it): 09:00-20:00 local.
+            self._window = (datetime.time(9, 0), datetime.time(20, 0))
 
     def is_dnd_registered(self, phone: str) -> bool:
         clean = phone.replace(" ", "").replace("-", "")
@@ -44,12 +105,16 @@ class RegulatoryDNDScrubber:
     def is_within_calling_window(
         self,
         current_time: datetime.time | None = None,
-        allowed_start: datetime.time = datetime.time(9, 0),
-        allowed_end: datetime.time = datetime.time(20, 0),
+        allowed_start: datetime.time | None = None,
+        allowed_end: datetime.time | None = None,
     ) -> bool:
-        """Validate TRAI/TCPA 9:00 AM - 8:00 PM local customer calling window."""
+        """Validate the configured legal calling window in the customer's
+        local time. Per-call bounds (when given) override the instance
+        window; the default remains 09:00-20:00 local (TRAI/TCPA)."""
+        start = self._window[0] if allowed_start is None else allowed_start
+        end = self._window[1] if allowed_end is None else allowed_end
         t = current_time or datetime.datetime.now().time()
-        return allowed_start <= t <= allowed_end
+        return start <= t <= end
 
     def scrub(self, phone: str, current_time: datetime.time | None = None) -> tuple[bool, str]:
         """Returns (is_permitted, reason)."""
