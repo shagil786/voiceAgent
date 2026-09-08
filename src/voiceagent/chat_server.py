@@ -1,5 +1,11 @@
 # src/voiceagent/chat_server.py
-"""Shared bits for the demo HTTP server (kept importable/testable)."""
+"""Shared bits for the demo HTTP server (kept importable/testable): the demo
+page plus the per-client rate limiter the server wires in."""
+import os
+import threading
+import time
+from collections import defaultdict, deque
+from typing import Mapping
 
 PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>VoiceAgent demo</title>
 <style>
@@ -33,3 +39,94 @@ async function go(){
 
 def build_html() -> str:
     return PAGE
+
+
+# --- per-client rate limiting -------------------------------------------------
+# Fixed-window counters keyed by client IP, guarded by a lock (HTTPServer is
+# single-threaded today, but the guard makes the limiter safe if the server
+# ever moves to ThreadingHTTPServer). Endpoints behind the limiter are the
+# ones that do real work (/api/turn runs the full LLM turn; /api/history hits
+# SQLite) — static pages are not limited. Key memory is bounded per key
+# (<= max_events timestamps); unique keys (IPs) expire lazily on next touch,
+# which is fine for a demo — a reverse proxy with unbounded key cardinality
+# would need a sweep, not a demo necessity.
+
+class RateLimiter:
+    """Fixed-window per-key rate limiter. `allow(key)` consumes one slot and
+    returns True while the key has budget in the current window; hits beyond
+    the limit return False until the window rolls over. Keys are client IPs
+    (via `_client_ip`); `max_events`/`window_s` bound memory and reset lag —
+    idle windows expire lazily on next touch. Deliberately stdlib-only."""
+
+    def __init__(self, max_events: int, window_s: float = 60.0):
+        self.max_events = max_events
+        self.window_s = window_s
+        # Identity mode: False = socket peer (client-supplied X-Forwarded-For
+        # NOT trusted); True = XFF leftmost hop (only behind a trusted proxy).
+        self.trust_proxy = False
+        self._hits: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def allow(self, key: str, now: float | None = None) -> bool:
+        """Consume one event for `key`; True when within budget for the
+        current window, False once the key is over its limit."""
+        if now is None:
+            now = time.monotonic()
+        with self._lock:
+            hits = self._hits[key]
+            cutoff = now - self.window_s
+            while hits and hits[0] <= cutoff:
+                hits.popleft()
+            if len(hits) >= self.max_events:
+                return False
+            hits.append(now)
+            return True
+
+    def retry_after(self, key: str, now: float | None = None) -> int:
+        """Whole seconds (min 1) until the key's oldest in-window hit expires
+        — used for the Retry-After header on 429 responses."""
+        if now is None:
+            now = time.monotonic()
+        with self._lock:
+            hits = self._hits.get(key)
+            if not hits:
+                return 1
+            return max(1, int(hits[0] + self.window_s - now) + 1)
+
+
+def _client_ip(handler, trust_proxy: bool = False) -> str:
+    """Extract the client identity for rate limiting. X-Forwarded-For is
+    CLIENT-SUPPLIED: trusting it when NOT behind a proxy lets an attacker
+    rotate the header per request and bypass the limiter entirely (measured:
+    20/20 through a 3/min limit). Trust is therefore OPT-IN via
+    VOICEAGENT_TRUST_PROXY=true — set it ONLY when the server sits behind a
+    trusted reverse proxy that overwrites/sets XFF (then the leftmost hop is
+    the real client). Default (no trust): the socket peer address."""
+    if trust_proxy:
+        fwd = handler.headers.get("X-Forwarded-For")
+        if fwd:
+            return fwd.split(",")[0].strip()
+    return handler.client_address[0]
+
+
+def rate_limiter_from_env(env: Mapping[str, str] | None = None) -> RateLimiter | None:
+    """Build the demo server's rate limiter from env (None disables limiting).
+    Defaults: 30 turn-relevant requests/min per client IP (the demo's UI,
+    with retries, needs nowhere near that). VOICEAGENT_TRUST_PROXY=true opts
+    into X-Forwarded-For identity (set it only behind a trusted reverse
+    proxy); the default keys the limiter on the socket peer."""
+    e = os.environ if env is None else env
+    limit = e.get("VOICEAGENT_HTTP_RATE_LIMIT", "").strip()
+    if not limit:
+        return None
+    try:
+        max_events = int(limit)
+        window_s = float(e.get("VOICEAGENT_HTTP_RATE_WINDOW_S", "60"))
+    except ValueError:
+        return None
+    if max_events <= 0 or window_s <= 0:
+        return None
+    trust = e.get("VOICEAGENT_TRUST_PROXY", "").strip().lower() in ("1", "true", "yes")
+    limiter = RateLimiter(max_events, window_s)
+    limiter.trust_proxy = trust
+    return limiter

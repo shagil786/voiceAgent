@@ -59,6 +59,9 @@ Optional / defaulted:
 | `VOICEAGENT_EMBEDDING_SPACE` | `latin` | Retrieval embedding space |
 | `VOICEAGENT_CANDIDATE_MODELS` | registry names | Comma-separated stems, smallest-first |
 | `VOICEAGENT_VOICES` | built-in registry | Comma `lang:path` pairs (piper ONNX) |
+| `VOICEAGENT_HTTP_RATE_LIMIT` | unset (off) | chat: max API requests/min per client IP (`/api/turn`, `/api/history`); over budget ⇒ `429` + `Retry-After`. Static pages are never limited |
+| `VOICEAGENT_HTTP_RATE_WINDOW_S` | `60` | chat: rate-limit window seconds |
+| `VOICEAGENT_TRUST_PROXY` | `false` | Set `true` ONLY behind a trusted reverse proxy: keys the rate limiter on the client-supplied `X-Forwarded-For` (leftmost hop). Default `false` = socket peer — trusting XFF when directly exposed lets clients rotate the header and bypass the limit |
 | `VOICEAGENT_HF_TOKEN` | unset | HF token for gated downloads |
 | `LIVEKIT_NUMBER` / `LIVEKIT_TRUNK_ID` | unset | Outbound dialing (DID + trunk) |
 | `LIVEKIT_ROOM_PREFIX` | `call-` | Must match the LiveKit dispatch rule |
