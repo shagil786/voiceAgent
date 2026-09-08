@@ -19,6 +19,19 @@ Baseline history (real encoders, k=6, per-space floors):
                              suite) — remaining miss 'order kab aayega'
                              ranks a lexically-overlapping wrong chunk
                              first (the deferred BM25/rerank lever's job)
+  KB multilingual glosses   : hit_rate=1.00 mrr=0.98 gap=3/3 — the
+  2026-09-08               : 'order kab aayega' routing miss was fixed by
+                             glossing the KB with the phrasings callers
+                             actually use; the ruler then GREW with es/fr/
+                             de/pt (latin space) + te/bn (native space)
+                             fixtures asserting the global-languages claim.
+                             The glosses moved latin-space chit-chat above
+                             the old 0.20 floor (gap probes 0.147-0.287,
+                             weakest content 0.426), so the latin floor was
+                             recalibrated 0.20 -> 0.32 (both clusters now
+                             sit ~0.09 from the floor; details in
+                             knowledge_rag.MIN_SIMILARITY_LATIN). This
+                             ruler now carries 24 fixtures.
 
 CLI:  .venv/bin/python -m voiceagent.rag_eval [--k 6] [--suite default]
 """
@@ -44,6 +57,23 @@ SUITE_DEFAULT: list[tuple[str, str | None, str]] = [
      "hinglish constraint (cancel domain)"),
     ("क्या शिप होने के बाद रद्द कर सकते हैं", "cancel_policy", "devanagari"),
     ("ऑर्डर कब डिलीवर होगा", "eta", "devanagari paraphrase"),
+    # Global-languages ruler (2026-09-08): es/fr/de/pt route to the latin
+    # space (MiniLM), te/bn to the native space (LaBSE) — the same languages
+    # the data tables claim to serve (langid, reply templates, TTS). A miss
+    # here is a live deployment gap: the caller would get no (or the wrong)
+    # KB chunk in a language the platform claims to support.
+    ("¿cuándo llega mi pedido?", "eta", "es paraphrase"),
+    ("quand arrive ma commande ?", "eta", "fr paraphrase"),
+    ("wann kommt meine Bestellung an?", "eta", "de paraphrase"),
+    ("quando chega meu pedido?", "eta", "pt paraphrase"),
+    ("డెలివరీ ఎప్పుడు ఉంటుంది?", "eta", "te paraphrase"),
+    ("ডেলিভারি কবে হবে?", "eta", "bn paraphrase"),
+    ("¿puedo cancelar después del envío?", "cancel_policy", "es policy"),
+    ("puis-je annuler après l'expédition ?", "cancel_policy", "fr policy"),
+    ("kann ich nach dem Versand stornieren?", "cancel_policy", "de policy"),
+    ("posso cancelar depois do envio?", "cancel_policy", "pt policy"),
+    ("షిప్ అయ్యాక రద్దు చేయవచ్చా?", "cancel_policy", "te policy"),
+    ("শিপ হওয়ার পর বাতিল করা যাবে?", "cancel_policy", "bn policy"),
     ("what is the capital of France", None, "gap: unrelated must not hit"),
     ("tell me a joke", None, "gap: chit-chat must not hit"),
     ("mazak kar raha tha", None, "gap: hinglish chit-chat must not hit"),

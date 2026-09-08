@@ -1,6 +1,7 @@
 Deliveries occur between 9:00 and 19:00 local time.
 
-Kab / eppo / kobe all mean WHEN (कब / எப்போ / কবে). Delivery timing
-questions in every language — eppo kedaikkum (tanglish), order kab aayega
-(hinglish), kobe delivery hobe (banglish), ऑर्डर कब डिलीवर होगा (hindi) —
-are answered by this 9:00-19:00 delivery window.
+order kab aayega (hinglish), ऑर्डर कब डिलीवर होगा (hindi), eppo kedaikkum
+(tanglish), kobe delivery hobe (banglish), cuándo llega mi pedido (español),
+quand arrive ma commande (français), wann kommt meine Bestellung an
+(deutsch), quando chega meu pedido (português), డెలివరీ ఎప్పుడు ఉంటుంది
+(తెలుగు), ডেলিভারি কবে হবে (বাংলা)

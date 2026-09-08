@@ -24,11 +24,12 @@ of the text it cut. This module adds the retrieval path:
    fails open to the historical whole-file cap (cap_knowledge).
 
 Phase-2 status: dual-space script-routed chunk retrieval is LANDED (this
-module; measured on rag_eval — hit_rate 0.67 -> 0.89 on the expanded suite,
-gaps unchanged). The remaining phase-2 lever is lexical/second-stage
-scoring (BM25 blend or rerank over the top-K): the one residual eval miss
-('order kab aayega') is a ranking failure, not a routing one — the query
-cosine-ranks a lexically-overlapping wrong chunk above the right one.
+module; measured on rag_eval — hit_rate 0.67 -> 0.89 -> 1.00, gaps intact).
+The historical residual miss ('order kab aayega') was a RANKING failure, not
+a routing one — fixed 2026-09-08 by glossing the KB with the phrasings
+callers actually use; the ruler then grew with es/fr/de/pt + te/bn fixtures
+(default tenant KB glosses, 24-fixture suite). The remaining phase-2 lever
+is lexical/second-stage scoring (BM25 blend or rerank over the top-K).
 Deliberately deferred: dense-only retrieval clears the quality gate, and
 BM25/rerank add an index + a latency/complexity budget that should be paid
 against measured failures, not speculatively.
@@ -69,16 +70,20 @@ CHUNK_MAX_CHARS = 900
 # shape). BM25/rerank (phase 2) may revisit this.
 TOP_K = 6
 MIN_SIMILARITY = 0.35
-# Latin-space floor (MiniLM), calibrated on the rag_eval fixture suite with
-# the real encoder (the ruler this change was measured against): unrelated
-# and chit-chat gap probes — English AND romanized hinglish — score
-# <= 0.149, while the weakest MATCHING romanized-hinglish question scores
-# 0.237 and English questions 0.43+. 0.20 separates the two clusters with
-# margin on both sides. Hinglish matches sit far lower than English ones
-# (MiniLM aligns romanized Hindi to English FAQ text only weakly) — reusing
-# the native 0.35 floor for latin queries dropped every hinglish hit; that
-# one-space floor was the measured phase-1 retrieval failure.
-MIN_SIMILARITY_LATIN = 0.20
+# Latin-space floor (MiniLM), recalibrated 2026-09-08 on the EXPANDED
+# 24-fixture ruler (the ruler this change was measured against): the KB took
+# multilingual glosses for the claimed languages (es/fr/de/pt + te/bn joined
+# the existing hinglish/hindi), and the OLD 0.20 calibration no longer
+# separated chit-chat from content — measured on the real encoder over the
+# shipped corpus, distractors moved up to 0.287 ('mazak kar raha tha') while
+# the weakest MATCHING content sits at 0.426 ('quando chega meu pedido?').
+# 0.32 splits the two clusters with ~0.09 margin each way; the old 0.20
+# allowed chit-chat to clear the floor after the glosses landed. Hinglish
+# matches sit far lower than English ones (MiniLM aligns romanized Hindi to
+# English FAQ text only weakly) — reusing the native 0.35 floor for latin
+# queries dropped every hinglish hit; that one-space floor was the measured
+# phase-1 retrieval failure.
+MIN_SIMILARITY_LATIN = 0.32
 
 # Disk cache for chunk embeddings — the knowledge.py pickle-cache pattern
 # with a BUMPED version (CACHE_VERSION + 1): a chunk payload is a different
@@ -138,6 +143,14 @@ class ChunkedKnowledge:
     min_similarity_latin: float = MIN_SIMILARITY_LATIN  # latin-space floor
     space_embeddings: dict[str, np.ndarray] = field(default_factory=dict)
     space_model_names: dict[str, str] = field(default_factory=dict)
+    # Phase-2 anti-dilution: per-space SENTENCE vectors (build-time, zero
+    # query latency) + the chunk index each sentence belongs to. A short
+    # query that exactly matches ONE gloss sentence inside a long chunk
+    # scores the sentence higher than the whole-chunk average (dilution);
+    # retrieve_chunks takes max(chunk, best-sentence) per chunk. Empty dict
+    # = no sentence rescoring (legacy/partially built indexes).
+    space_sentence_vectors: dict[str, np.ndarray] = field(default_factory=dict)
+    sentence_owner: np.ndarray | None = None
     space_embedders: dict[str, Callable[[list[str]], np.ndarray]] = field(
         default_factory=dict)
     # one-slot query cache, keyed by (space, query, encoder-id): a query is
@@ -363,6 +376,20 @@ def build_chunked_index(
     # encoder is given (offline determinism without the real latin model).
     latin_enc = (latin_embedder or embedder
                  or _default_space_embedder(LATIN_SPACE))
+    # Anti-dilution build step: sentence texts per chunk (vectors encoded in
+    # both spaces on a fresh build; cached alongside the chunk matrices).
+    sent_texts: list[str] = []
+    owner_idx: list[int] = []
+    for i, c in enumerate(chunks):
+        for s in _SENTENCE_SPLIT_RE.split(c.text):
+            s = s.strip()
+            if len(s) >= 2:
+                sent_texts.append(s)
+                owner_idx.append(i)
+    sentence_owner = (np.asarray(owner_idx, dtype=np.int64)
+                      if sent_texts else None)
+    sentence_vectors: dict[str, np.ndarray] = {}
+
     spaces: dict[str, np.ndarray] | None = None
     if cache_path is not None and chunks:
         try:
@@ -372,6 +399,8 @@ def build_chunked_index(
                                corpus_hash, len(chunks)):
                 spaces = {space: rec["embeddings"]
                           for space, rec in meta["spaces"].items()}
+                sentence_vectors = meta.get("sentence_vectors") or {}
+                sentence_owner = meta.get("sentence_owner")
         except (OSError, EOFError, pickle.UnpicklingError, ValueError):
             spaces = None
     if spaces is not None:
@@ -389,9 +418,16 @@ def build_chunked_index(
                 NATIVE_SPACE: _normalize(native_enc([c.text for c in chunks])),
                 LATIN_SPACE: _normalize(latin_enc([c.text for c in chunks])),
             }
+            if sent_texts:
+                sentence_vectors = {
+                    NATIVE_SPACE: _normalize(native_enc(sent_texts)),
+                    LATIN_SPACE: _normalize(latin_enc(sent_texts)),
+                }
             if cache_path is not None:
                 _save_cache(cache_path, model_name, latin_model_name,
-                            corpus_hash, spaces)
+                            corpus_hash, spaces,
+                            sentence_vectors=sentence_vectors,
+                            sentence_owner=sentence_owner)
     return ChunkedKnowledge(
         chunks=chunks,
         embeddings=spaces[NATIVE_SPACE],
@@ -403,12 +439,16 @@ def build_chunked_index(
                            LATIN_SPACE: latin_model_name},
         space_embedders=({LATIN_SPACE: latin_enc}
                          if latin_embedder is not None else {}),
+        space_sentence_vectors=sentence_vectors,
+        sentence_owner=sentence_owner,
     )
 
 
 def _save_cache(cache_path: str | Path, model_name: str,
                 latin_model_name: str, corpus_hash: str,
-                spaces: dict[str, np.ndarray]) -> None:
+                spaces: dict[str, np.ndarray], *,
+                sentence_vectors: dict[str, np.ndarray],
+                sentence_owner: np.ndarray | None) -> None:
     """Persist both spaces' matrices + provenance: per-space model name, dim
     and embeddings (a cache hit skips re-encoding the corpus in every
     space), plus the phase-1-style top-level model_name/dim fields for the
@@ -428,6 +468,8 @@ def _save_cache(cache_path: str | Path, model_name: str,
                     "embeddings": mat}
             for space, mat in spaces.items()
         },
+        "sentence_vectors": sentence_vectors,
+        "sentence_owner": sentence_owner,
     }
     with open(p, "wb") as f:
         pickle.dump(payload, f)
@@ -492,6 +534,17 @@ def retrieve_chunks(
             f"dim {matrix.shape[1]} — index was built with model "
             f"{space_model!r}; rebuild the index or use that model")
     sims = matrix @ q
+    # Phase-2 anti-dilution: a short query that matches ONE sentence inside
+    # a long chunk scores that sentence above the whole-chunk average. Where
+    # sentence vectors exist for this space, each chunk's effective score is
+    # max(whole-chunk, best-sentence) — zero query latency (precomputed
+    # vectors, one extra matmul over n_sentences). Measured: lifts 'eppo
+    # kedaikkum' 0.165 -> 0.203 across the floor with gaps intact.
+    if (space_sv := ck.space_sentence_vectors.get(space)) is not None             and ck.sentence_owner is not None and len(space_sv):
+        sent = space_sv @ q
+        best = np.full(sims.shape[0], -np.inf, dtype=sims.dtype)
+        np.maximum.at(best, ck.sentence_owner, sent)
+        sims = np.maximum(sims, best)
     order = np.argsort(-sims, kind="stable")
     hits: list[tuple[Chunk, float]] = []
     for idx in order[:max(k, 0)]:

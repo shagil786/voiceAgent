@@ -60,10 +60,11 @@ def test_eval_reports_misses():
 
 
 def test_ruler_gate_perfect():
-    """RAG phase-2 gate: 12-fixture ruler is at 1.00 hit-rate with gaps
-    intact (KB gloss for romanized-hinglish ETA questions landed 2026-09-08;
-    measured 0.89 -> 1.00). If this drops, a retrieval change regressed the
-    ruler — do not ship without beating the previous baseline."""
+    """RAG phase-2 gate: the 24-fixture ruler is at 1.00 hit-rate with gaps
+    intact (KB glosses for ETA + cancel-policy phrasings landed 2026-09-08;
+    measured 0.89 -> 1.00, then grew with es/fr/de/pt + te/bn fixtures). If
+    this drops, a retrieval change regressed the ruler — do not ship without
+    beating the previous baseline."""
     from voiceagent.rag_eval import SUITE_DEFAULT, evaluate
     from pathlib import Path as _P
     kb = _P("data/tenants/default/knowledge")

@@ -187,9 +187,11 @@ def test_cache_hit_skips_reembedding(tmp_path):
     emb1 = FakeEmbedder()
     ck1 = build_chunked_index(big_kb(), embedder=emb1, model_name="fake",
                               cache_path=cache)
-    # phase 2: the corpus is embedded once PER SPACE (one batch each) — the
-    # injected encoder drives both spaces when no latin_embedder is given
-    assert emb1.calls == 2
+    # phase 2: the corpus is embedded once PER SPACE (one batch for the
+    # chunks + one for the anti-dilution sentence glosses) — the injected
+    # encoder drives both spaces when no latin_embedder is given, so one
+    # shared fake sees 2 batches x 2 spaces
+    assert emb1.calls == 4
     emb2 = FakeEmbedder()
     ck2 = build_chunked_index(big_kb(), embedder=emb2, model_name="fake",
                               cache_path=cache)
@@ -216,7 +218,7 @@ def test_cache_invalidated_when_corpus_changes(tmp_path):
     emb2 = FakeEmbedder()
     build_chunked_index(files, embedder=emb2, model_name="fake",
                         cache_path=cache)
-    assert emb2.calls == 2  # stale hash -> rebuilt (one batch per space)
+    assert emb2.calls == 4  # stale hash -> rebuilt (chunks + sentences per space)
 
 
 def test_build_with_failing_embedder_raises_for_switch_to_catch():
@@ -292,15 +294,21 @@ class SpaceFake:
 
 # Bilingual tenant KB chunks (realistic for an Indian tenant): each chunk
 # carries a romanized-hinglish marker AND a Devanagari marker, so the same
-# chunk is reachable in both spaces.
+# chunk is reachable in both spaces. Every SENTENCE carries the marks too:
+# the anti-dilution build also embeds per-sentence vectors, and an unmarked
+# sentence would land on SpaceFake's shared "other" axis — the same axis an
+# unmarked (gap-probe) query lands on — scoring 1.0 and defeating the gap
+# semantics this fixture exists to exercise.
 DUAL_FILES = {
     "eta": ("## Delivery\n\n"
             "Deliveries kab hoti hain — डिलीवरी 9:00 se 19:00 baje tak. "
-            "Deliveries occur between 9:00 and 19:00 local time."),
+            "Deliveries kab occur — डिलीवरी between 9:00 and 19:00 local "
+            "time."),
     "cancel_policy": ("## Cancellation\n\n"
                       "Ship ho gaya hai to order kaise cancel karein — रद्द "
-                      "karne ki policy. Orders that already shipped cannot "
-                      "be cancelled."),
+                      "karne ki policy. "
+                      "Shipped orders cancel nahi hote — रद्द नहीं हो सकते "
+                      "after dispatch."),
 }
 
 

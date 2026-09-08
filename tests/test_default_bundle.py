@@ -23,19 +23,27 @@ BUNDLE = ROOT / "data" / "tenants" / "default"
 # voiceagent.demo_data — the strings must survive the move byte-identically).
 IDENTITY = "You are Acme's voice support agent."
 KNOWLEDGE = {
-    # 2026-09-08: the demo eta FAQ carries the multilingual-FAQ gloss
-    # (RAG phase-2, global pattern): customers ask the delivery-timing
-    # question in romanized hinglish/tanglish/banglish; the gloss lines pin
-    # those phrasings to this chunk (measured: hit_rate 0.89 -> 1.00 on the
-    # 12-fixture ruler, gaps 3/3 intact; romanized Tamil 'eppo kedaikkum'
-    # documented below-floor as a known boundary). Byte-pins updated to the
-    # new deliberate content — the historical strings survive in git.
+    # 2026-09-08 (2nd edit): the demo KB carries multilingual glosses for
+    # EVERY claimed language (RAG phase-2, global pattern) — hinglish/hindi/
+    # tanglish/banglish + es/fr/de/pt (latin space) + te/bn (native space).
+    # The latin-space floor was recalibrated 0.20 -> 0.32 on the expanded
+    # 24-fixture ruler (distractors <= 0.287, weakest content 0.426) because
+    # the glosses moved chit-chat above the old floor. Glosses are written
+    # WITHOUT question marks/periods inside the phrase list so the sentence
+    # splitter keeps each language's phrase inside ONE sentence. Byte-pins
+    # updated to the new deliberate content — the historical strings survive
+    # in git.
     "eta": "Deliveries occur between 9:00 and 19:00 local time.\n\n"
-           "Kab / eppo / kobe all mean WHEN (कब / எப்போ / কবে). Delivery timing\n"
-           "questions in every language — eppo kedaikkum (tanglish), order kab aayega\n"
-           "(hinglish), kobe delivery hobe (banglish), ऑर्डर कब डिलीवर होगा (hindi) —\n"
-           "are answered by this 9:00-19:00 delivery window.",
-    "cancel_policy": "Orders that already shipped cannot be cancelled.",
+           "order kab aayega (hinglish), ऑर्डर कब डिलीवर होगा (hindi), eppo kedaikkum\n"
+           "(tanglish), kobe delivery hobe (banglish), cuándo llega mi pedido (español),\n"
+           "quand arrive ma commande (français), wann kommt meine Bestellung an\n"
+           "(deutsch), quando chega meu pedido (português), డెలివరీ ఎప్పుడు ఉంటుంది\n"
+           "(తెలుగు), ডেলিভারি কবে হবে (বাংলা)",
+    "cancel_policy": "Orders that already shipped cannot be cancelled.\n\n"
+                     "puedo cancelar después del envío (español), puis-je annuler après\n"
+                     "l'expédition (français), kann ich nach dem Versand stornieren (deutsch),\n"
+                     "posso cancelar depois do envio (português), షిప్ అయ్యాక రద్దు చేయవచ్చా\n"
+                     "(తెలుగు), শিপ হওয়ার পর বাতিল করা যাবে (বাংলা)",
 }
 
 
