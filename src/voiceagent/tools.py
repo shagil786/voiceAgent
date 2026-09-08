@@ -48,6 +48,11 @@ def _default_erp_fixture() -> tuple[dict, dict]:
 # Mock ERP
 # ---------------------------------------------------------------------------
 
+# ADR-004: new domains implement the resource-verb GenericBackend
+# (voiceagent.generic_backend) instead of mapping nouns onto this protocol;
+# SupportBackend stays the supported surface for existing deployments.
+# (Forward reference only — no behavior change here.)
+
 @runtime_checkable
 class SupportBackend(Protocol):
     """The ERP/CRM binding surface the ToolGateway executes against — the
