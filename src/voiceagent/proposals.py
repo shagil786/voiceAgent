@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 from voiceagent.tools import ToolGateway, ToolSpec
@@ -151,6 +152,91 @@ def compile_approved(gw: ToolGateway, backend: Any,
                            prop.resource_type, prop.id_param))
         registered.append(prop.name)
     return registered
+
+
+def load_proposals_yaml(path: str | Path) -> list[ToolProposal]:
+    """Load the deployment's proposals artifact (proposals.yaml) — the
+    approval document. Shape:
+
+        proposals:
+          - name: cancel_visit
+            description: Cancel a booking (approved by ops on 2026-09-09).
+            params: [booking_id, reason]
+            action: cancel_booking
+            operation: cancel_booking
+            operation_params: {}
+            resource_type: booking
+            id_param: booking_id
+            preconditions:
+              - {field: status, op: not_in, value: [IN_PROGRESS, DONE]}
+            facts: [booking]
+            side_effects: true
+            risk_class: mutating
+            provenance: ai        # ai | operator
+            status: approved      # proposed | approved | rejected
+
+    Committing this file IS the human approval for the approved entries;
+    proposed/rejected entries are recorded (and validated) but never
+    compile. Unknown keys are rejected so a typo'd field cannot silently
+    drop a tool from the surface."""
+    import yaml
+    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict) or "proposals" not in raw:
+        raise ValueError(f"{path}: expected a top-level 'proposals' list")
+    entries = raw["proposals"]
+    if not isinstance(entries, list):
+        raise ValueError(f"{path}: 'proposals' must be a list")
+    out: list[ToolProposal] = []
+    for i, e in enumerate(entries):
+        if not isinstance(e, dict):
+            raise ValueError(f"{path}: proposal #{i} must be a mapping")
+        allowed = {"name", "description", "params", "action", "operation",
+                   "operation_params", "resource_type", "id_param",
+                   "preconditions", "facts", "side_effects", "risk_class",
+                   "provenance", "status"}
+        unknown = set(e) - allowed
+        if unknown:
+            raise ValueError(
+                f"{path}: proposal #{i} has unknown key(s) "
+                f"{sorted(unknown)} — refusing to drop a tool silently")
+        out.append(ToolProposal(
+            name=str(e["name"]),
+            description=str(e.get("description", "")),
+            params=tuple(e.get("params", [])),
+            action=str(e.get("action", e["name"])),
+            operation=str(e.get("operation", "")),
+            operation_params=dict(e.get("operation_params", {})),
+            resource_type=e.get("resource_type"),
+            id_param=e.get("id_param"),
+            preconditions=tuple(e.get("preconditions", [])),
+            facts=tuple(e.get("facts", [])),
+            side_effects=bool(e.get("side_effects", False)),
+            risk_class=e.get("risk_class", RISK_READ),
+            provenance=e.get("provenance", "operator"),
+            status=e.get("status", PROPOSED),
+        ))
+    return out
+
+
+def gateway_tool_meta(prop: ToolProposal) -> dict:
+    """The deployment.tools.yaml-style entry for an approved proposal —
+    what the brain's proposal surface needs (description, action, facts,
+    parameters schema). Compile-approved proposals land in
+    Deployment.gateway_tools so deploy() registers them with the brain;
+    execution goes through the gateway spec/binding compile_approved made."""
+    properties = {}
+    for pname in prop.params:
+        ptype = "string"  # proposals declare string params by default;
+        properties[pname] = {"type": ptype}  # typed coercion is a ToolSpec
+    return {
+        "action": prop.action,
+        "description": prop.description,
+        "facts": list(prop.facts),
+        "side_effects": prop.side_effects,
+        "parameters": {"type": "object",
+                       "properties": properties,
+                       "required": list(prop.params)},
+    }
 
 
 def draft_from_api_spec(spec: dict[str, Any], *,

@@ -130,6 +130,30 @@ def validate(root: Path) -> list[str]:
                                         f"'{action}' uses unknown signal "
                                         f"'{key}' (known: {sorted(known)}) "
                                         f"— it would never fire")
+    # ADR-005: a bundle may ship tool PROPOSALS (declaration-only, human-
+    # approved via commit). Validate structure + that approved proposals
+    # reference valid names/statuses; the semantics compile check happens in
+    # CI against the deployment backend (proposals.py.validate_proposal).
+    propf = root / "proposals.yaml"
+    if propf.exists():
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+        from voiceagent.proposals import load_proposals_yaml, validate_proposal
+        try:
+            proposals = load_proposals_yaml(propf)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{propf}: {e}")
+        else:
+            if not proposals:
+                errors.append(f"{propf}: empty proposals list")
+            for prop in proposals:
+                for err in validate_proposal(prop):
+                    errors.append(f"{propf}: {err}")
+                # approved proposals must name a backend operation the CI
+                # deployment can bind — structural guard only here (the
+                # backend's operation set is a runtime concern).
+                if prop.status not in ("proposed", "approved", "rejected"):
+                    errors.append(f"{propf}: {prop.name}: bad status")
     return errors
 
 

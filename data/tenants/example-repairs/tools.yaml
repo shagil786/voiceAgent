@@ -1,0 +1,19 @@
+# This deployment's surface is proposals-driven (ADR-005): the DOMAIN tools
+# (fetch_booking_status, cancel_booking) arrive via proposals.yaml (human-
+# approved), not here. tools.yaml composes ONLY the platform valves that
+# every deployment needs — the classic demo tools are deliberately NOT
+# declared, so they are not proposeable for this tenant.
+tools:
+  escalate_to_human:
+    action: escalate_to_human
+    side_effects: true
+    description: "Page the dispatch supervisor to take over this call. Provide a short reason — use immediately for safety concerns."
+  end_call:
+    action: end_call
+    side_effects: true
+    description: "End this call politely after the caller's booking issue is resolved."
+  record_feedback:
+    action: record_feedback
+    side_effects: true
+    description: "Record the caller's satisfaction rating (1-10) for this call."
+    parameters: {'type': 'object', 'properties': {rating: {"type": "string"}}, 'required': ['rating']}

@@ -1,0 +1,10 @@
+# Least-privilege action rules for the repairs deployment. Only actions
+# declared here may execute; everything else is DENY (policy engine).
+booking_status:
+  allow: true
+cancel_booking:
+  allow: true
+escalate_to_human:
+  allow: true
+end_call:
+  allow: true

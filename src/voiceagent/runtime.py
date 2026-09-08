@@ -300,6 +300,17 @@ def _bundle_knowledge(
     return _knowledge_for(files, embedder=embedder, cache_path=cache_path)
 
 
+def _bundle_proposals(tenant: "Tenant | None") -> list | None:
+    """A tenant bundle's proposals.yaml (ADR-005 approval artifact) parsed
+    into ToolProposal list; None when the bundle declares none. A present
+    but INVALID file raises — committed approval data must never fail
+    silently (CI validates it; see validate_tenant.py)."""
+    if tenant is None or not (tenant.root / "proposals.yaml").exists():
+        return None
+    from voiceagent.proposals import load_proposals_yaml
+    return load_proposals_yaml(tenant.root / "proposals.yaml")
+
+
 def _resolve_tenant(tenant: str | None,
                     env: dict[str, str] | None) -> Tenant | None:
     """Explicit `tenant` arg wins, then VOICEAGENT_TENANT (same env
@@ -486,12 +497,36 @@ def build_orchestrator(
     specs = None
     if bundle is not None and (bundle.root / "tools.yaml").exists():
         specs = specs_with_yaml_facts(bundle.root / "tools.yaml")
-    runner = GovernedToolRunner(
-        ToolGateway(erp=erp or MockERP(), specs=specs), policy,
-        decision_log=log)
+    gateway = ToolGateway(erp=erp or MockERP(), specs=specs)
+    # ADR-005: a bundle may ship approved tool PROPOSALS — declaration-only
+    # entries a human approved. Approved proposals compile onto the gateway
+    # (spec + binding over the deployment backend) and join the brain's
+    # surface; proposed/rejected entries never compile. The bundle's
+    # policies.yaml still gates every compiled action (least privilege).
+    proposal_metas: dict[str, dict] = {}
+    proposals = _bundle_proposals(bundle)
+    if proposals:
+        from voiceagent.proposals import (APPROVED as _APPROVED,
+                                          compile_approved,
+                                          gateway_tool_meta,
+                                          validate_proposal)
+        for prop in proposals:
+            errs = validate_proposal(prop)
+            if errs:
+                raise ValueError(
+                    f"proposals.yaml: invalid {prop.name}: {errs}")
+        registered = compile_approved(gateway, gateway.erp, proposals)
+        for prop in proposals:
+            if prop.status == _APPROVED and prop.name in registered:
+                proposal_metas[prop.name] = gateway_tool_meta(prop)
+    runner = GovernedToolRunner(gateway, policy, decision_log=log)
     brain = FrontierAgentBridge(FrontierClient(cfg))
     dep = deployment or make_deployment(tenant=bundle,
                                         policy_path=policy_path)
+    if proposal_metas:
+        # The deployment surface is mutable until deploy(): fold the
+        # approved proposal tools in so the brain can propose them.
+        dep.gateway_tools = {**dep.gateway_tools, **proposal_metas}
     orch = Orchestrator(
         brain, runner=runner, memory=memory or InMemoryMemory(),
         decision_log=log, max_tool_rounds=max_tool_rounds,

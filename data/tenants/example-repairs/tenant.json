@@ -1,0 +1,7 @@
+{
+  "name": "example-repairs",
+  "currency": "INR",
+  "persona": "Handy Repairs & Services' voice support agent — help customers with technician booking questions.",
+  "languages": ["en", "hi"],
+  "greeting": "Thank you for calling Handy Repairs. How can I help with your service booking today?"
+}

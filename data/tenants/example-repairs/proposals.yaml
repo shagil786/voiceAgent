@@ -1,0 +1,42 @@
+# Example deployment of the ADR-005 hybrid: this bundle's NEW tools arrived
+# as PROPOSALS (one operator-authored, one AI-drafted then human-approved),
+# not platform code. Committing this file IS the human approval for the
+# `approved` entries; the `proposed` entry is recorded for review and never
+# compiles. The backend (RepairsBackend, a GenericBackend) is injected via
+# build_orchestrator(erp=...) — bindings stay governed either way.
+proposals:
+  - name: fetch_booking_status
+    description: "Look up the current status of a service booking by its booking id (e.g. BK-3001)."
+    params: [booking_id]
+    action: booking_status
+    operation: __fetch__
+    resource_type: booking
+    id_param: booking_id
+    facts: [booking]
+    side_effects: false
+    risk_class: read
+    provenance: operator
+    status: approved
+  - name: cancel_booking
+    description: "Cancel a caller's upcoming service booking (params: booking_id, reason)."
+    params: [booking_id, reason]
+    action: cancel_booking
+    operation: cancel_booking
+    resource_type: booking
+    id_param: booking_id
+    preconditions:
+      - {field: status, op: not_in, value: [IN_PROGRESS, DONE]}
+    facts: [booking]
+    side_effects: true
+    risk_class: mutating
+    provenance: ai
+    status: approved
+  - name: quote_repair
+    description: "Draft proposal awaiting human review — must NOT compile."
+    params: [booking_id, amount]
+    action: quote_repair
+    operation: quote_repair
+    side_effects: false
+    risk_class: mutating
+    provenance: ai
+    status: proposed
