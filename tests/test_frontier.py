@@ -158,13 +158,77 @@ def test_client_without_tools_omits_tools_key():
 
 
 def test_client_http_error_raises_frontier_error():
+    # 503 is retryable: the client must exhaust its bounded retry budget,
+    # then surface the historical error contract unchanged.
+    attempts = {"n": 0}
+
     def failing_transport(url, payload, headers, timeout_s):
+        attempts["n"] += 1
         raise urllib.error.HTTPError(url, 503, "overloaded", {},
                                      io.BytesIO(b"try later"))
+
     client = FrontierClient(FrontierConfig(base_url="https://x/v1", model="m"),
-                            transport=failing_transport)
+                            transport=failing_transport,
+                            sleep_fn=lambda _s: None)
     with pytest.raises(FrontierError, match="HTTP 503"):
         client.chat([{"role": "user", "content": "hi"}])
+    assert attempts["n"] == 3  # 1 attempt + max_retries=2
+
+
+def test_client_retries_on_5xx_then_succeeds():
+    # Transient server errors must not kill the turn: back off, then recover.
+    attempts = {"n": 0}
+
+    def flaky_transport(url, payload, headers, timeout_s):
+        attempts["n"] += 1
+        if attempts["n"] <= 2:
+            raise urllib.error.HTTPError(url, 503, "overloaded", {},
+                                         io.BytesIO(b"try later"))
+        return canned_response("recovered")
+
+    sleeps: list[float] = []
+    client = FrontierClient(FrontierConfig(base_url="https://x/v1", model="m"),
+                            transport=flaky_transport, sleep_fn=sleeps.append)
+    reply = client.chat([{"role": "user", "content": "hi"}])
+    assert reply.content == "recovered"
+    assert attempts["n"] == 3
+    # bounded exponential backoff: base 0.4 * 2**attempt + sub-second jitter
+    assert len(sleeps) == 2
+    assert 0.4 <= sleeps[0] <= 0.45
+    assert 0.8 <= sleeps[1] <= 0.85
+
+
+def test_client_client_error_is_not_retried():
+    # 4xx (save 429) cannot be fixed by retrying: fail on the first attempt.
+    attempts = {"n": 0}
+
+    def failing_transport(url, payload, headers, timeout_s):
+        attempts["n"] += 1
+        raise urllib.error.HTTPError(url, 400, "bad request", {},
+                                     io.BytesIO(b"nope"))
+
+    sleeps: list[float] = []
+    client = FrontierClient(FrontierConfig(base_url="https://x/v1", model="m"),
+                            transport=failing_transport, sleep_fn=sleeps.append)
+    with pytest.raises(FrontierError, match="HTTP 400"):
+        client.chat([{"role": "user", "content": "hi"}])
+    assert attempts["n"] == 1
+    assert sleeps == []
+
+
+def test_client_connection_error_retries_then_raises_frontier_error():
+    attempts = {"n": 0}
+
+    def failing_transport(url, payload, headers, timeout_s):
+        attempts["n"] += 1
+        raise urllib.error.URLError("connection refused")
+
+    client = FrontierClient(FrontierConfig(base_url="https://x/v1", model="m"),
+                            transport=failing_transport,
+                            sleep_fn=lambda _s: None)
+    with pytest.raises(FrontierError, match="unreachable"):
+        client.chat([{"role": "user", "content": "hi"}])
+    assert attempts["n"] == 3
 
 
 def test_client_malformed_response_raises_frontier_error():

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import time
 import urllib.error
 import urllib.request
@@ -48,6 +49,10 @@ class FrontierConfig:
     model: str
     api_key: str | None = None
     timeout_s: float = 20.0
+    # Transient-failure retry budget (bounded exponential backoff, jittered):
+    # a momentary 429/5xx or connection blip must not kill the turn outright.
+    max_retries: int = 2
+    retry_base_delay_s: float = 0.4
 
 
 def config_from_env(env: Mapping[str, str] | None = None) -> FrontierConfig | None:
@@ -66,6 +71,24 @@ def config_from_env(env: Mapping[str, str] | None = None) -> FrontierConfig | No
 
 class FrontierError(RuntimeError):
     """Frontier endpoint failure (transport, HTTP, or malformed protocol)."""
+
+
+# HTTP statuses worth retrying: rate-limit + server-side 5xx are transient by
+# contract. 4xx client errors (save 429) are non-retryable — retrying a bad
+# request only burns the turn budget and delays the caller's fallback.
+RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
+
+# Sub-second jitter on top of the backoff (spreads a fleet's retries; two
+# deployments retrying at the same wall-clock moments hammer the provider).
+_RETRY_JITTER_S = 0.05
+
+
+def _retryable(exc: BaseException) -> bool:
+    """Transport errors worth a retry: 429/5xx (HTTPError) and connection-
+    level failures (URLError/OSError — refused, reset, timeout)."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in RETRYABLE_HTTP_CODES
+    return isinstance(exc, (urllib.error.URLError, OSError))
 
 
 # --- transport -------------------------------------------------------------
@@ -131,9 +154,12 @@ class FrontierClient:
     """OpenAI-compatible chat-completions client with native tools support.
     The HTTP transport is injectable for tests."""
 
-    def __init__(self, config: FrontierConfig, transport: Transport | None = None):
+    def __init__(self, config: FrontierConfig, transport: Transport | None = None,
+                 sleep_fn: Callable[[float], None] | None = None):
         self.config = config
         self._transport = transport or _urllib_transport
+        # Injectable so tests bound the backoff delay without sleeping.
+        self._sleep = sleep_fn or time.sleep
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None,
              tool_choice: str | dict = "auto", temperature: float = 0.4,
@@ -150,23 +176,7 @@ class FrontierClient:
         headers = ({"Authorization": f"Bearer {self.config.api_key}"}
                    if self.config.api_key else {})
         t0 = time.perf_counter()
-        try:
-            raw = self._transport(
-                self.config.base_url + "/chat/completions",
-                payload, headers, self.config.timeout_s)
-        except FrontierError:
-            raise
-        except urllib.error.HTTPError as exc:
-            body = ""
-            try:
-                body = exc.read().decode("utf-8", "replace")[:500]
-            except Exception:
-                pass
-            raise FrontierError(
-                f"HTTP {exc.code} from frontier endpoint: {body}") from exc
-        except (urllib.error.URLError, OSError) as exc:
-            raise FrontierError(
-                f"frontier endpoint unreachable: {exc}") from exc
+        raw = self._request_with_retries(payload, headers)
         latency = time.perf_counter() - t0
         try:
             message = raw["choices"][0]["message"]
@@ -181,6 +191,42 @@ class FrontierClient:
             latency_s=latency,
             raw=raw,
         )
+
+    def _request_with_retries(self, payload: dict, headers: dict) -> dict:
+        """POST the chat-completions payload with bounded exponential backoff
+        on retryable transport errors (429 / 5xx / connection). Client errors
+        (4xx save 429) and malformed responses raise immediately — retrying a
+        bad request only burns budget. Delays: base * 2**attempt + jitter.
+        `latency_s` still measures the whole retried request (observability)."""
+        url = self.config.base_url + "/chat/completions"
+        attempts = self.config.max_retries + 1
+        delay = self.config.retry_base_delay_s
+        for attempt in range(attempts):
+            try:
+                return self._transport(url, payload, headers,
+                                       self.config.timeout_s)
+            except FrontierError:
+                raise
+            except (urllib.error.HTTPError, urllib.error.URLError,
+                    OSError) as exc:
+                if not _retryable(exc) or attempt >= attempts - 1:
+                    # Final attempt (or a non-retryable error): raise the
+                    # historical error contract unchanged.
+                    if isinstance(exc, urllib.error.HTTPError):
+                        body = ""
+                        try:
+                            body = exc.read().decode(
+                                "utf-8", "replace")[:500]
+                        except Exception:
+                            pass
+                        raise FrontierError(
+                            f"HTTP {exc.code} from frontier endpoint: "
+                            f"{body}") from exc
+                    raise FrontierError(
+                        f"frontier endpoint unreachable: {exc}") from exc
+                self._sleep(delay * (2 ** attempt)
+                            + random.uniform(0.0, _RETRY_JITTER_S))
+        raise FrontierError("frontier request failed")  # pragma: no cover
 
 
 # --- tool schemas ----------------------------------------------------------

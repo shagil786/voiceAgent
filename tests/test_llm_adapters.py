@@ -44,13 +44,19 @@ class _StubHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
+        self.server.request_count = getattr(self.server, "request_count", 0) + 1
         self.server.last_request = {
             "path": self.path,
             "auth": self.headers.get("Authorization"),
             "body": json.loads(self.rfile.read(n) or b"{}"),
         }
-        if getattr(self.server, "fail", False):
-            self._reply(500, b'{"error": "internal boom"}')
+        # fail: fail every request; fail_until: fail the first N requests
+        # (retry-then-succeed tests); error_status: the failure status code.
+        if (getattr(self.server, "fail", False)
+                or self.server.request_count
+                <= getattr(self.server, "fail_until", 0)):
+            self._reply(getattr(self.server, "error_status", 500),
+                        b'{"error": "internal boom"}')
             return
         self._reply(200, json.dumps(
             {"choices": [{"message": {"content": "  hi there\n"}}]}).encode())
@@ -188,16 +194,44 @@ def test_openai_compat_no_auth_header_when_no_key(stub_server):
     assert stub_server.last_request["auth"] is None
 
 def test_openai_compat_http_error_raises_runtimeerror_with_body(stub_server):
-    llm = OpenAICompatLLM(_stub_url(stub_server), "m")
+    # 500 is retryable: the client must exhaust its bounded retry budget,
+    # then surface the historical error contract unchanged.
+    llm = OpenAICompatLLM(_stub_url(stub_server), "m", sleep_fn=lambda _s: None)
     stub_server.fail = True
     with pytest.raises(RuntimeError, match="internal boom"):
         llm.generate("hi")
+    assert stub_server.request_count == 3  # 1 attempt + max_retries=2
+
+def test_openai_compat_retries_on_5xx_then_succeeds(stub_server):
+    # A transient server error must not kill the turn: back off, then recover.
+    llm = OpenAICompatLLM(_stub_url(stub_server), "m", retry_base_delay_s=0.01)
+    stub_server.fail_until = 2
+    stub_server.error_status = 503
+    assert llm.generate("hi") == "hi there"
+    assert stub_server.request_count == 3
+
+def test_openai_compat_429_is_retryable(stub_server):
+    llm = OpenAICompatLLM(_stub_url(stub_server), "m", retry_base_delay_s=0.01)
+    stub_server.fail_until = 1
+    stub_server.error_status = 429  # rate-limited once, then fine
+    assert llm.generate("hi") == "hi there"
+    assert stub_server.request_count == 2
+
+def test_openai_compat_client_error_is_not_retried(stub_server):
+    # 4xx (save 429) cannot be fixed by retrying: fail on the first attempt.
+    llm = OpenAICompatLLM(_stub_url(stub_server), "m", sleep_fn=lambda _s: None)
+    stub_server.fail = True
+    stub_server.error_status = 400
+    with pytest.raises(RuntimeError, match="HTTP 400"):
+        llm.generate("hi")
+    assert stub_server.request_count == 1
 
 def test_openai_compat_unreachable_raises_runtimeerror():
     srv = HTTPServer(("127.0.0.1", 0), _StubHandler)
     port = srv.server_port
     srv.server_close()  # free the port so the connection is refused
-    llm = OpenAICompatLLM(f"http://127.0.0.1:{port}", "m")
+    llm = OpenAICompatLLM(f"http://127.0.0.1:{port}", "m",
+                          retry_base_delay_s=0.001)
     with pytest.raises(RuntimeError, match="cannot reach"):
         llm.generate("hi")
 

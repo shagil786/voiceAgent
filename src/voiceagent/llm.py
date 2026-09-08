@@ -4,10 +4,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import re
 import time
 import urllib.error
 import urllib.request
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
@@ -52,6 +54,21 @@ _BUILTIN_CANDIDATE_MODELS = [
 # Anchored to the repo root so the registry resolves from any CWD (tests,
 # scripts) — data/ is repo data, not a cwd-relative lookup.
 REGISTRY_PATH = Path(__file__).resolve().parents[2] / "data" / "models" / "registry.yaml"
+
+# Retry contract for the OpenAI-compatible endpoint (same policy as the
+# swarm frontier client): rate-limit + server-side 5xx are transient;
+# 4xx client errors (save 429) are non-retryable. Bounded exponential
+# backoff with sub-second jitter.
+RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
+_RETRY_JITTER_S = 0.05
+
+
+def _retryable_transport_error(exc: BaseException) -> bool:
+    """True for HTTP 429/5xx and connection-level failures (URLError/OSError);
+    False for anything else (client errors included)."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in RETRYABLE_HTTP_CODES
+    return isinstance(exc, (urllib.error.URLError, OSError))
 
 
 def load_model_registry(path: str | Path | None = None) -> list[dict]:
@@ -265,7 +282,9 @@ class OpenAICompatLLM(FamilyLLM):
     frontier = True
 
     def __init__(self, base_url: str, model: str, api_key: str | None = None,
-                 timeout: float = 30.0):
+                 timeout: float = 30.0, max_retries: int = 2,
+                 retry_base_delay_s: float = 0.4,
+                 sleep_fn: Callable[[float], None] | None = None):
         super().__init__({
             "model": model, "params": "remote", "quant": "-",
             "model_path": base_url, "size_mb": 0.0,
@@ -274,6 +293,10 @@ class OpenAICompatLLM(FamilyLLM):
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_base_delay_s = retry_base_delay_s
+        # Injectable so tests bound the backoff delay without sleeping.
+        self._sleep = sleep_fn or time.sleep
         self._pending_messages: list[dict] | None = None
 
     def chat_template(self, system: str, context: str, user_text: str) -> str:
@@ -296,6 +319,24 @@ class OpenAICompatLLM(FamilyLLM):
                          "max_tokens": max_tokens}
         if stop:
             payload["stop"] = stop
+        t0 = time.monotonic()
+        body = self._post_with_retries(payload)
+        elapsed = time.monotonic() - t0
+        if elapsed > 5.0:
+            logger.warning("frontier slow call: %.2fs (model %s)",
+                           elapsed, self.model)
+        try:
+            return body["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError, AttributeError) as e:
+            raise RuntimeError(f"unexpected response from "
+                               f"{self.base_url}: {body!r}") from e
+
+    def _post_with_retries(self, payload: dict) -> dict:
+        """POST /chat/completions with bounded exponential backoff on
+        retryable transport errors (429/5xx, connection failures) — the same
+        policy as the swarm frontier client. Client errors (4xx save 429)
+        and unreachable endpoints raise on the final attempt, preserving the
+        historical RuntimeError messages. Delays: base * 2**attempt + jitter."""
         req = urllib.request.Request(
             self.base_url + "/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
@@ -306,26 +347,28 @@ class OpenAICompatLLM(FamilyLLM):
             },
             method="POST",
         )
-        t0 = time.monotonic()
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"OpenAI-compatible endpoint returned "
-                               f"HTTP {e.code}: {detail}") from e
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"cannot reach OpenAI-compatible endpoint "
-                               f"{self.base_url}: {e.reason}") from e
-        elapsed = time.monotonic() - t0
-        if elapsed > 5.0:
-            logger.warning("frontier slow call: %.2fs (model %s)",
-                           elapsed, self.model)
-        try:
-            return body["choices"][0]["message"]["content"].strip()
-        except (KeyError, IndexError, TypeError, AttributeError) as e:
-            raise RuntimeError(f"unexpected response from "
-                               f"{self.base_url}: {body!r}") from e
+        attempts = self.max_retries + 1
+        delay = self.retry_base_delay_s
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as e:
+                if not _retryable_transport_error(e) or attempt >= attempts - 1:
+                    detail = e.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(f"OpenAI-compatible endpoint returned "
+                                       f"HTTP {e.code}: {detail}") from e
+                self._sleep(delay * (2 ** attempt)
+                            + random.uniform(0.0, _RETRY_JITTER_S))
+            except (urllib.error.URLError, OSError) as e:
+                if attempt >= attempts - 1:
+                    raise RuntimeError(f"cannot reach OpenAI-compatible "
+                                       f"endpoint {self.base_url}: "
+                                       f"{e.reason}") from e
+                self._sleep(delay * (2 ** attempt)
+                            + random.uniform(0.0, _RETRY_JITTER_S))
+        raise RuntimeError(f"OpenAI-compatible endpoint failed after "
+                           f"{attempts} attempts")  # pragma: no cover
 
 
 def build_llm_from_env() -> OpenAICompatLLM | None:
