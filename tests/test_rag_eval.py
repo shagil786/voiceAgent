@@ -57,3 +57,17 @@ def test_eval_reports_misses():
     r = evaluate(FILES, suite, build=_fake_build)
     assert r.hits == 0
     assert any(r_.startswith("FAIL") for r_ in r.rows)
+
+
+def test_ruler_gate_perfect():
+    """RAG phase-2 gate: 12-fixture ruler is at 1.00 hit-rate with gaps
+    intact (KB gloss for romanized-hinglish ETA questions landed 2026-09-08;
+    measured 0.89 -> 1.00). If this drops, a retrieval change regressed the
+    ruler — do not ship without beating the previous baseline."""
+    from voiceagent.rag_eval import SUITE_DEFAULT, evaluate
+    from pathlib import Path as _P
+    kb = _P("data/tenants/default/knowledge")
+    files = {p.stem: p.read_text(encoding="utf-8") for p in sorted(kb.glob("*.md"))}
+    res = evaluate(files, SUITE_DEFAULT, k=6)
+    assert res.gaps_correct == res.gaps_total
+    assert res.hit_rate >= 1.0, f"ruler regressed: hit_rate={res.hit_rate:.2f} (baseline 1.00)"
