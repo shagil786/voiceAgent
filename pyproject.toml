@@ -7,3 +7,17 @@ description = "CPU-only multilingual AI support agent - M0 benchmark spike"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+# The remaining suite warnings all originate inside third-party wheels, not
+# platform code (evidence in the 2026-09-07 audit §7/#2 and §14):
+#  - faster_whisper/feature_extractor.py:224 matmul divide/overflow: Apple
+#    Accelerate BLAS FP flags on finite float32 products — the same mechanism
+#    intent.py had; upstream fix, not ours (transcription output is correct).
+#  - torchaudio whisper-path Accelerate FP flags (asr fallback import path).
+# Filtering them here restores a clean signal so any FUTURE platform-code
+# warning is immediately visible in the summary line.
+filterwarnings = [
+    "ignore:divide by zero encountered in matmul:RuntimeWarning",
+    "ignore:overflow encountered in matmul:RuntimeWarning",
+    "ignore:invalid value encountered in matmul:RuntimeWarning",
+]
