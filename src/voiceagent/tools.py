@@ -491,12 +491,20 @@ class ToolGateway:
     def __init__(self, erp: SupportBackend | None = None,
                  specs: dict[str, ToolSpec] | None = None):
         self.erp = erp or MockERP()
-        self.specs = dict(specs or DEFAULT_TOOL_SPECS)
+        # Explicit specs override the platform defaults ENTIRELY (a domain
+        # gateway passes specs={} + its own registrations — an empty dict is
+        # a real choice, not a fallback trigger; only None means defaults).
+        self.specs = dict(specs) if specs is not None else dict(DEFAULT_TOOL_SPECS)
         self._idempotency: dict[str, ToolResult] = {}
         # ADR-004: tool_name -> executor(backend, params) -> value.
-        # Registered defaults below; domain code may register more.
+        # Registered defaults below; domain code may register more. An
+        # EXPLICIT specs dict (even {}) skips the default registrations —
+        # the classic surface must not linger behind a domain gateway.
         self.bindings: dict[str, Callable[[Any, dict], Any]] = {}
-        self._register_default_bindings()
+        if specs is not None:
+            self._register_default_bindings_for(specs)
+        else:
+            self._register_default_bindings()
 
     def register_binding(self, tool_name: str,
                          executor: Callable[[Any, dict], Any]) -> None:
@@ -517,22 +525,34 @@ class ToolGateway:
     def _register_default_bindings(self) -> None:
         """The classic SupportBackend surface as default registrations
         (byte-identical to the historical if/elif chain)."""
-        self.bindings["fetch_order_status"] = lambda erp, p: erp.get_order(p["order_id"])
-        # (The gateway's precondition fetch ALSO calls get_order for
-        # order_id-param tools; the binding re-fetch is idempotent-safe
-        # (read-only) and keeps the binding self-contained.)
-        self.bindings["order_lookup"] = lambda erp, p: erp.lookup_orders_by_phone(p["phone"])
-        self.bindings["end_call"] = lambda erp, p: {"call_ended": True,
-                                                    "reason": p.get("reason", "resolved")}
-        self.bindings["record_feedback"] = lambda erp, p: {"feedback_recorded": True,
-                                                           "rating": p["rating"],
-                                                           "comment": p["comment"]}
-        self.bindings["cancel_order"] = lambda erp, p: erp.cancel_order(p["order_id"], p["reason"])
-        self.bindings["reschedule_delivery"] = lambda erp, p: erp.reschedule_delivery(p["order_id"], p["new_date"])
-        self.bindings["initiate_refund"] = lambda erp, p: erp.initiate_refund(
-            p["order_id"], float(p["amount"]), p["reason"])
-        self.bindings["escalate_to_human"] = lambda erp, p: erp.record_handoff(p["reason"])
-        self.bindings["initiate_return"] = lambda erp, p: erp.mark_return(p["order_id"], p["reason"])
+        self._register_default_bindings_for(self.specs)
+
+    _CLASSIC_EXECUTORS: dict[str, Callable[[Any, dict], Any]] = {
+        "fetch_order_status": lambda erp, p: erp.get_order(p["order_id"]),
+        "order_lookup": lambda erp, p: erp.lookup_orders_by_phone(p["phone"]),
+        "end_call": lambda erp, p: {"call_ended": True,
+                                    "reason": p.get("reason", "resolved")},
+        "record_feedback": lambda erp, p: {"feedback_recorded": True,
+                                           "rating": p["rating"],
+                                           "comment": p["comment"]},
+        "cancel_order": lambda erp, p: erp.cancel_order(p["order_id"], p["reason"]),
+        "reschedule_delivery": lambda erp, p: erp.reschedule_delivery(p["order_id"], p["new_date"]),
+        "initiate_refund": lambda erp, p: erp.initiate_refund(
+            p["order_id"], float(p["amount"]), p["reason"]),
+        "escalate_to_human": lambda erp, p: erp.record_handoff(p["reason"]),
+        "initiate_return": lambda erp, p: erp.mark_return(p["order_id"], p["reason"]),
+    }
+
+    def _register_default_bindings_for(self, specs: dict) -> None:
+        """Register the classic executors for each classic tool PRESENT in
+        `specs` — the default registrations mirror whatever spec surface the
+        gateway carries (full DEFAULT_TOOL_SPECS, a tools.yaml-composed
+        subset, or a custom spec dict: each classic tool that has a spec
+        gets its executor; classic tools absent from an explicit domain
+        surface stay unbound and unexecutable)."""
+        for name, executor in self._CLASSIC_EXECUTORS.items():
+            if name in specs:
+                self.bindings[name] = executor
 
     @classmethod
     def from_yaml(cls, path, erp: MockERP | None = None) -> "ToolGateway":
