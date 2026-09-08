@@ -20,6 +20,7 @@ import math
 import re
 import time
 from dataclasses import dataclass, field, replace
+from typing import Any, Callable
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -199,6 +200,10 @@ class ToolSpec:
     # Optional numeric bounds: {param: (min, max)} enforced after coercion —
     # a rating must be 1..10, a partial refund 0..cap, etc. Declared data.
     param_bounds: dict = field(default_factory=dict)
+    # ADR-004, optional: (resource_type, id_param_name, getter) — a domain
+    # resource fetch for precondition checks. getter(backend, id) -> dict
+    # | None. Absent = classic order-scoped (order_id) or no-fetch behavior.
+    resource: tuple | None = None
     # Tool metadata the brain's proposal surface needs — declared HERE, next
     # to the binding, so adding a tool never requires touching runtime.py:
     # side_effects (mutating? default True = safest assumption) drives the
@@ -473,15 +478,61 @@ class ToolGateway:
     """Executes tools against the ERP with precondition, idempotency, and
     timeout protection. Specs are declarative (Python defaults, overridable
     from a tenant bundle's tools.yaml); the tool->ERP bindings are code —
-    the if/elif chain below maps each tool name to the SupportBackend
-    method it calls. A production backend implements SupportBackend and is
-    passed via erp= (MockERP is the offline demo fixture)."""
+    registered per tool (ADR-004) as executor callables
+    (backend, params) -> value. The DEFAULT registrations (registered in
+    __init__) map the classic SupportBackend surface; the historical if/elif
+    chain is gone. A production backend implements SupportBackend and is
+    passed via erp= (MockERP is the offline demo fixture). New domains
+    either wrap their backend in an adapter exposing the classic surface OR
+    register their own bindings over a GenericBackend after construction —
+    both are platform-authored code (ADR-003: tenants never invent
+    bindings)."""
 
     def __init__(self, erp: SupportBackend | None = None,
                  specs: dict[str, ToolSpec] | None = None):
         self.erp = erp or MockERP()
         self.specs = dict(specs or DEFAULT_TOOL_SPECS)
         self._idempotency: dict[str, ToolResult] = {}
+        # ADR-004: tool_name -> executor(backend, params) -> value.
+        # Registered defaults below; domain code may register more.
+        self.bindings: dict[str, Callable[[Any, dict], Any]] = {}
+        self._register_default_bindings()
+
+    def register_binding(self, tool_name: str,
+                         executor: Callable[[Any, dict], Any]) -> None:
+        """Register/replace the executor for `tool_name` (ADR-004). The
+        executor receives (backend, params) and returns the tool VALUE (the
+        gateway wraps it in ToolResult, applies idempotency and the timeout
+        contract). Registering an unknown tool name is allowed ONLY when a
+        spec with that name exists — the spec (params, preconditions,
+        facts) stays the authority; a binding without a spec can never be
+        proposed or executed."""
+        if tool_name not in self.specs:
+            raise ValueError(
+                f"register_binding: no spec for {tool_name!r} — declare "
+                f"the ToolSpec first (bindings without specs can never be "
+                f"governed)")
+        self.bindings[tool_name] = executor
+
+    def _register_default_bindings(self) -> None:
+        """The classic SupportBackend surface as default registrations
+        (byte-identical to the historical if/elif chain)."""
+        self.bindings["fetch_order_status"] = lambda erp, p: erp.get_order(p["order_id"])
+        # (The gateway's precondition fetch ALSO calls get_order for
+        # order_id-param tools; the binding re-fetch is idempotent-safe
+        # (read-only) and keeps the binding self-contained.)
+        self.bindings["order_lookup"] = lambda erp, p: erp.lookup_orders_by_phone(p["phone"])
+        self.bindings["end_call"] = lambda erp, p: {"call_ended": True,
+                                                    "reason": p.get("reason", "resolved")}
+        self.bindings["record_feedback"] = lambda erp, p: {"feedback_recorded": True,
+                                                           "rating": p["rating"],
+                                                           "comment": p["comment"]}
+        self.bindings["cancel_order"] = lambda erp, p: erp.cancel_order(p["order_id"], p["reason"])
+        self.bindings["reschedule_delivery"] = lambda erp, p: erp.reschedule_delivery(p["order_id"], p["new_date"])
+        self.bindings["initiate_refund"] = lambda erp, p: erp.initiate_refund(
+            p["order_id"], float(p["amount"]), p["reason"])
+        self.bindings["escalate_to_human"] = lambda erp, p: erp.record_handoff(p["reason"])
+        self.bindings["initiate_return"] = lambda erp, p: erp.mark_return(p["order_id"], p["reason"])
 
     @classmethod
     def from_yaml(cls, path, erp: MockERP | None = None) -> "ToolGateway":
@@ -568,52 +619,42 @@ class ToolGateway:
             return ToolResult(ok=replay.ok, value=replay.value,
                               error=replay.error, idempotent_replay=True)
 
-        # Order-scoped tools fetch the record for precondition checks; tools
-        # whose spec has no order_id (escalate_to_human) skip the fetch.
+        # Record fetch for precondition checks. Classic SupportBackend tools
+        # are order-scoped (order_id param -> get_order). ADR-004 domain
+        # tools declare spec.resource = (type, id_param, getter) — a
+        # resource-verb fetch; tools with neither skip the fetch.
+        resource = None
+        resource_spec = getattr(spec, "resource", None)
         try:
-            order = (self.erp.get_order(params["order_id"])
-                     if "order_id" in spec.params else None)
+            if "order_id" in spec.params:
+                resource = self.erp.get_order(params["order_id"])
+            elif (resource_spec is not None
+                  and resource_spec[1] in params):
+                resource = resource_spec[2](self.erp,
+                                            params[resource_spec[1]])
         except TimeoutError:
             return ToolResult(ok=False,
                               error="backend_timeout (graceful; ticket issued)")
-        if "order_id" in spec.params and order is None:
+        if "order_id" in spec.params and resource is None:
             return ToolResult(ok=False,
                               error=f"order_not_found: {params['order_id']}")
+        if (resource_spec is not None and resource_spec[1] in params
+                and resource is None):
+            return ToolResult(ok=False, error=(
+                f"{resource_spec[0]}_not_found: {params[resource_spec[1]]}"))
         for cond in spec.preconditions:
-            err = _check_precondition(order, cond)
+            err = _check_precondition(resource, cond)
             if err:
                 return ToolResult(ok=False, error=err)
 
         try:
-            if tool_name == "fetch_order_status":
-                value = order
-            elif tool_name == "order_lookup":
-                value = self.erp.lookup_orders_by_phone(params["phone"])
-            elif tool_name == "end_call":
-                value = {"call_ended": True,
-                         "reason": params.get("reason", "resolved")}
-            elif tool_name == "record_feedback":
-                value = {"feedback_recorded": True,
-                         "rating": params["rating"],
-                         "comment": params.get("comment", "")}
-            elif tool_name == "cancel_order":
-                value = self.erp.cancel_order(params["order_id"],
-                                              params["reason"])
-            elif tool_name == "reschedule_delivery":
-                value = self.erp.reschedule_delivery(params["order_id"],
-                                                     params["new_date"])
-            elif tool_name == "initiate_refund":
-                value = self.erp.initiate_refund(params["order_id"],
-                                                 float(params["amount"]),
-                                                 params["reason"])
-            elif tool_name == "escalate_to_human":
-                value = self.erp.record_handoff(params["reason"])
-            elif tool_name == "initiate_return":
-                value = self.erp.mark_return(params["order_id"],
-                                             params["reason"])
-            else:  # pragma: no cover — specs and bindings stay in sync
+            binding = self.bindings.get(tool_name)
+            if binding is None:
+                # A spec without a binding cannot execute — configs and
+                # bindings must stay in sync (ADR-004).
                 return ToolResult(ok=False,
                                   error=f"unbound_tool: {tool_name}")
+            value = binding(self.erp, params)
         except TimeoutError:
             # Graceful timeout: NOT cached (a retry may succeed once the
             # backend recovers); the caller tickets instead of retrying
