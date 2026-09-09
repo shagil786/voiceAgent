@@ -77,6 +77,25 @@ def ratings(memory_db: Path | None, limit: int = 50) -> list[dict]:
                  (max(1, limit),))
 
 
+def conversation_spines(audit_db: Path | None,
+                         limit_convs: int = 12) -> list[dict]:
+    """Group the decision log into per-conversation spines (ordered newest
+    first) for the quality judge — the platform's authoritative record."""
+    rows = calls(audit_db, limit=100000)
+    by_conv: dict[str, list[dict]] = {}
+    order: list[str] = []
+    for r in rows:
+        cid = r.get("conv_id") or "unknown"
+        if cid not in by_conv:
+            by_conv[cid] = []
+            order.append(cid)
+        by_conv[cid].append(r)
+    out = []
+    for cid in order[-limit_convs:]:
+        out.append({"conv_id": cid, "rows": by_conv[cid][-20:]})
+    return list(reversed(out))
+
+
 def summary(audit_db: Path | None, memory_db: Path | None) -> dict:
     rows = calls(audit_db, limit=100000)
     verdicts = Counter(r["verdict"] for r in rows)
@@ -228,6 +247,26 @@ class ControlServer(BaseHTTPRequestHandler):
                 self._send(200, {"ratings": ratings(self.memory_db, limit)})
             elif path == "/api/control/summary":
                 self._send(200, summary(self.audit_db, self.memory_db))
+            elif path == "/api/control/scores":
+                from voiceagent.quality import build_judge_from_env, judge_conversation
+                judge = build_judge_from_env()
+                conv = q.get("conv")
+                if conv:
+                    spines = conversation_spines(self.audit_db, limit_convs=500)
+                    target = next((s for s in spines if s["conv_id"] == conv[0]), None)
+                    if target is None:
+                        self._send(404, {"error": f"no conversation {conv[0]}"})
+                        return
+                    out = judge_conversation(target["rows"], judge)
+                    out["conv_id"] = conv[0]
+                    self._send(200, out)
+                    return
+                scored = []
+                for s in conversation_spines(self.audit_db, limit_convs=12):
+                    r = judge_conversation(s["rows"], judge)
+                    r["conv_id"] = s["conv_id"]
+                    scored.append(r)
+                self._send(200, {"scores": scored})
             else:
                 self._send(404, {"error": f"no such endpoint {path}"})
         except Exception as e:  # noqa: BLE001
