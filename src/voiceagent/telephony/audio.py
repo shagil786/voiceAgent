@@ -34,6 +34,17 @@ def resample_16k_to_48k(pcm: bytes) -> bytes:
     return _resample(pcm, 16000, 48000)
 
 
+def resample_to_16k(pcm: bytes, src_rate: int) -> bytes:
+    """Resample any mono int16 PCM rate down to the 16 kHz pipeline rate.
+    Piper voices are natively 22050 Hz while the telephony pipeline runs at
+    16 kHz; a 22050 stream passed through the 16k->48k path un-resampled
+    plays ~1.38x slow / pitched down (or silent). Pass-through when the
+    source is already 16 kHz."""
+    if src_rate == 16000 or not pcm:
+        return pcm
+    return _resample(pcm, src_rate, 16000)
+
+
 def chunk_frames(pcm: bytes, frame_ms: int, sample_rate: int) -> list[bytes]:
     """Split mono int16 PCM into `frame_ms` chunks; drop trailing partial."""
     samples_per_chunk = sample_rate * frame_ms // 1000

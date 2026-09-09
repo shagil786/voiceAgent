@@ -61,7 +61,14 @@ def _default_tts(text: str, language: str | None = None) -> bytes:
     try:
         speak(text, language=language, out_path=path)
         with wave.open(path, "rb") as w:
-            return w.readframes(w.getnframes())
+            pcm = w.readframes(w.getnframes())
+            rate = w.getframerate()
+        # Piper voices are natively 22050 Hz; the pipeline runs at 16 kHz.
+        # Publish the pipeline rate so 16k->48k room resampling is exact.
+        if rate != _PIPELINE_SAMPLE_RATE:
+            from voiceagent.telephony.audio import resample_to_16k
+            pcm = resample_to_16k(pcm, rate)
+        return pcm
     finally:
         Path(path).unlink(missing_ok=True)
 
