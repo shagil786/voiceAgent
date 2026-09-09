@@ -273,22 +273,26 @@ def ffmpeg_exe() -> str:
 def render_pass(w, h, fps, seconds, theme, outdir: Path, tag: str, log=print):
     outdir.mkdir(parents=True, exist_ok=True)
     n = int(seconds * fps)
-    args = [(w, h, f / fps, theme, outdir / f"{tag}_{f:04d}.png")
-            for f in range(n)]
-    if n >= 8 and os.cpu_count() and os.cpu_count() > 1:
-        import multiprocessing as mp
-        with mp.Pool(min(os.cpu_count(), 4)) as pool:
-            for done, p in enumerate(pool.imap_unordered(_paint_one, args), 1):
-                if done % 60 == 0:
-                    log(f"  [{tag}] {done}/{n}")
-        paths = [a[4] for a in args]
-    else:
-        for k, a in enumerate(args):
-            _paint_one(a)
-            if k % 30 == 0:
-                log(f"  [{tag}] frame {k}/{n}")
-        paths = [a[4] for a in args]
-    return paths
+    all_args = [(w, h, f / fps, theme, outdir / f"{tag}_{f:04d}.png")
+                for f in range(n)]
+    # resume: skip frames that already exist with content
+    args = [a for a in all_args
+            if not (a[4].exists() and a[4].stat().st_size > 1000)]
+    if len(args) < len(all_args):
+        log(f"  [{tag}] reusing {len(all_args) - len(args)} existing frames")
+    if args:
+        if len(args) >= 8 and os.cpu_count() and os.cpu_count() > 1:
+            import multiprocessing as mp
+            with mp.Pool(min(os.cpu_count(), 4)) as pool:
+                for done, _ in enumerate(pool.imap_unordered(_paint_one, args), 1):
+                    if done % 60 == 0:
+                        log(f"  [{tag}] {done}/{len(args)}")
+        else:
+            for k, a in enumerate(args):
+                _paint_one(a)
+                if k % 30 == 0:
+                    log(f"  [{tag}] frame {k}/{len(args)}")
+    return [a[4] for a in all_args]
 
 
 def _paint_one(a):
@@ -299,7 +303,7 @@ def _paint_one(a):
 
 def _pattern(frames: list[Path]) -> str:
     """'dir/hd_%04d.png' from the first frame path."""
-    return str(frames[0].parent / frames[0].name[:-8] + "%04d.png")
+    return str(frames[0].parent / (frames[0].name[:-8] + "%04d.png"))
 
 
 def encode_mp4(frames: list[Path], fps: int, out: Path, log=print):

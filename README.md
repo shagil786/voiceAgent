@@ -51,6 +51,7 @@ LEARNING LOOPS
 | **Telephony limb** (SIP/WebRTC + real number) | ⏳ built on `feat/livekit-limb` — loopback-verified, first PSTN drill pending (docs/telephony-runbook.md) |
 | **Real ERP adapter** (`erp_http.HttpERP` — HTTP connector, opt-in via `ToolGateway(erp=...)`; contract: `docs/erp-http-api.md`) | ✅ built; MockERP stays the offline demo default |
 | **Packaging** (Docker/VPS) | ⏳ Dockerfile + compose + DEPLOY.md on `main`; first container build pending |
+| **Dashboard background** (`dashboard-bg/` — "Voicefield": seamless MP4/GIF loop + live interactive canvas twin, mic-reactive, event pulses) | ✅ assets rendered |
 
 Design: `docs/superpowers/specs/2026-09-03-global-adaptive-agent-design.md`.
 Plans: `docs/superpowers/plans/2026-09-04-instant-learn-profiles.md` (done),
