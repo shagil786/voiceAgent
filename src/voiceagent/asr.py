@@ -242,11 +242,21 @@ class QwenASRHandle:
     """Qwen/Qwen3-ASR-0.6B-hf handle — the M5b-3 core engine (en/hi/hinglish
     and any unknown language).
 
-    Language hints are accepted for interface uniformity but NOT forced:
-    the model's built-in LID was correct on every en/hi bake-off sample
-    (including hinglish audio, detected as Hindi), and forcing via the
-    assistant-prefill mechanism is deferred until a measured need shows up.
-    loader is injectable so tests stub the ~1.6 GB download."""
+    Declared languages are FORCED through the processor's native `language`
+    suffix (the reference implementation's mechanism): a declared language
+    is never auto-detected — forcing is what keeps a declared-English
+    deployment from hearing Thai on noisy phone audio (live incident
+    2026-09). Codes outside Qwen's supported set (e.g. the Indic-conformer languages) pass None -> auto-detect,
+    exactly as before. loader is injectable so tests stub the download."""
+
+    # Codes the Qwen3-ASR processor accepts for forcing (mirrors
+    # transformers' LANGUAGE_CODE_TO_NAME keys — the conformer-routed Indic
+    # codes are deliberately absent: they never reach this engine declared).
+    FORCED_LANGUAGE_CODES = frozenset({
+        "ar", "yue", "zh", "cs", "da", "nl", "en", "fil", "fi", "fr",
+        "de", "el", "hi", "hu", "id", "it", "ja", "ko", "mk", "ms",
+        "fa", "pl", "pt", "ro", "ru", "es", "sv", "th", "tr", "vi",
+    })
 
     def __init__(self, model_id: str = QWEN_ASR_MODEL_ID, loader=None):
         self._model_id = model_id
@@ -282,22 +292,46 @@ class QwenASRHandle:
         return self.transcribe_detected(audio, language)[0]
 
     def transcribe_detected(self, audio, language: str | None = None):
-        """One Qwen pass returning (text, detected_language_or_None)."""
+        """One Qwen pass returning (text, detected_language_or_None).
+
+        A declared language is FORCED via the processor's native `language`
+        suffix (no auto-LID); None/unsupported codes keep auto-detect. When
+        forced, the model emits transcription only, so the detected slot
+        echoes the forced code."""
         import torch
         path = audio if isinstance(audio, (str, Path)) \
             else self._array_to_wav_path(audio)
         processor, model = self._ensure_engine()
-        inputs = processor.apply_transcription_request(audio=str(path))
+        forced = self._forced_code(language)
+        inputs = processor.apply_transcription_request(
+            audio=str(path),
+            **({"language": forced} if forced else {}))
         inputs = inputs.to(model.device, model.dtype)
         with torch.no_grad():
             out = model.generate(**inputs, max_new_tokens=256, do_sample=False)
         gen = out[:, inputs["input_ids"].shape[1]:]
         try:
             parsed = processor.decode(gen[0], return_format="parsed")
-            return parsed.get("transcription", "").strip(), parsed.get("language")
+            return (parsed.get("transcription", "").strip(),
+                    parsed.get("language") or forced)
         except Exception:
             text = processor.decode(gen[0], skip_special_tokens=True).strip()
-            return text, None
+            return text, forced
+
+    @classmethod
+    def _forced_code(cls, language: str | None) -> str | None:
+        """Declared tag -> forceable Qwen code, or None (auto-detect).
+
+        "hinglish" is spoken Hindi -> "hi" (same mapping as whisper).
+        Anything outside FORCED_LANGUAGE_CODES (conformer-routed Indic
+        codes, garbage) stays unforced — never let an arbitrary string
+        reach the processor (it raises ValueError on unknown codes)."""
+        base = _normalize_lang(language)
+        if base == "hinglish":
+            base = "hi"
+        if base in cls.FORCED_LANGUAGE_CODES:
+            return base
+        return None
 
 
 def warmup_asr() -> None:
@@ -347,29 +381,22 @@ def get_asr_for_language(lang: str | None, engines=None, supported=None,
 
     M5b-3 routing (bake-off data): te/ta/bn/mr/gu/kn/ml/pa -> IndicConformer
     (te WER 0.348 vs whisper 1.067 / Qwen 1.315, 0.11s warm); hi/hinglish/
-    None/unknown -> Qwen3-ASR-0.6B (hi 0.247 vs 0.423, code-switch output).
-    DECLARED ENGLISH (en, en-US, ...) -> whisper-small with a HARD "en"
-    hint: Qwen's built-in LID is not forceable and misfired Thai on English
-    phone audio (live incident 2026-09) — a deployment that knows its
-    language is English must never pay auto-LID. Tags are normalized
+    en/None/unknown -> Qwen3-ASR-0.6B (hi 0.247 vs 0.423, code-switch
+    output). Declared languages are FORCED, never auto-detected: Qwen takes
+    a `language` forcing suffix (native processor support), whisper takes a
+    hint, the conformer requires its language per recipe. Tags normalize
     ("en-US" -> "en") before routing. A native language outside the
     conformer's card list falls back to the Qwen core with a warning.
     `engines`/`supported`/`warn` are injectable for tests; default engines
     are cached per engine kind (process-wide singletons).
     """
     if engines is None:
-        engines = {"qwen": _get_qwen_asr, "indic": _get_indic_asr,
-                   "whisper": _get_whisper_small}
+        engines = {"qwen": _get_qwen_asr, "indic": _get_indic_asr}
     if supported is None:
         supported = INDIC_CONFORMER_LANGUAGES
     if warn is None:
         warn = lambda msg: logger.warning(msg)  # noqa: E731
     base = _normalize_lang(lang)
-    if base == "en":
-        # Hard-English path: whisper-small forced to "en" (no auto-LID).
-        # engines["whisper"] may be absent in older test injections — fall
-        # back to the real singleton factory (same as the default map).
-        return engines.get("whisper", _get_whisper_small)()
     if base in INDIC_ROUTE_LANGS:
         if base in supported:
             return engines["indic"]()
@@ -385,21 +412,14 @@ def transcribe_wav_routed(path: str, language: str | None = None) -> str:
     auto-detection on the small model (the blind path — never auto-reroutes,
     see module docstring).
 
-    Declared-English deployments (en/en-US/en-IN/...) skip auto-detection
-    entirely: Qwen3-ASR's built-in LID heard Thai on a short real English
-    phone clip and derailed the whole turn into a Thai reply + broken TTS.
-    When the deployment KNOWS English, whisper-small with a hard "en" hint
-    is deterministic (bake-off en WER 0.038) and already warm at boot.
+    Declared languages reach their engine FORCED (Qwen's native `language`
+    suffix, whisper's hint, the conformer's required recipe arg) — a
+    deployment that knows its language never pays auto-LID. (Live incident
+    2026-09: unforced Qwen heard Thai on English phone audio and derailed
+    the turn into a Thai reply + broken TTS.)
 
     If the routed engine fails (model download/gated repo, load error), the
     turn must not die mid-call: falls back to whisper small with a warning."""
-    if _normalize_lang(language) == "en":
-        try:
-            return _get_whisper_small().transcribe(path, language="en")
-        except Exception as e:
-            logger.warning("whisper-small en path failed for language=%s "
-                           "(%s: %s); falling back to the routed engine",
-                           language, type(e).__name__, e)
     language = _normalize_lang(language)
     try:
         return get_asr_for_language(language).transcribe(path, language=language)

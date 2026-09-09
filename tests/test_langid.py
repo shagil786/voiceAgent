@@ -24,10 +24,11 @@ SCRIPT_SAMPLES = {
     "ml": "എന്റെ ഓർഡർ ഇപ്പോഴും വന്നിട്ടില്ല",
     "pa": "ਮੇਰਾ ਆਰਡਰ ਹਾਲੇ ਨਹੀਂ ਆਇਆ",
     "gu": "મારો ઓર્ડર હજી આવ્યો નથી",
+    "th": "คำสั่งซื้อของฉันยังมาไม่ถึง",
 }
 
 ALL_CODES = {"en", "hinglish", "hi", "ta", "te", "bn", "mr", "gu", "kn",
-             "ml", "pa"}
+             "ml", "pa", "th"}
 
 
 @pytest.mark.parametrize("lang,text", sorted(SCRIPT_SAMPLES.items()))
@@ -80,7 +81,7 @@ def test_only_known_codes_are_returned(text):
 
 def test_native_script_langs_vocabulary():
     assert NATIVE_SCRIPT_LANGS == {"hi", "ta", "te", "bn", "mr", "gu",
-                                   "kn", "ml", "pa"}
+                                   "kn", "ml", "pa", "th"}
 
 
 # ---------------------------------------------------------------------------

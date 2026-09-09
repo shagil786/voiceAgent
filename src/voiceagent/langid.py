@@ -27,10 +27,13 @@ import re
 
 # Languages the reply-language directive fires for (non-Latin scripts).
 NATIVE_SCRIPT_LANGS = frozenset(
-    {"hi", "ta", "te", "bn", "mr", "gu", "kn", "ml", "pa"})
+    {"hi", "ta", "te", "bn", "mr", "gu", "kn", "ml", "pa", "th"})
 
 # Unicode block per language. Devanagari maps to hi (Marathi is script-
-# identical); every other block is unambiguous.
+# identical); every other block is unambiguous. Thai (U+0E00–U+0E7F) was
+# added after a live incident (2026-09): Thai text classified as "en" sent
+# Thai replies through the English TTS voice. Further scripts follow the
+# same one-line pattern — detection must grow with the deployments.
 _SCRIPT_RANGES = (
     ("hi", 0x0900, 0x097F),  # Devanagari
     ("bn", 0x0980, 0x09FF),  # Bengali
@@ -40,6 +43,7 @@ _SCRIPT_RANGES = (
     ("te", 0x0C00, 0x0C7F),  # Telugu
     ("kn", 0x0C80, 0x0CFF),  # Kannada
     ("ml", 0x0D00, 0x0D7F),  # Malayalam
+    ("th", 0x0E00, 0x0E7F),  # Thai
 )
 
 # Native-script characters required before the native script beats Latin.
@@ -99,7 +103,7 @@ _TOKEN_RE = re.compile(r"[a-z\u00e0-\u024f]+")
 
 def detect_language(text: str) -> str:
     """Return one of: en, hinglish, es, fr, de, pt, hi, ta, te, bn, mr, gu,
-    kn, ml, pa."""
+    kn, ml, pa, th."""
     counts: dict[str, int] = {}
     for ch in text:
         cp = ord(ch)

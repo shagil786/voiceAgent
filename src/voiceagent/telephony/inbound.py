@@ -338,7 +338,8 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
     tts = _deps_get(deps, "tts")
 
     turn_fn = make_turn_fn(orchestrator, session_id, asr=asr, tts=tts, language=language)
-    session = BridgeSession(on_utterance=lambda pcm: turn_fn(pcm))
+    session = BridgeSession(on_utterance=lambda pcm: turn_fn(pcm),
+                                threaded=True)
 
     token = _mint_worker_token(config, room_name, f"worker-{room_name}")
     room = rtc.Room()

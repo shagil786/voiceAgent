@@ -327,10 +327,12 @@ class _FakeQwenProcessor:
     def __init__(self, mode="parsed"):
         self.paths = []
         self.decode_calls = []
+        self.forced_languages = []
         self.mode = mode
 
-    def apply_transcription_request(self, audio=None):
+    def apply_transcription_request(self, audio=None, **kwargs):
         self.paths.append(audio)
+        self.forced_languages.append(kwargs.get("language"))
         return _FakeQwenInputs(input_len=5)
 
     def decode(self, ids, **kwargs):
@@ -357,8 +359,21 @@ def test_qwen_handle_transcribe_detected_returns_language():
     text, lang = handle.transcribe_detected("x.wav", language="hi")
     assert text == "stub qwen text"
     assert lang == "English"
-    # the hint is accepted but never forced into the request
+    # declared languages are FORCED into the request (no auto-LID)
+    assert proc.forced_languages == ["hi"]
     assert proc.decode_calls == ["parsed"]
+
+
+def test_qwen_handle_forces_declared_language_tags():
+    """Tags normalize (en-US -> en), hinglish maps to hi, unsupported codes
+    (conformer-routed Indic) stay unforced — one rule, every language."""
+    proc = _FakeQwenProcessor()
+    handle = _qwen_handle_with(proc, _FakeQwenModel())
+    handle.transcribe("x.wav", language="en-US")
+    handle.transcribe("x.wav", language="hinglish")
+    handle.transcribe("x.wav", language="te")
+    handle.transcribe("x.wav", language=None)
+    assert proc.forced_languages == ["en", "hi", None, None]
 
 
 def test_qwen_handle_falls_back_to_plain_decode():
