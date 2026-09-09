@@ -27,6 +27,7 @@ from voiceagent.swarm.frontier import (
     FrontierAgentBridge,
     FrontierClient,
     config_from_env,
+    configs_from_env,
 )
 from voiceagent.tools import (
     DEFAULT_TOOL_SPECS,
@@ -475,9 +476,10 @@ def build_orchestrator(
     learned intent memory; None defers to VOICEAGENT_MEMORY_DB (opt-in —
     unset keeps the memory layer fully inert).
     """
-    cfg = config_from_env(env)
-    if cfg is None:
+    cfgs = configs_from_env(env)
+    if not cfgs:
         return None
+    cfg = cfgs[0]
 
     bundle = _resolve_tenant(tenant, env)
     log = decision_log or _audit_log_from_env(env)
@@ -520,7 +522,7 @@ def build_orchestrator(
             if prop.status == _APPROVED and prop.name in registered:
                 proposal_metas[prop.name] = gateway_tool_meta(prop)
     runner = GovernedToolRunner(gateway, policy, decision_log=log)
-    brain = FrontierAgentBridge(FrontierClient(cfg))
+    brain = FrontierAgentBridge(FrontierClient(cfgs[0], fallbacks=cfgs[1:]))
     dep = deployment or make_deployment(tenant=bundle,
                                         policy_path=policy_path)
     if proposal_metas:

@@ -56,17 +56,34 @@ class FrontierConfig:
 
 
 def config_from_env(env: Mapping[str, str] | None = None) -> FrontierConfig | None:
-    """Build config from VOICEAGENT_FRONTIER_URL / _MODEL / _KEY. Returns None
-    when the URL is unset (deployment runs the local/scripted path)."""
+    """Back-compat: the primary endpoint config, or None when unset."""
+    cfgs = configs_from_env(env)
+    return cfgs[0] if cfgs else None
+
+
+def configs_from_env(env: Mapping[str, str] | None = None) -> list[FrontierConfig]:
+    """Ordered provider list. Primary from VOICEAGENT_FRONTIER_URL / _MODEL /
+    _KEY; an optional fallback from VOICEAGENT_FRONTIER_FALLBACK_URL / _MODEL
+    / _KEY (model defaults to the primary's). The client fails over to the
+    next endpoint when one fails (429/5xx/unreachable/4xx/malformed)."""
     e = os.environ if env is None else env
+    cfgs: list[FrontierConfig] = []
     base_url = e.get("VOICEAGENT_FRONTIER_URL")
-    if not base_url:
-        return None
-    return FrontierConfig(
-        base_url=base_url.rstrip("/"),
-        model=e.get("VOICEAGENT_FRONTIER_MODEL", "gpt-4o-mini"),
-        api_key=e.get("VOICEAGENT_FRONTIER_KEY") or None,
-    )
+    if base_url:
+        cfgs.append(FrontierConfig(
+            base_url=base_url.rstrip("/"),
+            model=e.get("VOICEAGENT_FRONTIER_MODEL", "gpt-4o-mini"),
+            api_key=e.get("VOICEAGENT_FRONTIER_KEY") or None,
+        ))
+    fb_url = e.get("VOICEAGENT_FRONTIER_FALLBACK_URL")
+    if fb_url:
+        cfgs.append(FrontierConfig(
+            base_url=fb_url.rstrip("/"),
+            model=e.get("VOICEAGENT_FRONTIER_FALLBACK_MODEL",
+                        e.get("VOICEAGENT_FRONTIER_MODEL", "gpt-4o-mini")),
+            api_key=e.get("VOICEAGENT_FRONTIER_FALLBACK_KEY") or None,
+        ))
+    return cfgs
 
 
 class FrontierError(RuntimeError):
@@ -155,8 +172,10 @@ class FrontierClient:
     The HTTP transport is injectable for tests."""
 
     def __init__(self, config: FrontierConfig, transport: Transport | None = None,
-                 sleep_fn: Callable[[float], None] | None = None):
+                 sleep_fn: Callable[[float], None] | None = None,
+                 fallbacks: list[FrontierConfig] | None = None):
         self.config = config
+        self.configs = [config] + list(fallbacks or [])
         self._transport = transport or _urllib_transport
         # Injectable so tests bound the backoff delay without sleeping.
         self._sleep = sleep_fn or time.sleep
@@ -164,8 +183,23 @@ class FrontierClient:
     def chat(self, messages: list[dict], tools: list[dict] | None = None,
              tool_choice: str | dict = "auto", temperature: float = 0.4,
              max_tokens: int = 512) -> FrontierReply:
+        """Try each configured provider in order; fail over to the next on any
+        endpoint failure. The last provider's error is re-raised if all fail."""
+        last: FrontierError | None = None
+        for cfg in self.configs:
+            try:
+                return self._chat(cfg, messages, tools, tool_choice,
+                                  temperature, max_tokens)
+            except FrontierError as exc:
+                last = exc
+        assert last is not None
+        raise last
+
+    def _chat(self, cfg: FrontierConfig, messages: list[dict],
+              tools: list[dict] | None, tool_choice: str | dict,
+              temperature: float, max_tokens: int) -> FrontierReply:
         payload: dict = {
-            "model": self.config.model,
+            "model": cfg.model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -173,10 +207,10 @@ class FrontierClient:
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice
-        headers = ({"Authorization": f"Bearer {self.config.api_key}"}
-                   if self.config.api_key else {})
+        headers = ({"Authorization": f"Bearer {cfg.api_key}"}
+                   if cfg.api_key else {})
         t0 = time.perf_counter()
-        raw = self._request_with_retries(payload, headers)
+        raw = self._request_with_retries(payload, headers, cfg)
         latency = time.perf_counter() - t0
         try:
             message = raw["choices"][0]["message"]
@@ -187,24 +221,26 @@ class FrontierClient:
         return FrontierReply(
             content=message.get("content"),
             tool_calls=_parse_tool_calls(message),
-            model=raw.get("model", self.config.model),
+            model=raw.get("model", cfg.model),
             latency_s=latency,
             raw=raw,
         )
 
-    def _request_with_retries(self, payload: dict, headers: dict) -> dict:
+    def _request_with_retries(self, payload: dict, headers: dict,
+                              cfg: FrontierConfig | None = None) -> dict:
         """POST the chat-completions payload with bounded exponential backoff
         on retryable transport errors (429 / 5xx / connection). Client errors
         (4xx save 429) and malformed responses raise immediately — retrying a
         bad request only burns budget. Delays: base * 2**attempt + jitter.
         `latency_s` still measures the whole retried request (observability)."""
-        url = self.config.base_url + "/chat/completions"
-        attempts = self.config.max_retries + 1
-        delay = self.config.retry_base_delay_s
+        cfg = cfg or self.config
+        url = cfg.base_url + "/chat/completions"
+        attempts = cfg.max_retries + 1
+        delay = cfg.retry_base_delay_s
         for attempt in range(attempts):
             try:
                 return self._transport(url, payload, headers,
-                                       self.config.timeout_s)
+                                       cfg.timeout_s)
             except FrontierError:
                 raise
             except (urllib.error.HTTPError, urllib.error.URLError,

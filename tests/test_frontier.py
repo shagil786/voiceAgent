@@ -324,3 +324,58 @@ def test_real_frontier_endpoint_replies():
     bridge.register_tool("get_time", "Returns the current UTC time string.")
     turn = bridge.propose(Blackboard(session_id="it").state, "Say OK.")
     assert (turn.reply_text or "").strip(), turn.raw
+
+
+# --- provider fallback ------------------------------------------------------
+
+def test_configs_from_env_builds_primary_plus_fallback():
+    env = {
+        "VOICEAGENT_FRONTIER_URL": "https://primary.example/v1",
+        "VOICEAGENT_FRONTIER_MODEL": "m1",
+        "VOICEAGENT_FRONTIER_KEY": "k1",
+        "VOICEAGENT_FRONTIER_FALLBACK_URL": "https://fallback.example/v1",
+        "VOICEAGENT_FRONTIER_FALLBACK_MODEL": "m2",
+        "VOICEAGENT_FRONTIER_FALLBACK_KEY": "k2",
+    }
+    from voiceagent.swarm.frontier import configs_from_env
+    cfgs = configs_from_env(env)
+    assert [c.base_url for c in cfgs] == [
+        "https://primary.example/v1", "https://fallback.example/v1"]
+    assert [c.model for c in cfgs] == ["m1", "m2"]
+    # fallback model defaults to primary's when unset
+    env.pop("VOICEAGENT_FRONTIER_FALLBACK_MODEL")
+    cfgs = configs_from_env(env)
+    assert cfgs[1].model == "m1"
+
+
+def test_client_fails_over_to_fallback_on_primary_failure():
+    primary = FrontierConfig(base_url="https://primary.example/v1",
+                             model="m1", api_key="k1", max_retries=0)
+    fallback = FrontierConfig(base_url="https://fallback.example/v1",
+                              model="m2", api_key="k2")
+
+    def _t(url, payload, headers, timeout_s):
+        if "primary.example" in url:
+            raise urllib.error.URLError("primary down")
+        return {"choices": [{"message": {"content": "hi from fallback",
+                                         "tool_calls": []}}],
+                "model": "m2"}
+
+    client = FrontierClient(primary, transport=_t, fallbacks=[fallback])
+    reply = client.chat([{"role": "user", "content": "hello"}])
+    assert reply.content == "hi from fallback"
+    assert reply.model == "m2"
+
+
+def test_client_raises_last_error_when_all_providers_fail():
+    primary = FrontierConfig(base_url="https://primary.example/v1",
+                             model="m1", api_key="k1", max_retries=0)
+    fallback = FrontierConfig(base_url="https://fallback.example/v1",
+                              model="m2", api_key="k2")
+
+    def _t(url, payload, headers, timeout_s):
+        raise urllib.error.URLError("nope")
+
+    client = FrontierClient(primary, transport=_t, fallbacks=[fallback])
+    with pytest.raises(FrontierError):
+        client.chat([{"role": "user", "content": "hello"}])
