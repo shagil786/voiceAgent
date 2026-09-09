@@ -265,6 +265,32 @@ class FrontierClient:
         raise FrontierError("frontier request failed")  # pragma: no cover
 
 
+# --- cross-provider failover -----------------------------------------------
+
+class FailoverClient:
+    """Tries a list of chat providers in order, moving to the next on any
+    FrontierError. Providers only need a `chat()` matching FrontierClient's
+    signature (e.g. BedrockConverseClient). Re-raises the last error when
+    every provider fails."""
+
+    def __init__(self, providers: list[object]):
+        self.providers = providers
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None,
+             tool_choice: str | dict = "auto", temperature: float = 0.4,
+             max_tokens: int = 512) -> FrontierReply:
+        last: FrontierError | None = None
+        for provider in self.providers:
+            try:
+                return provider.chat(  # type: ignore[attr-defined]
+                    messages, tools=tools, tool_choice=tool_choice,
+                    temperature=temperature, max_tokens=max_tokens)
+            except FrontierError as exc:
+                last = exc
+        assert last is not None
+        raise last
+
+
 # --- tool schemas ----------------------------------------------------------
 
 def tool_schema(name: str, description: str,

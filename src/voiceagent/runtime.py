@@ -23,7 +23,9 @@ from voiceagent.decisionlog import DecisionLog
 from voiceagent.memory import InMemoryMemory
 from voiceagent.orchestrator import Deployment, Orchestrator
 from voiceagent.policy import PolicyEngine, load_policies
+from voiceagent.swarm.bedrock import BedrockConverseClient, config_from_env as bedrock_config_from_env
 from voiceagent.swarm.frontier import (
+    FailoverClient,
     FrontierAgentBridge,
     FrontierClient,
     config_from_env,
@@ -477,9 +479,9 @@ def build_orchestrator(
     unset keeps the memory layer fully inert).
     """
     cfgs = configs_from_env(env)
-    if not cfgs:
+    bedrock_cfg = bedrock_config_from_env(env)
+    if not cfgs and bedrock_cfg is None:
         return None
-    cfg = cfgs[0]
 
     bundle = _resolve_tenant(tenant, env)
     log = decision_log or _audit_log_from_env(env)
@@ -522,7 +524,14 @@ def build_orchestrator(
             if prop.status == _APPROVED and prop.name in registered:
                 proposal_metas[prop.name] = gateway_tool_meta(prop)
     runner = GovernedToolRunner(gateway, policy, decision_log=log)
-    brain = FrontierAgentBridge(FrontierClient(cfgs[0], fallbacks=cfgs[1:]))
+    providers: list[object] = []
+    if cfgs:
+        providers.append(FrontierClient(cfgs[0], fallbacks=cfgs[1:]))
+    if bedrock_cfg is not None:
+        providers.append(BedrockConverseClient(bedrock_cfg))
+    client: object = (FailoverClient(providers) if len(providers) > 1
+                      else providers[0])
+    brain = FrontierAgentBridge(client)  # type: ignore[arg-type]
     dep = deployment or make_deployment(tenant=bundle,
                                         policy_path=policy_path)
     if proposal_metas:
