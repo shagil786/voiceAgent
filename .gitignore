@@ -9,3 +9,4 @@ data/models/
 data/tenants/pizzapal/
 data/deploy/
 .DS_Store
+data/erp/

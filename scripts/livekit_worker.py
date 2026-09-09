@@ -75,6 +75,16 @@ def build_deps():
         logger.info("asr warmup ok")
     except Exception:
         logger.warning("asr warmup failed (continuing)", exc_info=True)
+    # Warm the intent sidecar classifier (two SentenceTransformer models,
+    # ~16s CPU load on the FIRST live turn — the observed 17.5s mute after
+    # the greeting). Load at boot and hand the orchestrator the warm copy.
+    try:
+        from voiceagent.memory import _sidecar_classifier
+        orchestrator._intent_classifier = _sidecar_classifier()
+        logger.info("intent classifier warmup ok")
+    except Exception:
+        logger.warning("intent classifier warmup failed (continuing)",
+                       exc_info=True)
     language = os.environ.get("VOICEAGENT_DEFAULT_LANG") or None
     # Declared greeting (tenant data): instant pickup line, no brain roundtrip.
     greeting = getattr(orchestrator, "greeting", "") or ""
@@ -119,6 +129,16 @@ def main() -> None:
     if deps.get("orchestrator") is None:
         print("ERROR: VOICEAGENT_FRONTIER_URL not set — the LiveKit worker "
               "cannot serve calls without a governed brain. See .env.example.",
+              file=sys.stderr)
+        sys.exit(2)
+
+    if not os.environ.get("VOICEAGENT_ERP_URL") \
+            and not os.environ.get("VOICEAGENT_ALLOW_MOCK_ERP"):
+        print("ERROR: VOICEAGENT_ERP_URL not set — live calls must be backed "
+              "by a REAL ERP backend, never the in-memory MockERP fixture. "
+              "Run scripts/erp_server.py and set VOICEAGENT_ERP_URL in .env "
+              "(or set VOICEAGENT_ALLOW_MOCK_ERP=1 to explicitly serve "
+              "non-real data for offline tests only).",
               file=sys.stderr)
         sys.exit(2)
 

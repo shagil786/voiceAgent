@@ -453,6 +453,17 @@ def _intent_memory_from_env(env: dict[str, str] | None):
 from voiceagent.memory import classifier_exemplars  # noqa: E402
 
 
+def _erp_from_env(env: dict[str, str] | None = None):
+    """Real HTTP ERP backend when VOICEAGENT_ERP_URL is configured; None when
+    unset (callers then keep the explicit offline/test default). Live entry
+    points (the LiveKit worker) REQUIRE the URL — no silent mock serving."""
+    e = os.environ if env is None else env
+    if not e.get("VOICEAGENT_ERP_URL"):
+        return None
+    from voiceagent.erp_http import HttpERP
+    return HttpERP(env=e)
+
+
 def build_orchestrator(
     env: dict[str, str] | None = None,
     policy_path: str = DEFAULT_POLICY_PATH,
@@ -501,7 +512,15 @@ def build_orchestrator(
     specs = None
     if bundle is not None and (bundle.root / "tools.yaml").exists():
         specs = specs_with_yaml_facts(bundle.root / "tools.yaml")
-    gateway = ToolGateway(erp=erp or MockERP(), specs=specs)
+    if erp is None:
+        erp = _erp_from_env(env)
+    if erp is None:
+        logging.getLogger(__name__).warning(
+            "no ERP backend configured (VOICEAGENT_ERP_URL unset) — using "
+            "the in-memory MockERP fixture; data served to the agent is NOT "
+            "real. Set VOICEAGENT_ERP_URL to back calls with a real ERP.")
+        erp = MockERP()
+    gateway = ToolGateway(erp=erp, specs=specs)
     # ADR-005: a bundle may ship approved tool PROPOSALS — declaration-only
     # entries a human approved. Approved proposals compile onto the gateway
     # (spec + binding over the deployment backend) and join the brain's

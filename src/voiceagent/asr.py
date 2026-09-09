@@ -101,6 +101,17 @@ INDIC_CONFORMER_LANGUAGES = frozenset({
 INDIC_ROUTE_LANGS = frozenset({"te", "ta", "bn", "mr", "gu", "kn", "ml", "pa"})
 
 
+def _normalize_lang(lang: str | None) -> str | None:
+    """BCP-47-ish tag -> base language code ("en-US" -> "en", "en_US" -> "en").
+
+    Deployments declare tags (VOICEAGENT_DEFAULT_LANG=en-US); engines take
+    bare codes (faster-whisper expects "en", not "en-US"). None stays None.
+    """
+    if not lang:
+        return None
+    return str(lang).strip().lower().replace("_", "-").split("-")[0] or None
+
+
 def _real_whisper_engine_loader(model: str, device: str, compute_type: str):
     from faster_whisper import WhisperModel
     return WhisperModel(model, device=device, compute_type=compute_type)
@@ -139,7 +150,8 @@ class WhisperASRHandle:
         logging and known-language corroboration. The detected language is
         deliberately NOT used to reroute (see module docstring: whisper
         cannot reliably separate Hinglish from Indic-native audio)."""
-        hint = {"hinglish": "hi"}.get(language, language)
+        hint = {"hinglish": "hi"}.get(_normalize_lang(language) or "",
+                                      _normalize_lang(language))
         engine = self._ensure_engine()
         segments, info = engine.transcribe(audio, language=hint)
         text = " ".join(s.text.strip() for s in segments if s.text.strip()).strip()
@@ -334,23 +346,34 @@ def get_asr_for_language(lang: str | None, engines=None, supported=None,
     transcribe(audio, language) interface.
 
     M5b-3 routing (bake-off data): te/ta/bn/mr/gu/kn/ml/pa -> IndicConformer
-    (te WER 0.348 vs whisper 1.067 / Qwen 1.315, 0.11s warm); everything
-    else — en, hi, hinglish, None, unknown — -> Qwen3-ASR-0.6B (en tie with
-    whisper at 3x speed, hi 0.247 vs 0.423, code-switch output). A native
-    language outside the conformer's card list falls back to the Qwen core
-    with a warning. `engines`/`supported`/`warn` are injectable for tests;
-    default engines are cached per engine kind (process-wide singletons).
+    (te WER 0.348 vs whisper 1.067 / Qwen 1.315, 0.11s warm); hi/hinglish/
+    None/unknown -> Qwen3-ASR-0.6B (hi 0.247 vs 0.423, code-switch output).
+    DECLARED ENGLISH (en, en-US, ...) -> whisper-small with a HARD "en"
+    hint: Qwen's built-in LID is not forceable and misfired Thai on English
+    phone audio (live incident 2026-09) — a deployment that knows its
+    language is English must never pay auto-LID. Tags are normalized
+    ("en-US" -> "en") before routing. A native language outside the
+    conformer's card list falls back to the Qwen core with a warning.
+    `engines`/`supported`/`warn` are injectable for tests; default engines
+    are cached per engine kind (process-wide singletons).
     """
     if engines is None:
-        engines = {"qwen": _get_qwen_asr, "indic": _get_indic_asr}
+        engines = {"qwen": _get_qwen_asr, "indic": _get_indic_asr,
+                   "whisper": _get_whisper_small}
     if supported is None:
         supported = INDIC_CONFORMER_LANGUAGES
     if warn is None:
         warn = lambda msg: logger.warning(msg)  # noqa: E731
-    if lang in INDIC_ROUTE_LANGS:
-        if lang in supported:
+    base = _normalize_lang(lang)
+    if base == "en":
+        # Hard-English path: whisper-small forced to "en" (no auto-LID).
+        # engines["whisper"] may be absent in older test injections — fall
+        # back to the real singleton factory (same as the default map).
+        return engines.get("whisper", _get_whisper_small)()
+    if base in INDIC_ROUTE_LANGS:
+        if base in supported:
             return engines["indic"]()
-        warn(f"language '{lang}' is not supported by "
+        warn(f"language '{base}' is not supported by "
              f"{INDIC_MODEL_ID}; falling back to the Qwen core engine")
     return engines["qwen"]()
 
@@ -362,8 +385,22 @@ def transcribe_wav_routed(path: str, language: str | None = None) -> str:
     auto-detection on the small model (the blind path — never auto-reroutes,
     see module docstring).
 
+    Declared-English deployments (en/en-US/en-IN/...) skip auto-detection
+    entirely: Qwen3-ASR's built-in LID heard Thai on a short real English
+    phone clip and derailed the whole turn into a Thai reply + broken TTS.
+    When the deployment KNOWS English, whisper-small with a hard "en" hint
+    is deterministic (bake-off en WER 0.038) and already warm at boot.
+
     If the routed engine fails (model download/gated repo, load error), the
     turn must not die mid-call: falls back to whisper small with a warning."""
+    if _normalize_lang(language) == "en":
+        try:
+            return _get_whisper_small().transcribe(path, language="en")
+        except Exception as e:
+            logger.warning("whisper-small en path failed for language=%s "
+                           "(%s: %s); falling back to the routed engine",
+                           language, type(e).__name__, e)
+    language = _normalize_lang(language)
     try:
         return get_asr_for_language(language).transcribe(path, language=language)
     except Exception as e:
