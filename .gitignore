@@ -8,3 +8,4 @@ data/models/
 .env
 data/tenants/pizzapal/
 data/deploy/
+.DS_Store
