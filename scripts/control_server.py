@@ -8,11 +8,31 @@ VOICEAGENT_AUDIT_DB / VOICEAGENT_MEMORY_DB / VOICEAGENT_DEPLOY_ROOT.
 Endpoints: GET /api/control/{status,calls,ratings,summary},
 POST /api/control/onboard/{preview,deploy}. See voiceagent.control.
 """
+import os
 import sys
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+
+def load_dotenv(path: Path) -> None:
+    """Tiny stdlib .env loader (repo pattern from live_conversation.py):
+    KEY=*** lines, '#' comments, optional quotes. Never overrides an env var
+    the operator already exported."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 from voiceagent.control import server_from_env  # noqa: E402
 

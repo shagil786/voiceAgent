@@ -342,6 +342,10 @@ class OpenAICompatLLM(FamilyLLM):
             data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
+                # Groq (among others) sits behind Cloudflare bot protection:
+                # urllib's default 'Python-urllib' UA gets 403/1010. A plain
+                # descriptive UA keeps the client first-party.
+                "User-Agent": "voiceagent-llm/1.0",
                 **({"Authorization": f"Bearer {self.api_key}"}
                    if self.api_key else {}),
             },
