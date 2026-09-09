@@ -49,6 +49,28 @@ LEXICON: dict[str, tuple[str, ...]] = {
         "wütend", "wutend", "furchtbar", "unakzeptabel", "lächerlich",
         "lacherlich", "betrogen", "es reicht",
     ),
+    # 2026-09: lexicons for the newly-detected/served languages (pt has a
+    # langid lexicon but no frustration set; te/ta/bn/th are ASR+TTS
+    # supported). Small INITIAL native sets — same standing as the
+    # LLM-authored synthetic lists elsewhere: real-traffic validation
+    # pending, expand via the SentimentStore learned-phrase path.
+    "pt": (
+        "irritado", "furioso", "inaceitável", "inaceitavel", "ridículo",
+        "ridiculo", "golpe", "farto", "basta", "porcaria", "péssimo",
+        "pessimo", "falar com o gerente",
+    ),
+    "te": (
+        "కోపం", "విసుగు", "చెత్త", "మోసం", "చాలు",
+    ),
+    "ta": (
+        "கோபம்", "எரிச்சல்", "மோசம்", "ஏமாற்று", "போதும்",
+    ),
+    "bn": (
+        "রাগ", "বিরক্ত", "বাজে", "ঠকানো", "যথেষ্ট হয়েছে",
+    ),
+    "th": (
+        "โกรธ", "แย่", "หลอกลวง", "ไม่พอใจ", "พอแล้ว",
+    ),
 }
 
 _INTENSITY_BANGS = re.compile(r"[!]{2,}|[?]{2,}")

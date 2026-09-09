@@ -271,22 +271,43 @@ class FailoverClient:
     """Tries a list of chat providers in order, moving to the next on any
     FrontierError. Providers only need a `chat()` matching FrontierClient's
     signature (e.g. BedrockConverseClient). Re-raises the last error when
-    every provider fails."""
+    every provider fails.
 
-    def __init__(self, providers: list[object]):
+    STICKY primary with cooldown: a provider that just failed is skipped
+    for `cooldown_s` (default 60s) so a flapping primary is not retried on
+    every turn — the healthy provider serves until the primary recovers.
+    When every provider is cooling down, all are tried anyway (never refuse
+    service). A success clears that provider's cooldown. `now` is
+    injectable (time.monotonic) so tests never sleep."""
+
+    def __init__(self, providers: list[object], cooldown_s: float = 60.0,
+                 now: Callable[[], float] | None = None):
         self.providers = providers
+        self.cooldown_s = cooldown_s
+        self._now = now or time.monotonic
+        self._cooled_until: dict[int, float] = {}
+
+    def _available(self) -> list[int]:
+        now = self._now()
+        live = [i for i in range(len(self.providers))
+                if self._cooled_until.get(i, 0.0) <= now]
+        return live or list(range(len(self.providers)))
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None,
              tool_choice: str | dict = "auto", temperature: float = 0.4,
              max_tokens: int = 512) -> FrontierReply:
         last: FrontierError | None = None
-        for provider in self.providers:
+        for i in self._available():
             try:
-                return provider.chat(  # type: ignore[attr-defined]
+                reply = self.providers[i].chat(  # type: ignore[attr-defined]
                     messages, tools=tools, tool_choice=tool_choice,
                     temperature=temperature, max_tokens=max_tokens)
             except FrontierError as exc:
                 last = exc
+                self._cooled_until[i] = self._now() + self.cooldown_s
+                continue
+            self._cooled_until.pop(i, None)
+            return reply
         assert last is not None
         raise last
 

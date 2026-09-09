@@ -6,12 +6,15 @@ and interfaces asynchronously with the Deep Cognitive Swarm.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from voiceagent.swarm.arbiter import ArbiterDecision, ConsensusArbiter
 from voiceagent.swarm.blackboard import Blackboard, Proposal
+
+logger = logging.getLogger(__name__)
 
 
 # Natural conversational fillers by intent category (English + Hinglish)
@@ -55,11 +58,27 @@ class VoiceFrontman:
         arbiter: ConsensusArbiter | None = None,
         llm_client: Any | None = None,
         on_sidecar_dispatch: Callable[[dict[str, Any]], Any] | None = None,
+        policy: Any | None = None,
     ):
         self.blackboard = blackboard
         self.arbiter = arbiter or ConsensusArbiter()
         self.llm = llm_client
         self.on_sidecar = on_sidecar_dispatch
+        # Optional governance for sidecar dispatch: when a PolicyEngine is
+        # wired, a sidecar whose `action` (or `type`) is not ALLOWed is
+        # dropped + logged instead of dispatched. None preserves the legacy
+        # demo behavior (dispatch everything). The live call path does not
+        # use the frontman (Orchestrator is the only brain there).
+        self.policy = policy
+
+    def _sidecar_allowed(self, sidecar: dict[str, Any]) -> bool:
+        if self.policy is None:
+            return True
+        from voiceagent.policy import PolicyContext
+        action = str(sidecar.get("action") or sidecar.get("type")
+                     or "sidecar_dispatch")
+        decision = self.policy.evaluate(action, PolicyContext())
+        return decision.verdict == "ALLOW"
 
     def get_filler(self, user_text: str) -> str:
         """Select a natural acoustic filler in < 5ms to maintain voice pacing."""
@@ -92,8 +111,19 @@ class VoiceFrontman:
             default_content="I understand. How else can I assist you today?",
         )
 
-        # Trigger any omnichannel sidecars (WhatsApp, payment link)
+        # Trigger any omnichannel sidecars (WhatsApp, payment link) —
+        # policy-filtered when a PolicyEngine is wired (unwired = legacy
+        # dispatch-everything demo behavior). Blocked sidecars are dropped
+        # from the response list too, so downstream code can never mistake
+        # a veto for a dispatched action.
+        allowed_sidecars = []
         for sidecar in decision.sidecar_actions:
+            if not self._sidecar_allowed(sidecar):
+                logger.warning(
+                    "sidecar %r blocked by policy; not dispatched",
+                    sidecar.get("action") or sidecar.get("type"))
+                continue
+            allowed_sidecars.append(sidecar)
             if self.on_sidecar:
                 if asyncio.iscoroutinefunction(self.on_sidecar):
                     await self.on_sidecar(sidecar)
@@ -106,6 +136,6 @@ class VoiceFrontman:
             filler_text=filler,
             action=decision.action,
             params=decision.params,
-            sidecars_dispatched=decision.sidecar_actions,
+            sidecars_dispatched=allowed_sidecars,
             latency_ms=latency_ms,
         )

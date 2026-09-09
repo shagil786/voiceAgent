@@ -54,6 +54,22 @@ class ConsensusArbiter:
             if comp.metadata.get("sidecar"):
                 sidecars.append(comp.metadata["sidecar"])
 
+        # A compliance veto DISPOSES: nothing below it may execute. The
+        # terminal is the real governed handoff (escalate_to_human), never a
+        # synthetic action — disclosures and vetoes still reach the caller.
+        compliance_vetoes = [v for v in vetoes if v.startswith("COMPLIANCE_VETO")]
+        if compliance_vetoes:
+            spoken = ("This needs a human colleague to proceed. "
+                      + " ".join(disclosures)).strip()
+            return ArbiterDecision(
+                spoken_content=spoken,
+                action="escalate_to_human",
+                params={"reason": "; ".join(compliance_vetoes)},
+                mandatory_disclosures=disclosures,
+                vetoes_applied=vetoes,
+                sidecar_actions=sidecars,
+            )
+
         # 2. Check Risk/Credit Vetoes
         risk_blocked = False
         for r in risk_proposals:
@@ -63,13 +79,24 @@ class ConsensusArbiter:
             if r.metadata.get("sidecar"):
                 sidecars.append(r.metadata["sidecar"])
 
-        # If risk is blocked, we cannot execute sales offers
+        # If risk is blocked, we cannot execute sales offers. The terminal is
+        # the real governed handoff — `risk_escalation` was a synthetic
+        # action no gateway binds, i.e. an escalation dead-end.
         if risk_blocked:
             risk_lead = risk_proposals[0] if risk_proposals else None
             spoken = risk_lead.content if risk_lead else "Your request requires additional risk verification."
+            blocked = next((p for p in sales_proposals if p.action), None)
+            params: dict[str, Any] = {
+                "reason": "; ".join(v for v in vetoes
+                                    if v.startswith("RISK_VETO")),
+            }
+            if blocked is not None:
+                params["blocked_action"] = blocked.action
+                params.update(blocked.params)
             return ArbiterDecision(
                 spoken_content=spoken,
-                action="risk_escalation",
+                action="escalate_to_human",
+                params=params,
                 vetoes_applied=vetoes,
                 mandatory_disclosures=disclosures,
             )
@@ -77,12 +104,28 @@ class ConsensusArbiter:
         # 3. Check Pricing Bounds
         price_adjusted = False
         active_pricing: Proposal | None = None
+        pricing_blocked = False
         for pr in pricing_proposals:
             if pr.veto:
                 vetoes.append(f"PRICING_VETO: {pr.veto_reason or 'below minimum floor'}")
+                pricing_blocked = True
             active_pricing = pr
             if pr.metadata.get("sidecar"):
                 sidecars.append(pr.metadata["sidecar"])
+
+        # A pricing veto blocks the priced action: executing the sale below
+        # the floor would violate the bound the veto exists to enforce.
+        if pricing_blocked:
+            return ArbiterDecision(
+                spoken_content=("This needs a human colleague to proceed. "
+                                + " ".join(disclosures)).strip(),
+                action="escalate_to_human",
+                params={"reason": "; ".join(
+                    v for v in vetoes if v.startswith("PRICING_VETO"))},
+                mandatory_disclosures=disclosures,
+                vetoes_applied=vetoes,
+                sidecar_actions=sidecars,
+            )
 
         # 4. Resolve Primary Action and Content
         winning_proposal: Proposal | None = None

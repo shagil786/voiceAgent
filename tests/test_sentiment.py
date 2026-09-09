@@ -79,3 +79,13 @@ def test_novel_intensity_captured_as_candidate_then_promoted(store):
 
 def test_promote_missing_candidate_returns_false(store):
     assert not store.promote("nonexistent", "en")
+
+
+def test_new_language_frustration_sets():
+    assert detect_frustration("Isto é inaceitável, que porcaria").frustrated
+    assert detect_frustration("నాకు చాలా కోపం వస్తోంది").frustrated
+    assert detect_frustration("எனக்கு மிகவும் கோபம்").frustrated
+    assert detect_frustration("আমার খুব রাগ হচ্ছে, এটা বাজে").frustrated
+    assert detect_frustration("โกรธมาก บริการแย่").frustrated
+    assert not detect_frustration("obrigado pela ajuda").frustrated
+    assert not detect_frustration("ధన్యవాదాలు").frustrated

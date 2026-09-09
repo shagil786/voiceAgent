@@ -66,7 +66,11 @@ def test_arbiter_priority_hierarchy_and_veto():
     dec1 = arbiter.arbitrate([sales_prop, risk_veto])
     assert "RISK_VETO: Credit score below 650" in dec1.vetoes_applied
     assert "additional guarantor" in dec1.spoken_content
-    assert dec1.action == "risk_escalation"
+    # The terminal is the real governed handoff (escalate_to_human), never
+    # the synthetic risk_escalation no gateway binds — with the blocked
+    # proposal's params preserved for the human.
+    assert dec1.action == "escalate_to_human"
+    assert "Credit score below 650" in dec1.params["reason"]
 
     # Case 2: Statutory Compliance Disclosure is strictly appended
     comp_prop = Proposal(
@@ -225,3 +229,78 @@ def test_factory_reads_packs():
     import inspect
     from voiceagent.swarm import specialist as mod
     assert "load_vertical" in inspect.getsource(mod.create_domain_specialist)
+
+
+def test_frontman_sidecars_policy_filtered_when_wired():
+    """With a PolicyEngine wired, undeclared sidecar types are dropped (not
+    dispatched, not listed); declared ones flow. Unwired = legacy dispatch."""
+    import asyncio
+    from voiceagent.policy import PolicyEngine
+    from voiceagent.swarm.blackboard import Blackboard
+    from voiceagent.swarm.frontman import VoiceFrontman
+
+    async def _run(policy):
+        from voiceagent.swarm.agents.closer import CommercialSalesCloser
+        from voiceagent.swarm.agents.compliance import ComplianceWatchdog
+        bb = Blackboard(session_id="call-pol-1")
+        bb.register_agent("closer", CommercialSalesCloser().handle_turn)
+        bb.register_agent("compliance", ComplianceWatchdog().handle_turn)
+        sent = []
+        frontman = VoiceFrontman(
+            blackboard=bb,
+            on_sidecar_dispatch=lambda p: sent.append(p),
+            policy=policy)
+        res = await frontman.handle_turn(
+            "Tell me about available 3BHK apartments in Bandra")
+        return res, sent
+
+    # Empty policy: least-privilege DENY drops every sidecar.
+    res, sent = asyncio.run(_run(PolicyEngine({})))
+    assert sent == [] and res.sidecars_dispatched == []
+    assert res.spoken_text  # the turn itself still answers
+
+    # Declared sidecar type flows.
+    res, sent = asyncio.run(_run(PolicyEngine(
+        {"whatsapp_doc": {"allow": True}})))
+    assert len(sent) >= 1
+    assert [s.get("type") for s in res.sidecars_dispatched] == [
+        s.get("type") for s in sent]
+
+
+def test_compliance_veto_disposes_to_human_handoff():
+    """A compliance veto blocks everything below it: the sales offer must
+    NOT win, disclosures still reach the caller, and the terminal is the
+    governed handoff with the veto reason preserved."""
+    from voiceagent.swarm.arbiter import ConsensusArbiter
+    from voiceagent.swarm.blackboard import (
+        PRIORITY_COMPLIANCE, PRIORITY_SALES, Proposal)
+    arbiter = ConsensusArbiter()
+    sales = Proposal(source_agent="closer", priority=PRIORITY_SALES,
+                     action="book_unit", params={"unit": "A-101"},
+                     content="Your booking is confirmed.")
+    veto = Proposal(source_agent="compliance", priority=PRIORITY_COMPLIANCE,
+                    veto=True, veto_reason="RERA approval pending",
+                    content="MahaRERA registration No. P51800031245.")
+    dec = arbiter.arbitrate([sales, veto])
+    assert dec.action == "escalate_to_human"
+    assert "RERA approval pending" in dec.params["reason"]
+    assert "booking is confirmed" not in dec.spoken_content
+    assert "MahaRERA registration No. P51800031245." in dec.spoken_content
+    assert any(v.startswith("COMPLIANCE_VETO") for v in dec.vetoes_applied)
+
+
+def test_pricing_veto_blocks_below_floor_sale():
+    """A below-floor pricing veto must not let the sale execute at the
+    vetoed price."""
+    from voiceagent.swarm.arbiter import ConsensusArbiter
+    from voiceagent.swarm.blackboard import (
+        PRIORITY_PRICING, PRIORITY_SALES, Proposal)
+    arbiter = ConsensusArbiter()
+    sales = Proposal(source_agent="closer", priority=PRIORITY_SALES,
+                     action="close_deal", content="Deal at 1.40cr.")
+    floor = Proposal(source_agent="negotiator", priority=PRIORITY_PRICING,
+                     veto=True, veto_reason="below hard floor 1.46cr",
+                     content="Floor is 1.46cr.")
+    dec = arbiter.arbitrate([sales, floor])
+    assert dec.action == "escalate_to_human"
+    assert "below hard floor" in dec.params["reason"]

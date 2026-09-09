@@ -265,7 +265,13 @@ def test_unknown_tool_call_is_surfaced_back_not_dropped():
 def test_multi_round_governed_then_readonly_then_final():
     erp = MockERP()
     runner = GovernedToolRunner(ToolGateway(erp=erp),
-                                PolicyEngine({"reschedule": {"allow": True}}))
+                                PolicyEngine({"reschedule": {"allow": True},
+                                              # read-only bridge tools are
+                                              # policy-declared (least
+                                              # privilege): undeclared names
+                                              # never execute past the gate.
+                                              "book_site_visit": {
+                                                  "allow": True}}))
     brain = ScriptedBrain([
         reply(calls=[tc("t1", "reschedule_delivery",
                         order_id="ORD-4821", new_date="2026-09-10")]),
@@ -412,3 +418,27 @@ def test_knowledge_ids_empty_when_deployment_has_no_knowledge():
     orch.deploy(Deployment(name="bare", system_prompt="You are."))
     res = orch.handle_turn("s-bare", "hello")
     assert res.knowledge_ids == []
+
+
+def test_undeclared_bridge_tool_denied_when_runner_wired():
+    """A bridge handler the policy never declared must NOT execute once a
+    runner is wired — least-privilege default closes the ungoverned path
+    (a mis-registered mutating handler stays inert)."""
+    from voiceagent.decisionlog import DecisionLog
+    erp = MockERP()
+    log = DecisionLog()
+    runner = GovernedToolRunner(ToolGateway(erp=erp),
+                                PolicyEngine({"reschedule": {"allow": True}}))
+    brain = ScriptedBrain([
+        reply(calls=[tc("t1", "book_site_visit", listing_id="L1")]),
+        reply("Sorry, I cannot do that."),
+    ])
+    orch = make_orchestrator(brain, runner)
+    orch.decision_log = log
+    result = orch.handle_turn("s-deny", "Can I visit the site?")
+    payload = json.loads(tool_messages(brain.calls[1])[0]["content"])
+    assert payload["ok"] is False and payload["verdict"] == "DENY"
+    assert "least privilege" in payload["reasons"][1]
+    assert any(e.action == "book_site_visit" and e.verdict == "DENY"
+               for e in log.entries())
+    assert result.reply == "Sorry, I cannot do that."

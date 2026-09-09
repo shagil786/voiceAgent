@@ -666,7 +666,38 @@ class Orchestrator:
         if gmeta is not None:
             return self._run_governed(call, gmeta, state, session_id,
                                       frustration)
-        # read-only brain tool: explicit handler execution via the bridge
+        # Read-only brain tool: explicit handler execution via the bridge —
+        # POLICY-GATED (ADR-003): with a runner wired, the tool NAME is
+        # evaluated as its own action and only ALLOW executes. Undeclared
+        # names DENY by least privilege, so operators must declare
+        # read-only tools in policies.yaml — a mis-registered mutating
+        # handler can never execute ungoverned on the live path (the runner
+        # is always wired there). Without a runner (unit tests, demos) the
+        # legacy direct execution applies.
+        if self.runner is not None:
+            ctx = PolicyContext(
+                authenticated=state.profile.authenticated,
+                amount=None,
+                signals={"risk_tier": state.profile.risk_tier,
+                         "session_id": session_id,
+                         "frustrated": frustration.frustrated,
+                         "frustration_level": frustration.level},
+            )
+            decision = self.runner.policy.evaluate(call.name, ctx)
+            if decision.verdict != "ALLOW":
+                reasons = [f"bridge tool '{call.name}' not allowed: "
+                           f"{decision.verdict}"] + list(decision.reasons)
+                if self.decision_log is not None:
+                    self.decision_log.record(DecisionEntry(
+                        ts=now_ts(), conv_id=session_id, action=call.name,
+                        verdict="DENY", reasons=list(reasons),
+                        authenticated=state.profile.authenticated))
+                entry = {"action": call.name, "tool": call.name,
+                         "verdict": "DENY", "ok": False,
+                         "error": reasons[0], "reasons": reasons}
+                return ({"ok": False, "verdict": "DENY",
+                         "reasons": reasons, "error": reasons[0]},
+                        entry, False)
         try:
             value = self.brain.execute_call(call)
             return {"ok": True, "value": value}, None, False

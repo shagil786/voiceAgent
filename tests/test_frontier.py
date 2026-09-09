@@ -379,3 +379,36 @@ def test_client_raises_last_error_when_all_providers_fail():
     client = FrontierClient(primary, transport=_t, fallbacks=[fallback])
     with pytest.raises(FrontierError):
         client.chat([{"role": "user", "content": "hello"}])
+
+
+def test_failover_cools_flapping_primary_then_recovers():
+    """A failed primary is skipped for the cooldown (no per-turn retry
+    storm); a recovered primary serves again after it lapses."""
+    from voiceagent.swarm.frontier import FailoverClient, FrontierError
+    calls = {"primary": 0, "backup": 0}
+    clock = [1000.0]
+
+    class Primary:
+        def chat(self, *a, **k):
+            calls["primary"] += 1
+            if calls["primary"] == 1:
+                raise FrontierError("flap")
+            from voiceagent.swarm.frontier import FrontierReply
+            return FrontierReply(content="primary back", tool_calls=[],
+                                 model="p", latency_s=0.0, raw={})
+
+    class Backup:
+        def chat(self, *a, **k):
+            calls["backup"] += 1
+            from voiceagent.swarm.frontier import FrontierReply
+            return FrontierReply(content="backup", tool_calls=[],
+                                 model="b", latency_s=0.0, raw={})
+
+    chain = FailoverClient([Primary(), Backup()], cooldown_s=60.0,
+                           now=lambda: clock[0])
+    assert chain.chat([]).content == "backup"   # primary flaps -> backup
+    assert chain.chat([]).content == "backup"   # primary cooling: no retry
+    assert calls == {"primary": 1, "backup": 2}
+    clock[0] += 61.0                            # cooldown lapses
+    assert chain.chat([]).content == "primary back"
+    assert calls["primary"] == 2
