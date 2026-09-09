@@ -399,3 +399,26 @@ def test_qwen_handle_accepts_float_array_via_temp_wav():
     handle.transcribe(np.zeros(8000, dtype=np.float32))
     assert isinstance(proc.paths[0], str)
     assert proc.paths[0].endswith(".wav")
+
+
+def test_warmup_declared_route_picks_engine_without_loading(monkeypatch):
+    """warmup_asr_for_language routes like the router (Qwen vs Indic) and
+    returns the normalized code — stubbed engines, no downloads."""
+    warmed = {}
+
+    class _Q:
+        def _ensure_engine(self):
+            warmed["qwen"] = True
+
+    class _I:
+        def _ensure_model(self):
+            warmed["indic"] = True
+
+    monkeypatch.setattr(asr_mod, "_get_qwen_asr", lambda: _Q())
+    monkeypatch.setattr(asr_mod, "_get_indic_asr", lambda: _I())
+    assert asr_mod.warmup_asr_for_language("en-US") == "en"
+    assert warmed == {"qwen": True}
+    warmed.clear()
+    assert asr_mod.warmup_asr_for_language("te") == "te"
+    assert warmed == {"indic": True}
+    assert asr_mod.warmup_asr_for_language(None) is None

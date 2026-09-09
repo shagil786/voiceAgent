@@ -4,8 +4,8 @@ import time
 import pytest
 from types import SimpleNamespace
 from voiceagent.telephony.inbound import (
-    _wait_for_sip_track_async, ensure_room_sample_rate, make_turn_fn,
-    wait_for_sip_track, webhook_handler,
+    _mask_pii, _wait_for_sip_track_async, ensure_room_sample_rate,
+    make_turn_fn, wait_for_sip_track, webhook_handler,
 )
 
 class FakeOrch:
@@ -205,3 +205,61 @@ def test_phone_slot_accumulates_across_turns():
     turn(b"\x00" * 640)   # completes to 10 digits -> annotated
     assert "caller phone digits so far" in seen[1] and "9828379313" in seen[1]
     assert "982" in seen[1]
+
+
+def test_mask_pii_hides_phone_runs_keeps_short_ids():
+    assert _mask_pii("call 9876543210 now") == "call **** now"
+    assert _mask_pii("order ORD-4821 rated 9") == "order ORD-4821 rated 9"
+    assert _mask_pii("+91-9828379313") == "+91-****"
+
+
+def test_turn_fn_brain_outage_serves_handoff_line(caplog):
+    """A dead brain must not kill the call: the handoff line plays and the
+    outage is audited on the turn actions."""
+    import logging
+    from voiceagent.orchestrator import _FALLBACK_REPLY
+    from voiceagent.swarm.frontier import FrontierError
+
+    def dead_brain(sid, text, **kw):
+        raise FrontierError("provider down")
+
+    orch = SimpleNamespace(handle_turn=dead_brain)
+    seen = {}
+    turn = make_turn_fn(orch, "s1", asr=lambda pcm: "hello?",
+                        tts=lambda text: seen.update(spoken=text) or b"wav")
+    with caplog.at_level(logging.WARNING, logger="voiceagent.telephony.inbound"):
+        reply, wav = turn(b"\x00" * 640)
+    assert reply == _FALLBACK_REPLY and wav == b"wav"
+    assert seen["spoken"] == _FALLBACK_REPLY
+    assert any("brain unreachable" in r.message for r in caplog.records)
+
+
+def test_default_tts_uses_reply_voice_on_mismatch(monkeypatch):
+    """Thai reply on an en-declared trunk speaks with the Thai voice (not
+    garbled through the English one); matching replies keep declared."""
+    import wave
+    import voiceagent.telephony.inbound as inbound_mod
+    import voiceagent.tts as tts_mod
+
+    calls = {}
+
+    def fake_speak(text, language=None, out_path=None):
+        calls["language"] = language
+        with wave.open(out_path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(b"\x00\x00" * 160)
+        return out_path
+
+    monkeypatch.setattr(tts_mod, "speak", fake_speak)
+    # Reload the function-level import target: inbound does
+    # `from voiceagent.tts import ... speak` at call time, so patching the
+    # attribute suffices.
+    from voiceagent.telephony.inbound import _default_tts
+    _default_tts("สวัสดีค่ะ ยินดีต้อนรับ", language="en")
+    assert calls["language"] == "th"
+    _default_tts("Your order is confirmed", language="en")
+    assert calls["language"] == "en"
+    _default_tts("Your order is confirmed", language="en-US")
+    assert calls["language"] == "en"  # tags normalize, no mismatch trip

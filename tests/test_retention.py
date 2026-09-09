@@ -57,10 +57,22 @@ def test_memory_erase_and_prune(tmp_path):
     erase_db = tmp_path / "erase.sqlite"
     _memory(erase_db)
     store = IntentMemoryStore(str(erase_db), eager=False)
+    # A distilled prototype (caller text in exemplar JSON) — episode
+    # deletion alone must not leave it behind. Seeded via SQL so the test
+    # never loads embedding models.
+    import sqlite3
+    raw = sqlite3.connect(str(erase_db))
+    raw.execute(
+        "INSERT INTO prototypes (tenant, label, centroid_json,"
+        " exemplars_json, hit_count, last_seen, confidence)"
+        " VALUES ('t1', 'order_status', '[0.1]', '[\"where is my order\"]',"
+        " 1, '2026-01-01T10:00:00', 0.9)")
+    raw.commit()
+    raw.close()
     out = store.erase_session("s-1", tenant="t1")
-    assert out == {"episodes": 1, "ratings": 1}
+    assert out == {"episodes": 1, "ratings": 1, "prototypes": 1}
     assert store.erase_session("s-1", tenant="t1") == {
-        "episodes": 0, "ratings": 0}
+        "episodes": 0, "ratings": 0, "prototypes": 0}
     store.close()
 
 
@@ -74,6 +86,7 @@ def test_purge_and_erase_end_to_end(tmp_path):
            "VOICEAGENT_DATA_RETENTION_DAYS": "30"}
     out = purge_expired(env=env)
     assert out["audit_log"] == 1
+    assert out["memory_ratings"] == 0  # fresh rating survives a 30d window
     out = erase_session("s-new", env=env)
     assert out["audit_log"] == 1 and out["memory_episodes"] == 0
     out = erase_session("s-1", env=env)
@@ -121,3 +134,18 @@ def test_forget_caller_cli(tmp_path):
 
 def test_cutoff_iso_format():
     assert cutoff_iso(30).count("T") == 1 and len(cutoff_iso(30)) == 19
+
+
+def test_ratings_prune_with_episodes(tmp_path):
+    from voiceagent.memory import IntentMemoryStore
+    db = tmp_path / "r.sqlite"
+    _memory(db)  # rating ts = now -> survives; backdate it, then prune
+    import sqlite3
+    raw = sqlite3.connect(str(db))
+    raw.execute("UPDATE ratings SET ts = '2020-01-01T00:00:00'")
+    raw.commit()
+    raw.close()
+    store = IntentMemoryStore(str(db), eager=False)
+    assert store.prune_ratings_before("2026-01-01T00:00:00") == 1
+    assert store.prune_ratings_before("2026-01-01T00:00:00") == 0
+    store.close()

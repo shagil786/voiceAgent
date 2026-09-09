@@ -86,6 +86,22 @@ def build_deps():
         logger.warning("intent classifier warmup failed (continuing)",
                        exc_info=True)
     language = os.environ.get("VOICEAGENT_DEFAULT_LANG") or None
+    # Warm the DECLARED route (Qwen core or Indic conformer, not just the
+    # whisper fallback) + the declared TTS voice, so the first real turn
+    # never pays a multi-GB model load or voice download mid-call.
+    try:
+        from voiceagent.asr import warmup_asr_for_language
+        warmed = warmup_asr_for_language(language)
+        logger.info("declared-asr warmup ok (%s)", warmed)
+    except Exception:
+        logger.warning("declared-asr warmup failed (continuing)",
+                       exc_info=True)
+    try:
+        from voiceagent.tts import get_tts_handle
+        voice = get_tts_handle().warm(language)
+        logger.info("tts warmup ok (%s)", voice)
+    except Exception:
+        logger.warning("tts warmup failed (continuing)", exc_info=True)
     # Declared greeting (tenant data): instant pickup line, no brain roundtrip.
     greeting = getattr(orchestrator, "greeting", "") or ""
     return {"orchestrator": orchestrator, "session_id": None,

@@ -222,3 +222,19 @@ def test_real_synthesis_hi_and_te(tmp_path):
         assert out.exists() and out.stat().st_size > 10_000
         with wave.open(str(out), "rb") as w:
             assert w.getnframes() > 0 and w.getframerate() == 22050
+
+
+def test_handle_warm_preloads_declared_voice(tmp_path):
+    from voiceagent.tts import TTSHandle
+    calls = []
+
+    def loader(name, model_dir):
+        calls.append(name)
+        return object()
+
+    h = TTSHandle(voice_loader=loader, warn=lambda m: None)
+    assert h.warm("en-US") == "en_US-lessac-medium"
+    assert h.warm("th") == "th_TH-tsync2-medium"
+    assert calls == ["en_US-lessac-medium", "th_TH-tsync2-medium"]
+    h.warm("en")  # cached: no second load
+    assert calls == ["en_US-lessac-medium", "th_TH-tsync2-medium"]

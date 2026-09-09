@@ -341,6 +341,20 @@ def warmup_asr() -> None:
     _get_whisper_small()._ensure_engine()
 
 
+def warmup_asr_for_language(lang: str | None) -> str | None:
+    """Warm the engine the router picks for a deployment's DECLARED language
+    (Qwen core or Indic conformer) — warmup_asr covers only the whisper
+    fallback, while the first real turn would otherwise pay the multi-GB
+    model load mid-call. Returns the normalized code. Fail-open: callers
+    wrap this (a warmup failure must never block worker startup)."""
+    base = _normalize_lang(lang)
+    if base in INDIC_ROUTE_LANGS:
+        _get_indic_asr()._ensure_model()
+    elif base is not None:
+        _get_qwen_asr()._ensure_engine()
+    return base
+
+
 def _get_whisper_small() -> WhisperASRHandle:
     """Lazy singleton for whisper small — the M5b-3 failure fallback engine
     (battle-tested, always available offline once cached)."""

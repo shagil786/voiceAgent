@@ -430,7 +430,11 @@ class IntentMemoryStore:
     def erase_session(self, session_id: str,
                       tenant: str | None = None) -> dict[str, int]:
         """Right-to-be-forgotten: delete one session's episodes + ratings
-        (optionally scoped to a tenant). Returns per-table row counts."""
+        (optionally scoped to a tenant). With a tenant, also drops that
+        tenant's prototypes: consolidation distills caller text into
+        prototype exemplars/centroids, so episode deletion alone would
+        leave learned caller data behind (relearned from survivors on the
+        next pass). Returns per-table row counts."""
         out: dict[str, int] = {}
         with self._lock:
             for table in ("episodes", "ratings"):
@@ -443,6 +447,11 @@ class IntentMemoryStore:
                         f"DELETE FROM {table} WHERE session_id = ?"
                         " AND tenant = ?", (session_id, tenant))
                 out[table] = cur.rowcount
+            if tenant is not None:
+                cur = self._conn.execute(
+                    "DELETE FROM prototypes WHERE tenant = ?", (tenant,))
+                out["prototypes"] = cur.rowcount
+                self._version += 1
             self._conn.commit()
         return out
 
@@ -453,6 +462,27 @@ class IntentMemoryStore:
             cur = self._conn.execute(
                 "DELETE FROM episodes WHERE ts < ?", (cutoff_iso,))
             self._conn.commit()
+            return cur.rowcount
+
+    def prune_ratings_before(self, cutoff_iso: str) -> int:
+        """Retention: ratings outlive episodes unless culled here — call
+        alongside prune_episodes_before (retention.purge_expired does)."""
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM ratings WHERE ts < ?", (cutoff_iso,))
+            self._conn.commit()
+            return cur.rowcount
+
+    def delete_prototypes(self, tenant: str) -> int:
+        """Delete a tenant's learned prototypes. Called by erase_session:
+        prototypes distill caller text (exemplars/centroids) that episode
+        deletion alone would leave behind. The next consolidation pass
+        relearns from the surviving episodes."""
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM prototypes WHERE tenant = ?", (tenant,))
+            self._conn.commit()
+            self._version += 1  # live classifier reseeds off this counter
             return cur.rowcount
 
     # -- consolidation --------------------------------------------------------

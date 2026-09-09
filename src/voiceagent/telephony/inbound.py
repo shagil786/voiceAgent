@@ -48,18 +48,50 @@ def _default_asr(pcm16: bytes, language: str | None = None) -> str:
         Path(path).unlink(missing_ok=True)
 
 
+def _mask_pii(text: str) -> str:
+    """Mask phone-shaped digit runs (7+) in log lines — transcripts and the
+    accumulated phone slot flow through logger.info below, and log
+    aggregators are outside retention/erasure reach. Short runs (order ids,
+    amounts, ratings) stay readable for debugging."""
+    return re.sub(r"\d{7,}", "****", text)
+
+
 def _default_tts(text: str, language: str | None = None) -> bytes:
     """Reply text -> 16k-ish mono int16 PCM frames via temp-WAV `speak`.
 
     Reuses the existing file-output `speak()` pattern (synthesize to a temp
     WAV, then read the frames back); no new TTS API is added.
+
+    Voice-match containment: when the trunk declares a language but the
+    brain's reply is detected as another language that HAS a registered
+    voice, the reply speaks in its own voice instead of garbling non-Latin
+    script through the declared voice (the 2026-09 Thai shape). Detection
+    without a voice keeps the declared voice (best effort, warn as usual).
     """
-    from voiceagent.tts import speak
+    from voiceagent.tts import HINGLISH_VOICE_LANG, VOICE_REGISTRY, speak
+
+    effective = language
+    if language:
+        # Tags ("en-US") never match registry keys — normalize to the base
+        # code first (avoids a spurious fallback warning on every turn).
+        declared_base = str(language).strip().lower().replace(
+            "_", "-").split("-")[0] or None
+        if declared_base in VOICE_REGISTRY:
+            effective = declared_base
+        detected = detect_language(text)
+        if detected == "hinglish":
+            detected = HINGLISH_VOICE_LANG  # same mapping as voice_for
+        if (detected != declared_base and detected in VOICE_REGISTRY):
+            logger.warning(
+                "tts voice mismatch: trunk declares %r but reply detects "
+                "as %r — speaking with the reply's voice", language,
+                detected)
+            effective = detected
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         path = tmp.name
     try:
-        speak(text, language=language, out_path=path)
+        speak(text, language=effective, out_path=path)
         with wave.open(path, "rb") as w:
             pcm = w.readframes(w.getnframes())
             rate = w.getframerate()
@@ -157,6 +189,9 @@ def make_turn_fn(
     _re_nonspeech = re.compile(r"^[\W一-鿿ぁ-ゟァ-ヿ]+$")
 
     def turn_fn(pcm16: bytes) -> tuple[str, bytes]:
+        from voiceagent.orchestrator import _FALLBACK_REPLY
+        from voiceagent.swarm.frontier import FrontierError
+
         t0 = time.monotonic()
         user_text = asr_fn(pcm16)
         # ASR silence gate: Qwen hallucinates lone CJK glyphs / punctuation on
@@ -172,10 +207,26 @@ def make_turn_fn(
         cjk_only = (stripped and re.search(r"[一-鿿ぁ-ゟァ-ヿ]", stripped)
                     and not re.search(r"[A-Za-z0-9\u0900-\u097F]", stripped))
         if (len(stripped) <= 2 and _re_nonspeech.match(stripped)) or cjk_only:
-            logger.info("turn: skipped non-speech ASR output %r", user_text[:40])
+            logger.info("turn: skipped non-speech ASR output %r",
+                        _mask_pii(user_text[:40]))
             return "", b""
         t_asr = time.monotonic()
-        result = orchestrator.handle_turn(session_id, user_text)
+        try:
+            result = orchestrator.handle_turn(session_id, user_text)
+        except FrontierError:
+            # Brain outage must not kill the call with dead air: speak the
+            # handoff line (the same graceful degradation as an empty model
+            # reply) and let the room loop continue.
+            logger.warning("turn: brain unreachable — serving handoff line",
+                           exc_info=True)
+
+            class _OutageResult:
+                reply = _FALLBACK_REPLY
+                actions = [{"action": "escalate_to_human",
+                            "verdict": "ESCALATE", "ok": False,
+                            "error": "brain_unreachable"}]
+
+            result = _OutageResult()
         t_brain = time.monotonic()
         reply = result.reply
         wav_out = tts_fn(reply)
@@ -198,14 +249,16 @@ def make_turn_fn(
             else:
                 logger.info(
                     "end_call ALLOW but transcript %r is not a clear "
-                    "farewell — keeping the call alive", raw_text[:100])
+                    "farewell — keeping the call alive",
+                    _mask_pii(raw_text[:100]))
         act_sig = "; ".join(
             f"{a.get('action')}={a.get('verdict')}/{'ok' if a.get('ok') else (a.get('error') or 'err')}"
             for a in acts)
         logger.info(
             "turn: asr=%.2fs brain=%.2fs tts=%.2fs | caller=%r | tools=[%s] | reply[%s]=%r",
             t_asr - t0, t_brain - t_asr, t_tts - t_brain,
-            user_text[:120], act_sig, detect_language(reply), reply[:120],
+            _mask_pii(user_text[:120]), act_sig, detect_language(reply),
+            _mask_pii(reply[:120]),
         )
         return reply, wav_out
 
@@ -431,8 +484,18 @@ async def _run_room_async(room_name: str, config: Any, deps: Any) -> bool:
             logger.info("greeting: declared text (%d chars)", len(declared_greeting))
             greet_text = declared_greeting
         else:
-            greet_result = orchestrator.handle_turn(session_id, GREETING_TRANSCRIPT)
-            greet_text = greet_result.reply
+            from voiceagent.orchestrator import _FALLBACK_REPLY
+            from voiceagent.swarm.frontier import FrontierError
+            try:
+                greet_result = orchestrator.handle_turn(
+                    session_id, GREETING_TRANSCRIPT)
+                greet_text = greet_result.reply
+            except FrontierError:
+                # Brain outage on pickup: greet with the handoff line rather
+                # than dropping the call before it starts.
+                logger.warning("greeting: brain unreachable — serving "
+                               "handoff line", exc_info=True)
+                greet_text = _FALLBACK_REPLY
         greet_wav = tts(greet_text) if tts is not None else _default_tts(
             greet_text, language
         )

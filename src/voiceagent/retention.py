@@ -80,6 +80,7 @@ def purge_expired(*, audit_db: str | None = None,
         store = IntentMemoryStore(memory_db)
         try:
             out["memory_episodes"] = store.prune_episodes_before(cutoff)
+            out["memory_ratings"] = store.prune_ratings_before(cutoff)
         finally:
             store.close()
     return out
@@ -110,6 +111,8 @@ def erase_session(conv_id: str, *,
             counts = store.erase_session(conv_id, tenant=tenant)
             out["memory_episodes"] = counts.get("episodes", 0)
             out["memory_ratings"] = counts.get("ratings", 0)
+            if "prototypes" in counts:
+                out["memory_prototypes"] = counts["prototypes"]
         finally:
             store.close()
     return out

@@ -185,6 +185,16 @@ class TTSHandle:
             self._voices[voice_name] = voice
         return voice
 
+    def warm(self, language: str | None = None) -> str:
+        """Preload the voice for a deployment's declared language (download
+        + load now, not on the first caller). Returns the voice name.
+        Fail-open: callers wrap this."""
+        base = (str(language or "en").strip().lower().replace("_", "-")
+                .split("-")[0] or "en")
+        _, voice_name = self.voice_for(base, "")
+        self._get_voice(voice_name)
+        return voice_name
+
     def speak(self, text: str, language: str | None = None,
               out_path: str | None = None) -> str:
         """Synthesize text to a WAV file (auto-detecting the language when
