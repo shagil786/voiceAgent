@@ -1,0 +1,49 @@
+# Example deployment of tenant-declared domain tools: the clinic's
+# appointment tools arrive as PROPOSALS (committing this file IS the human
+# approval for `approved` entries), not platform code. The platform never
+# learns the word "appointment" — tools.yaml keeps the legacy order-verb
+# surface working, while these proposals execute natively against the
+# clinic backend's GenericBackend surface (get_resource/execute_operation).
+# The backend (ClinicBackend, demo_clinic.py) is injected via
+# build_orchestrator(erp=...) — bindings stay governed either way.
+proposals:
+  - name: fetch_appointment_status
+    description: "Look up the current status of a patient's appointment by its appointment id (e.g. APT-1042)."
+    params: [appointment_id]
+    action: appointment_status
+    operation: __fetch__
+    resource_type: appointment
+    id_param: appointment_id
+    facts: [appointment]
+    side_effects: false
+    risk_class: read
+    provenance: operator
+    status: approved
+  - name: cancel_appointment
+    description: "Cancel a patient's upcoming appointment (params: appointment_id, reason). Visits already underway or completed cannot be cancelled."
+    params: [appointment_id, reason]
+    action: cancel_appointment
+    operation: cancel_appointment
+    resource_type: appointment
+    id_param: appointment_id
+    preconditions:
+      - {field: status, op: not_in, value: [SHIPPED, DELIVERED]}
+    facts: [appointment]
+    side_effects: true
+    risk_class: mutating
+    provenance: operator
+    status: approved
+  - name: reschedule_appointment
+    description: "Reschedule a patient's appointment to a new date (params: appointment_id, new_date)."
+    params: [appointment_id, new_date]
+    action: reschedule_appointment
+    operation: reschedule_appointment
+    resource_type: appointment
+    id_param: appointment_id
+    preconditions:
+      - {field: status, op: not_in, value: [SHIPPED, DELIVERED]}
+    facts: [appointment]
+    side_effects: true
+    risk_class: mutating
+    provenance: operator
+    status: approved

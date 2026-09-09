@@ -70,8 +70,9 @@ import urllib.request
 from typing import Any
 
 from voiceagent.config import RuntimeConfig
+from voiceagent.generic_backend import GenericBackendError
 
-__all__ = ["ErpHttpError", "HttpERP"]
+__all__ = ["ErpHttpError", "HttpERP", "GenericHttpERP"]
 
 
 class ErpHttpError(TimeoutError):
@@ -246,3 +247,77 @@ def _config_from_env(env: dict[str, str] | None) -> RuntimeConfig:
     env keeps tests off os.environ; None reads os.environ)."""
     from voiceagent.config import load_config
     return load_config(env=env)
+
+
+class GenericHttpERP(HttpERP):
+    """GenericBackend over HTTP — the any-org transport.
+
+    Any backend speaking three routes works, whatever its domain nouns:
+        GET  /resources/{type}/{id}   -> object | 404 (None)
+        GET  /resources/{type}?phone= -> array of objects
+        POST /operations/{name} {...} -> object (the tool's value)
+    (POST /handoffs stays the safety-valve route, inherited via
+    record_handoff below.) Auth/timeouts/failure contract are HttpERP's:
+    every failure raises ErpHttpError (governed timeout path). Errors that
+    are programming mistakes, not backend failures — create/update (no HTTP
+    verb in this contract), a non-phone list filter — raise
+    GenericBackendError instead (never a fabricated value either way).
+    """
+
+    def get_resource(self, resource_type: str, resource_id: str) -> dict | None:
+        payload = self._request(
+            "GET", f"/resources/{_id_path(resource_type)}"
+                   f"/{_id_path(resource_id)}")
+        if payload is None:
+            return None
+        if not isinstance(payload, dict):
+            raise ErpHttpError(
+                "erp contract violation: get_resource expected object, got "
+                f"{type(payload).__name__}")
+        return payload
+
+    def list_resources(self, resource_type: str,
+                       filters: dict[str, Any] | None = None) -> list[dict]:
+        filters = filters or {}
+        if set(filters) != {"phone"}:
+            raise GenericBackendError(
+                "list_resources over HTTP supports exactly a 'phone' filter "
+                f"(got {sorted(filters)}) — unbounded listing is not a "
+                "governed operation")
+        payload = self._request(
+            "GET", f"/resources/{_id_path(resource_type)}",
+            query={"phone": _digits(filters["phone"])})
+        if not isinstance(payload, list):
+            raise ErpHttpError(
+                "erp contract violation: list_resources expected array, got "
+                f"{type(payload).__name__}")
+        for entry in payload:
+            if not isinstance(entry, dict):
+                raise ErpHttpError(
+                    "erp contract violation: list_resources entries must be "
+                    "objects")
+        return payload
+
+    def create_resource(self, resource_type: str, data: dict) -> dict:
+        raise GenericBackendError(
+            "create_resource has no HTTP verb in the generic contract: "
+            "records are created by the org's own funnel, not the agent")
+
+    def update_resource(self, resource_type: str, resource_id: str,
+                        data: dict) -> dict:
+        raise GenericBackendError(
+            "update_resource has no HTTP verb in the generic contract: "
+            "mutations go through governed operations, not field writes")
+
+    def execute_operation(self, operation_name: str,
+                          params: dict) -> dict:
+        return self._mutate(
+            "POST", f"/operations/{_id_path(operation_name)}", params or {})
+
+    def record_handoff(self, reason: str) -> dict:
+        return self._mutate("POST", "/handoffs", {"reason": reason})
+
+    def get_lifecycle_states(self, resource_type: str) -> list[str]:
+        raise NotImplementedError(
+            "lifecycle introspection has no HTTP verb yet — preconditions "
+            "stay with the ToolSpecs (the historical model)")

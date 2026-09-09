@@ -5,6 +5,13 @@ Serves the SupportBackend HTTP surface that voiceagent.erp_http.HttpERP
 calls: GET /orders/{id}, GET /customers/{id}/orders, GET /orders?phone=...,
 POST /orders/{id}/cancel|reschedule|refund|return, POST /handoffs.
 
+Plus the GENERIC contract that voiceagent.erp_http.GenericHttpERP speaks
+(the any-org shape — same store, domain-neutral routes):
+GET /resources/{type}/{id}, GET /resources/{type}?phone=...,
+POST /operations/{name} {...params}. This service's demo data IS orders,
+so the generic routes serve type "order"; an org's own service serves its
+own types and operations behind the same three routes.
+
 Storage is SQLite (data/erp/erp.sqlite, gitignored) — real persistence,
 real query semantics, survives restarts. On first boot the store seeds
 from the COMMITTED tenant fixtures (data/tenants/*/erp_fixture.json):
@@ -137,6 +144,81 @@ def _orders_by_phone(conn: sqlite3.Connection, phone: str) -> list[dict]:
     return out
 
 
+# --- order mutations (shared by the legacy /orders routes and the generic
+# /operations routes — one implementation, two route shapes) ------------------
+
+def _op_cancel(conn: sqlite3.Connection, oid: str, body: dict) -> dict:
+    reason = body.get("reason") or ""
+    conn.execute("UPDATE orders SET status = 'CANCELLED',"
+                 " cancel_reason = ? WHERE order_id = ?", (reason, oid))
+    conn.commit()
+    return _row_to_order(conn.execute(
+        "SELECT * FROM orders WHERE order_id = ?", (oid,)).fetchone())
+
+
+def _op_reschedule(conn: sqlite3.Connection, oid: str, body: dict) -> dict:
+    new_date = body.get("new_date") or body.get("delivery_date") or ""
+    conn.execute("UPDATE orders SET delivery_date = ?"
+                 " WHERE order_id = ?", (new_date, oid))
+    conn.commit()
+    return _row_to_order(conn.execute(
+        "SELECT * FROM orders WHERE order_id = ?", (oid,)).fetchone())
+
+
+def _op_refund(conn: sqlite3.Connection, oid: str, body: dict) -> dict:
+    amount = body.get("amount") or 0.0
+    reason = body.get("reason") or ""
+    conn.execute("UPDATE orders SET status = 'REFUND_INITIATED'"
+                 " WHERE order_id = ?", (oid,))
+    rid = f"RF-{conn.execute('SELECT COUNT(*) AS c FROM refunds').fetchone()['c'] + 1:04d}"
+    conn.execute("INSERT INTO refunds (refund_id, order_id, amount,"
+                 " reason, ts) VALUES (?, ?, ?, ?, ?)",
+                 (rid, oid, amount, reason, _now()))
+    conn.commit()
+    return {"order_id": oid, "amount": amount,
+            "reason": reason, "refund_id": rid}
+
+
+def _op_return(conn: sqlite3.Connection, oid: str, body: dict) -> dict:
+    reason = body.get("reason") or ""
+    conn.execute("UPDATE orders SET status = 'RETURN_REQUESTED',"
+                 " return_reason = ? WHERE order_id = ?", (reason, oid))
+    conn.commit()
+    return _row_to_order(conn.execute(
+        "SELECT * FROM orders WHERE order_id = ?", (oid,)).fetchone())
+
+
+def _record_handoff(conn: sqlite3.Connection, reason: str) -> dict:
+    hid = f"HO-{conn.execute('SELECT COUNT(*) AS c FROM handoffs').fetchone()['c'] + 1:04d}"
+    conn.execute("INSERT INTO handoffs (handoff_id, reason, status, ts)"
+                 " VALUES (?, ?, 'OPEN', ?)", (hid, reason, _now()))
+    conn.commit()
+    return {"handoff_id": hid, "reason": reason, "status": "OPEN"}
+
+
+# Legacy action name -> mutation helper (the /orders/{id}/{action} shape).
+_LEGACY_ORDER_ACTIONS = {
+    "cancel": _op_cancel,
+    "reschedule": _op_reschedule,
+    "refund": _op_refund,
+    "return": _op_return,
+}
+
+# Generic operation name -> (resource type, id-param, mutation helper).
+# This service's demo data IS orders, so the generic contract is served for
+# type "order" here; an org's own service registers its own types and ops
+# behind the same three routes (the mechanism is generic, the data is not).
+_GENERIC_OPERATIONS = {
+    "cancel_order": ("order", "order_id", _op_cancel),
+    "reschedule_delivery": ("order", "order_id", _op_reschedule),
+    "initiate_refund": ("order", "order_id", _op_refund),
+    "mark_return": ("order", "order_id", _op_return),
+    "record_handoff": (None, "reason", None),
+}
+
+_GENERIC_RESOURCE_TYPES = frozenset({"order"})
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "voiceagent-erp/1"
 
@@ -170,6 +252,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parts and parts[0] == "health":
                 return self._send(200, {"ok": True})
+            if parts[:1] == ["resources"] and len(parts) == 2:
+                # Generic read-all: GET /resources/{type}?phone=...
+                if parts[1] not in _GENERIC_RESOURCE_TYPES:
+                    return self._send(404, {"error": "unknown resource"})
+                phone = (query.get("phone") or [""])[0]
+                return self._send(200, _orders_by_phone(conn, phone))
+            if parts[:1] == ["resources"] and len(parts) == 3:
+                # Generic read-one: GET /resources/{type}/{id}
+                if parts[1] not in _GENERIC_RESOURCE_TYPES:
+                    return self._send(404, {"error": "unknown resource"})
+                row = _find_order(conn, parts[2])
+                if row is None:
+                    return self._send(404, {"error": "not found"})
+                return self._send(200, _row_to_order(row))
             if parts[:1] == ["orders"] and len(parts) == 1:
                 phone = (query.get("phone") or [""])[0]
                 return self._send(200, _orders_by_phone(conn, phone))
@@ -195,13 +291,22 @@ class Handler(BaseHTTPRequestHandler):
         conn = _connect(DB_PATH)
         try:
             if parts[:1] == ["handoffs"] and len(parts) == 1:
-                reason = body.get("reason") or ""
-                hid = f"HO-{conn.execute('SELECT COUNT(*) AS c FROM handoffs').fetchone()['c'] + 1:04d}"
-                conn.execute("INSERT INTO handoffs (handoff_id, reason, status, ts)"
-                             " VALUES (?, ?, 'OPEN', ?)", (hid, reason, _now()))
-                conn.commit()
-                return self._send(200, {"handoff_id": hid, "reason": reason,
-                                        "status": "OPEN"})
+                return self._send(
+                    200, _record_handoff(conn, body.get("reason") or ""))
+            if parts[:1] == ["operations"] and len(parts) == 2:
+                # Generic mutation: POST /operations/{name} {...params}
+                entry = _GENERIC_OPERATIONS.get(parts[1])
+                if entry is None:
+                    return self._send(404, {"error": f"no operation {parts[1]}"})
+                rtype, id_param, helper = entry
+                if helper is None:  # record_handoff: no resource lookup
+                    return self._send(
+                        200, _record_handoff(conn, body.get("reason") or ""))
+                rid = body.get(id_param) or ""
+                row = _find_order(conn, rid) if rtype == "order" else None
+                if row is None:
+                    return self._send(404, {"error": f"{rtype} not found"})
+                return self._send(200, helper(conn, row["order_id"], body))
             if parts[:1] == ["orders"] and len(parts) == 2:
                 action = None
             elif parts[:1] == ["orders"] and len(parts) == 3:
@@ -212,45 +317,10 @@ class Handler(BaseHTTPRequestHandler):
             if row is None:
                 return self._send(404, {"error": "order not found"})
             oid = row["order_id"]
-            if action == "cancel":
-                reason = body.get("reason") or ""
-                conn.execute("UPDATE orders SET status = 'CANCELLED',"
-                             " cancel_reason = ? WHERE order_id = ?",
-                             (reason, oid))
-                conn.commit()
-                return self._send(200, _row_to_order(
-                    conn.execute("SELECT * FROM orders WHERE order_id = ?",
-                                 (oid,)).fetchone()))
-            if action == "reschedule":
-                new_date = body.get("new_date") or body.get("delivery_date") or ""
-                conn.execute("UPDATE orders SET delivery_date = ?"
-                             " WHERE order_id = ?", (new_date, oid))
-                conn.commit()
-                return self._send(200, _row_to_order(
-                    conn.execute("SELECT * FROM orders WHERE order_id = ?",
-                                 (oid,)).fetchone()))
-            if action == "refund":
-                amount = body.get("amount") or 0.0
-                reason = body.get("reason") or ""
-                conn.execute("UPDATE orders SET status = 'REFUND_INITIATED'"
-                             " WHERE order_id = ?", (oid,))
-                rid = f"RF-{conn.execute('SELECT COUNT(*) AS c FROM refunds').fetchone()['c'] + 1:04d}"
-                conn.execute("INSERT INTO refunds (refund_id, order_id, amount,"
-                             " reason, ts) VALUES (?, ?, ?, ?, ?)",
-                             (rid, oid, amount, reason, _now()))
-                conn.commit()
-                return self._send(200, {"order_id": oid, "amount": amount,
-                                        "reason": reason, "refund_id": rid})
-            if action == "return":
-                reason = body.get("reason") or ""
-                conn.execute("UPDATE orders SET status = 'RETURN_REQUESTED',"
-                             " return_reason = ? WHERE order_id = ?",
-                             (reason, oid))
-                conn.commit()
-                return self._send(200, _row_to_order(
-                    conn.execute("SELECT * FROM orders WHERE order_id = ?",
-                                 (oid,)).fetchone()))
-            return self._send(404, {"error": f"no action {action}"})
+            helper = _LEGACY_ORDER_ACTIONS.get(action or "")
+            if helper is None:
+                return self._send(404, {"error": f"no action {action}"})
+            return self._send(200, helper(conn, oid, body))
         finally:
             conn.close()
 

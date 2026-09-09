@@ -246,6 +246,50 @@ def test_known_order_immediate_success_unchanged():
     assert not res.escalated
 
 
+def test_ladder_serves_domain_resource_slots():
+    """ADR-004: the ladder is not order-specific — a domain tool declaring
+    ToolSpec.resource=(type, id_param, getter) gets the same bounded ladder
+    on its own id slot and `{type}_not_found` prefix, with zero platform
+    changes per tenant."""
+    from voiceagent.tools import ToolSpec
+    specs = {"fetch_booking_status": ToolSpec(
+        params=("booking_id",), action="booking_status",
+        description="Look up a service booking.",
+        resource=("booking", "booking_id", lambda erp, rid: None))}
+    gw = ToolGateway(erp=MockERP(), specs=specs)
+    gw.register_binding("fetch_booking_status",
+                        lambda erp, p: {"booking_id": p["booking_id"]})
+    policy = {"booking_status": {"allow": True},
+              "escalate_to_human": {"allow": True},
+              "not_found_ladder": {"max_retries": 1, "offer_alternates": False,
+                                   "alternates": []}}
+    runner = GovernedToolRunner(gw, PolicyEngine(policy))
+    brain = ScriptedBrain([reply(calls=[tc("t1", "fetch_booking_status",
+                                          booking_id="BK-9999")])])
+    orch = Orchestrator(brain=FrontierAgentBridge(brain), runner=runner,
+                        memory=InMemoryMemory())
+    orch.deploy(Deployment(name="ladder-generic", system_prompt="x",
+                           gateway_tools={
+                               "fetch_booking_status":
+                                   {"action": "booking_status"},
+                               "escalate_to_human":
+                                   {"action": "escalate_to_human"}}))
+    res = orch.handle_turn("s-dom-1", "Where is my booking BK-9999?",
+                           profile=CallerProfile(authenticated=True))
+    assert res.actions[0]["error"].startswith("booking_not_found")
+    assert "BK-9999" in res.reply and "confirm" in res.reply.lower()
+    assert not res.escalated
+
+
+def test_ladder_slot_resolution_prefers_legacy_order():
+    orch = make_ladder_orch(ScriptedBrain([]), LADDER_POLICY)
+    slot, prefix, instruction = orch._ladder_slot(
+        "fetch_order_status", {"order_id": "X"})
+    assert (slot, prefix) == ("order_id", "order_not_found")
+    assert "do not invent an order" in instruction
+    assert orch._ladder_slot("unknown_tool", {}) == (None, None, "")
+
+
 def test_no_ladder_declared_preserves_current_single_miss_behavior():
     erp = MockERP()
     brain = ScriptedBrain([

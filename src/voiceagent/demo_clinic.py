@@ -47,6 +47,9 @@ from __future__ import annotations
 
 import copy
 import time
+from typing import Any
+
+from voiceagent.generic_backend import GenericBackendError
 
 # The seeded appointment records (clinic data lives HERE, in the adapter —
 # the same placement discipline as MockERP's bundle fixture: backend records
@@ -294,3 +297,119 @@ class ClinicBackend:
         self.pages.append(page)
         return {"handed_off": True, "paged": "on-call clinic staff",
                 "reason": reason}
+
+    # --- native GenericBackend surface (ADR-004 forward path) ------------------
+    # The SAME appointments, addressed in clinic nouns: tenants that declare
+    # appointment tools (proposals.yaml) execute here, never through the
+    # order-verb mapping above. Legacy order verbs stay untouched.
+
+    _RESOURCE = "appointment"
+
+    @staticmethod
+    def _phone_digits(value: Any) -> str:
+        return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+    def get_resource(self, resource_type: str, resource_id: str) -> dict | None:
+        """Appointment lookup by id, loose spelling ('apt1042' ~ 'APT-1042').
+        None for absent ids — the gateway's `{type}_not_found` ladder uses it.
+        """
+        self._check_live()
+        if resource_type != self._RESOURCE:
+            raise GenericBackendError(
+                f"unsupported resource_type {resource_type!r} "
+                f"(expected 'appointment')")
+        want = _apt_shape(resource_id)
+        for k, v in self.appointments.items():
+            if _apt_shape(k) == want:
+                return copy.deepcopy(v)
+        return None
+
+    def list_resources(self, resource_type: str,
+                       filters: dict[str, Any] | None = None) -> list[dict]:
+        """Appointments for the phone number they were booked with (callers
+        rarely know their appointment id)."""
+        self._check_live()
+        if resource_type != self._RESOURCE:
+            raise GenericBackendError(
+                f"unsupported resource_type {resource_type!r} "
+                f"(expected 'appointment')")
+        want = self._phone_digits((filters or {}).get("phone", ""))
+        if not want:
+            raise GenericBackendError(
+                "list_resources('appointment') requires a 'phone' filter — "
+                "unbounded appointment listing is not a governed operation")
+        out = []
+        for p in self.patients.values():
+            have = self._phone_digits(p.get("phone", ""))
+            if have and (have == want or have.endswith(want)
+                         or want.endswith(have)):
+                for aid in p.get("appointments", []):
+                    a = self.appointments.get(aid)
+                    if a:
+                        out.append(copy.deepcopy(a))
+        return out
+
+    def create_resource(self, resource_type: str, data: dict) -> dict:
+        raise GenericBackendError(
+            "create_resource is not supported: appointments are booked "
+            "through the clinic's own scheduling flow, not the support agent")
+
+    def update_resource(self, resource_type: str, resource_id: str,
+                        data: dict) -> dict:
+        raise GenericBackendError(
+            "update_resource is not supported: appointment mutations go "
+            "through governed operations (cancel/reschedule), not free-form "
+            "field writes")
+
+    def execute_operation(self, operation_name: str,
+                          params: dict) -> dict:
+        """Governed appointment mutations in clinic nouns. Unknown ids raise
+        `appointment_not_found` (the ladder's error shape); disallowed
+        states raise — the gateway preconditions usually block first."""
+        self._check_live()
+        params = params or {}
+        if operation_name == "record_handoff":
+            return self.record_handoff(params.get("reason", ""))
+        appointment = self.get_resource(
+            self._RESOURCE, params.get("appointment_id", ""))
+        if appointment is None:
+            raise GenericBackendError(
+                f"appointment_not_found: {params.get('appointment_id')}")
+        if operation_name == "cancel_appointment":
+            if appointment["status"] in ("SHIPPED", "DELIVERED"):
+                raise GenericBackendError(
+                    f"cannot cancel a {appointment['status']} appointment "
+                    f"(visit underway or completed)")
+            appointment["status"] = "CANCELLED"
+            appointment["cancel_reason"] = params.get("reason", "")
+            self.appointments[appointment["appointment_id"]] = appointment
+            return copy.deepcopy(appointment)
+        if operation_name == "reschedule_appointment":
+            if appointment["status"] in ("SHIPPED", "DELIVERED"):
+                raise GenericBackendError(
+                    f"cannot reschedule a {appointment['status']} appointment")
+            appointment["appointment_date"] = params["new_date"]
+            self.appointments[appointment["appointment_id"]] = appointment
+            return copy.deepcopy(appointment)
+        if operation_name == "billing_adjustment":
+            appointment["status"] = "REFUND_INITIATED"
+            self.appointments[appointment["appointment_id"]] = appointment
+            adjustment = {"appointment_id": appointment["appointment_id"],
+                          "amount": float(params.get("amount", 0.0)),
+                          "reason": params.get("reason", ""),
+                          "adjustment_id": f"ADJ-{len(self.adjustments) + 1:04d}"}
+            self.adjustments.append(adjustment)
+            return adjustment
+        raise GenericBackendError(
+            f"unsupported operation {operation_name!r} (cancel_appointment, "
+            f"reschedule_appointment, billing_adjustment, record_handoff)")
+
+    def get_lifecycle_states(self, resource_type: str) -> list[str]:
+        """States a clinic appointment moves through (the generic status
+        words the backend stores — the same data contract the gateway
+        preconditions evaluate)."""
+        if resource_type != self._RESOURCE:
+            raise GenericBackendError(
+                f"unsupported resource_type {resource_type!r}")
+        return ["CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED",
+                "RETURN_REQUESTED", "REFUND_INITIATED"]

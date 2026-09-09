@@ -598,36 +598,64 @@ class Orchestrator:
         is NOT rendered here: exhaustion annotates the fed-back payload so
         the brain proposes the governed escalate_to_human (policy verdict,
         DecisionLog audit) as today — escalation stays the mandatory
-        terminal, never a bot loop, never an invented order."""
+        terminal, never a bot loop, never an invented resource. The slot is
+        generic: classic order tools resolve the legacy `order_id` slot with
+        byte-identical behavior; ADR-004 domain tools (ToolSpec.resource =
+        (type, id_param, getter), e.g. a booking lookup) resolve their own
+        id slot and `{type}_not_found` prefix — a new tenant's resources get
+        the ladder with zero platform changes."""
         engine = (getattr(self.runner, "policy", None)
                   if self.runner is not None else None)
         ladder = engine.not_found_ladder() if engine is not None else None
         if ladder is None:
             return None
         args = call.arguments or {}
-        if "order_id" not in args:
+        slot, prefix, instruction = self._ladder_slot(call.name, args)
+        if slot is None or prefix is None:
             return None                       # only slot-bearing lookups
-        slot = "order_id"
         if payload.get("ok"):
             # Slot FILLED: a successful lookup resets the probe counter.
             self._dialogue.found(session_id, slot)
             return None
         error = payload.get("error")
-        if not (isinstance(error, str) and error.startswith("order_not_found")):
+        if not (isinstance(error, str) and error.startswith(prefix)):
             return None
         directive = self._dialogue.not_found(
-            session_id, slot, value=str(args.get("order_id") or ""),
+            session_id, slot, value=str(args.get(slot) or ""),
             max_retries=ladder["max_retries"],
             alternates=(ladder["alternates"]
                         if ladder["offer_alternates"] else []))
         if directive.kind == "escalate":
             payload["not_found_ladder_exhausted"] = True
-            payload["instruction"] = (
-                "The order id could not be resolved after repeated "
-                "clarify attempts — propose escalate_to_human with a short "
-                "reason now; do not invent an order.")
+            payload["instruction"] = instruction
             return None
         return render_directive(directive)
+
+    def _ladder_slot(self, tool_name: str,
+                     args: dict) -> tuple[str | None, str | None, str]:
+        """Resolve (slot, error-prefix, exhaustion-instruction) for a tool.
+
+        Legacy order tools keep byte-identical behavior (slot `order_id`,
+        `order_not_found`, the pinned instruction). Domain tools carrying a
+        ToolSpec.resource resolve (id_param, `{type}_not_found`, a generic
+        instruction naming the resource). (None, None, "") when the call
+        carries no id slot — the ladder stays inert."""
+        if "order_id" in args:
+            return ("order_id", "order_not_found",
+                    "The order id could not be resolved after repeated "
+                    "clarify attempts — propose escalate_to_human with a short "
+                    "reason now; do not invent an order.")
+        gateway = getattr(self.runner, "gateway", None)
+        specs = getattr(gateway, "specs", None) or {}
+        resource_spec = getattr(specs.get(tool_name), "resource", None)
+        if resource_spec is not None and resource_spec[1] in args:
+            rtype, id_param = resource_spec[0], resource_spec[1]
+            label = id_param.replace("_", " ")
+            return (id_param, f"{rtype}_not_found",
+                    f"The {label} could not be resolved after repeated "
+                    f"clarify attempts — propose escalate_to_human with a "
+                    f"short reason now; do not invent {label}.")
+        return None, None, ""
 
     def _dispatch_tool_call(self, call: FrontierToolCall, state: BlackboardState,
                             session_id: str,

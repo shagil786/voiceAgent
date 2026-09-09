@@ -330,3 +330,75 @@ def test_scripted_brain_governed_appointment_status_turn(monkeypatch):
     entry = log.entries()[-1]
     assert entry.verdict == "ALLOW" and entry.action == "appointment_status"
     assert entry.conv_id == "s-clinic" and entry.authenticated is True
+
+
+# --- 6. native appointment tools: bundle-declared, zero order-words  --------
+# The proposals.yaml tools compile onto the gateway and execute against the
+# clinic backend's GenericBackend surface — the same appointments, addressed
+# in clinic nouns, with no platform code involved.
+
+def test_native_appointment_tools_compile_from_bundle():
+    import os
+    os.chdir(ROOT)  # bare bundle names resolve under data/tenants/
+    orch = build_orchestrator(env=dict(FRONTIER_URL),
+                              tenant="example-clinic",
+                              erp=ClinicBackend())
+    schema = {s["function"]["name"]: s["function"]
+              for s in orch.brain.tool_schemas()}
+    for tool in ("fetch_appointment_status", "cancel_appointment",
+                 "reschedule_appointment"):
+        assert tool in schema, f"{tool} must be proposeable from the bundle"
+        assert "appointment" in schema[tool]["description"]
+    assert "order" not in schema["fetch_appointment_status"]["description"]
+
+
+def test_native_appointment_status_turn_no_order_words():
+    import os
+    os.chdir(ROOT)
+    orch = build_orchestrator(env=dict(FRONTIER_URL),
+                              tenant="example-clinic",
+                              erp=ClinicBackend(), decision_log=DecisionLog())
+    orch.brain.client = ScriptedBrain([
+        reply(calls=[tc("t1", "fetch_appointment_status",
+                        appointment_id="APT-1042")]),
+        reply("Your appointment APT-1042 with Dr. Meera Iyer is confirmed."),
+    ])
+    res = orch.handle_turn("s-clinic-native",
+                           "what is the status of my appointment APT-1042?",
+                           authenticated=True)
+    assert res.actions and res.actions[0]["tool"] == "fetch_appointment_status"
+    assert res.actions[0]["action"] == "appointment_status"
+    assert res.actions[0]["verdict"] == "ALLOW" and res.actions[0]["ok"]
+    assert res.actions[0]["value"]["patient_name"] == "Ravi Kumar"
+
+
+def test_native_appointment_not_found_uses_generic_ladder_error():
+    import os
+    os.chdir(ROOT)
+    orch = build_orchestrator(env=dict(FRONTIER_URL),
+                              tenant="example-clinic",
+                              erp=ClinicBackend(), decision_log=DecisionLog())
+    orch.brain.client = ScriptedBrain([
+        reply(calls=[tc("t1", "fetch_appointment_status",
+                        appointment_id="APT-9999")]),
+        reply("I could not find that appointment."),
+    ])
+    res = orch.handle_turn("s-clinic-miss", "status of APT-9999?",
+                           authenticated=True)
+    assert res.actions[0]["error"].startswith("appointment_not_found")
+
+
+def test_native_cancel_appointment_executes_and_blocks_completed():
+    be = ClinicBackend()
+    assert be.execute_operation(
+        "cancel_appointment",
+        {"appointment_id": "APT-1042", "reason": "plans changed"})["status"] \
+        == "CANCELLED"
+    assert be.get_resource("appointment", "APT-1042")["status"] == "CANCELLED"
+    assert "CONFIRMED" in be.get_lifecycle_states("appointment")
+    import pytest
+    from voiceagent.generic_backend import GenericBackendError
+    with pytest.raises(GenericBackendError):
+        be.execute_operation(
+            "cancel_appointment",
+            {"appointment_id": "APT-1052", "reason": "x"})  # DELIVERED
