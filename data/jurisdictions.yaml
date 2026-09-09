@@ -1,0 +1,26 @@
+# Outbound calling windows + DND seeds by jurisdiction.
+#
+# This is OPERATOR DATA, not platform code: adding a jurisdiction is a YAML
+# edit after verifying local law — never a code change. Entries the platform
+# has actually operated under carry their source (TRAI, TCPA); anything
+# without a source must not be added.
+#
+# Schema per jurisdiction:
+#   window_start / window_end: local-time "HH:MM" calling window bounds.
+#   source: regulation the window was verified against (required).
+#   seed_dnd: known-registered demo numbers (masked); production deployments
+#     supply the real registry via dnd_numbers= (seeds never replace it).
+jurisdictions:
+  IN:
+    window_start: "09:00"
+    window_end: "20:00"
+    source: "TRAI (Telecom Commercial Communications Customer Preference Regulations)"
+    seed_dnd:
+      - "+919****9999"
+      - "+919****0000"
+  US:
+    window_start: "09:00"
+    window_end: "20:00"
+    source: "TCPA (Telephone Consumer Protection Act)"
+    seed_dnd:
+      - "+180****0199"

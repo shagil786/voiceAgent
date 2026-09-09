@@ -9,11 +9,58 @@ import datetime
 import logging
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Coroutine
 
 from voiceagent.outbound.amd import CallParty, Sub600msAMD
 
 logger = logging.getLogger(__name__)
+
+# Repo root anchor (src/voiceagent/outbound/ -> parents[3]) so the
+# jurisdiction data file resolves regardless of process cwd.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_JURISDICTIONS_FILE = _REPO_ROOT / "data" / "jurisdictions.yaml"
+
+_FALLBACK_WINDOW = (datetime.time(9, 0), datetime.time(20, 0))
+
+
+def _parse_hhmm(raw: object) -> datetime.time | None:
+    """'HH:MM' -> time, None when malformed (never raise on operator data)."""
+    try:
+        hour, _, minute = str(raw).partition(":")
+        return datetime.time(int(hour), int(minute))
+    except (ValueError, TypeError):
+        return None
+
+
+def _jurisdiction_file_data() -> tuple[dict, dict]:
+    """(windows, seeds) from data/jurisdictions.yaml — ({}, {}) on any
+    failure (missing file, bad YAML, bad rows): operator data must never
+    take the dialer down; the verified code table below stays the floor."""
+    try:
+        import yaml
+        raw = yaml.safe_load(_JURISDICTIONS_FILE.read_text(
+            encoding="utf-8")) or {}
+    except Exception:
+        logger.warning("jurisdictions.yaml unreadable; using built-in "
+                       "verified table only", exc_info=True)
+        return {}, {}
+    if not isinstance(raw, dict):
+        return {}, {}
+    windows, seeds = {}, {}
+    for code, entry in (raw.get("jurisdictions") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        start = _parse_hhmm(entry.get("window_start"))
+        end = _parse_hhmm(entry.get("window_end"))
+        if start is None or end is None:
+            logger.warning("jurisdictions.yaml: %r has a malformed window; "
+                           "skipped", code)
+            continue
+        windows[str(code)] = (start, end)
+        seed = entry.get("seed_dnd") or []
+        seeds[str(code)] = {str(n) for n in seed if n}
+    return windows, seeds
 
 
 @dataclass
@@ -34,11 +81,13 @@ class RegulatoryDNDScrubber:
 
     Jurisdiction model: calling windows and seed DND lists are per-jurisdiction
     CONFIGURATION, not code. CALLING_WINDOWS carries the windows this platform
-    has actually operated under (IN TRAI / US TCPA — both 09:00-20:00 local);
-    any other jurisdiction MUST be configured explicitly by the operator after
-    verifying local law — the platform deliberately does NOT invent windows
-    for jurisdictions it has not verified. Default behavior (no country_code)
-    is byte-identical to the pre-configuration behavior."""
+    has actually operated under (IN TRAI / US TCPA — both 09:00-20:00 local),
+    EXTENDED by data/jurisdictions.yaml (file wins): operators add a
+    jurisdiction with a YAML edit after verifying local law — never code.
+    Any other jurisdiction MUST be configured explicitly by the operator;
+    the platform deliberately does NOT invent windows for jurisdictions it
+    has not verified. Default behavior (no country_code) is byte-identical
+    to the pre-configuration behavior."""
 
     # Jurisdiction code -> (window_start, window_end), local customer time.
     # ONLY verified jurisdictions belong in this table. TRAI (India) and
@@ -56,6 +105,23 @@ class RegulatoryDNDScrubber:
         "US": {"+18005550199"},
     }
 
+    @classmethod
+    def _windows(cls) -> dict[str, tuple[datetime.time, datetime.time]]:
+        """Verified code table, extended by data/jurisdictions.yaml (file
+        wins on conflict — the operator verified local law after the code
+        shipped). Operators add jurisdictions with a YAML edit, never code."""
+        file_windows, _ = _jurisdiction_file_data()
+        return {**cls.CALLING_WINDOWS, **file_windows}
+
+    @classmethod
+    def _seeds(cls) -> dict[str, set[str]]:
+        """Seed DND merged the same way (file extends the code seeds)."""
+        _, file_seeds = _jurisdiction_file_data()
+        merged = {k: set(v) for k, v in cls.SEED_DND.items()}
+        for code, seed in file_seeds.items():
+            merged.setdefault(code, set()).update(seed)
+        return merged
+
     def __init__(
         self,
         dnd_numbers: set[str] | None = None,
@@ -71,7 +137,7 @@ class RegulatoryDNDScrubber:
         if dnd_numbers is not None:
             self._dnd_registry: set[str] = set(dnd_numbers)
         elif country_code:
-            seeds = self.SEED_DND.get(country_code, set())
+            seeds = self._seeds().get(country_code, set())
             self._dnd_registry = set(seeds)
             if not seeds:
                 logger.warning(
@@ -86,14 +152,13 @@ class RegulatoryDNDScrubber:
             # Partial override: fill the missing bound from the jurisdiction
             # table (or the historical default), so callers can shift just one
             # bound without silently dropping the other.
-            base = self.CALLING_WINDOWS.get(
-                country_code or "", (datetime.time(9, 0), datetime.time(20, 0)))
+            base = self._windows().get(country_code or "", _FALLBACK_WINDOW)
             self._window = (
                 allowed_start if allowed_start is not None else base[0],
                 allowed_end if allowed_end is not None else base[1],
             )
-        elif country_code in self.CALLING_WINDOWS:
-            self._window = self.CALLING_WINDOWS[country_code]
+        elif country_code in self._windows():
+            self._window = self._windows()[country_code]
         else:
             # Historical default (IN/US share it): 09:00-20:00 local.
             self._window = (datetime.time(9, 0), datetime.time(20, 0))

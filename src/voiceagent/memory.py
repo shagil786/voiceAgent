@@ -427,6 +427,34 @@ class IntentMemoryStore:
                 (f" | feedback:{rating:g}", tenant, session_id))
             self._conn.commit()
 
+    def erase_session(self, session_id: str,
+                      tenant: str | None = None) -> dict[str, int]:
+        """Right-to-be-forgotten: delete one session's episodes + ratings
+        (optionally scoped to a tenant). Returns per-table row counts."""
+        out: dict[str, int] = {}
+        with self._lock:
+            for table in ("episodes", "ratings"):
+                if tenant is None:
+                    cur = self._conn.execute(
+                        f"DELETE FROM {table} WHERE session_id = ?",
+                        (session_id,))
+                else:
+                    cur = self._conn.execute(
+                        f"DELETE FROM {table} WHERE session_id = ?"
+                        " AND tenant = ?", (session_id, tenant))
+                out[table] = cur.rowcount
+            self._conn.commit()
+        return out
+
+    def prune_episodes_before(self, cutoff_iso: str) -> int:
+        """Retention: delete episodes older than an ISO timestamp, any
+        tenant. Returns the row count removed."""
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM episodes WHERE ts < ?", (cutoff_iso,))
+            self._conn.commit()
+            return cur.rowcount
+
     # -- consolidation --------------------------------------------------------
 
     def consolidate(self, tenant: str, now: str | None = None) -> None:

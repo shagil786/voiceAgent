@@ -152,6 +152,25 @@ class SqliteDecisionLog:
     def to_csv(self, path: str) -> None:
         _entries_to_csv_file(self.entries(), path)
 
+    def delete_conv(self, conv_id: str) -> int:
+        """Right-to-be-forgotten: delete every entry for one conversation.
+        Returns the row count removed."""
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM decision_log WHERE conv_id = ?", (conv_id,))
+            self._conn.commit()
+            return cur.rowcount
+
+    def prune_before(self, cutoff_iso: str) -> int:
+        """Retention: delete entries older than an ISO timestamp (ts < cutoff).
+        Returns the row count removed. Timestamps are ISO-8601 UTC, so lexic
+        comparison is chronological."""
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM decision_log WHERE ts < ?", (cutoff_iso,))
+            self._conn.commit()
+            return cur.rowcount
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()
