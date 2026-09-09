@@ -116,7 +116,10 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8080)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s:%(name)s:%(message)s",
+        datefmt="%H:%M:%S")
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     config = load_config()
     deps = build_deps()
