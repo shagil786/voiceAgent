@@ -35,31 +35,41 @@ RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
 class BedrockConfig:
     region: str
     model_id: str
-    access_key: str
-    secret_key: str
+    access_key: str = ""
+    secret_key: str = ""
     session_token: str | None = None
+    api_key: str | None = None   # Bedrock API key (bearer) — skips SigV4
+    url: str | None = None       # optional full Converse URL override
     timeout_s: float = 30.0
     max_retries: int = 2
     retry_base_delay_s: float = 0.4
 
 
 def config_from_env(env: Mapping[str, str] | None = None) -> BedrockConfig | None:
-    """Build the Bedrock provider from AWS standard env vars + the model id.
-    Returns None when any required field is missing (fallback stays off)."""
+    """Build the Bedrock provider. Auth is EITHER a Bedrock API key
+    (VOICEAGENT_BEDROCK_API_KEY, bearer) OR IAM creds (AWS_ACCESS_KEY_ID +
+    AWS_SECRET_ACCESS_KEY, SigV4). Returns None when no usable auth + model id
+    (fallback stays off)."""
     e = os.environ if env is None else env
+    api_key = e.get("VOICEAGENT_BEDROCK_API_KEY")
     access_key = e.get("AWS_ACCESS_KEY_ID")
     secret_key = e.get("AWS_SECRET_ACCESS_KEY")
-    if not access_key or not secret_key:
+    if not api_key and (not access_key or not secret_key):
         return None
+    model_id = e.get("VOICEAGENT_BEDROCK_MODEL_ID")
+    url = e.get("VOICEAGENT_BEDROCK_URL")
     region = (e.get("VOICEAGENT_BEDROCK_REGION")
               or e.get("AWS_REGION") or e.get("AWS_DEFAULT_REGION"))
-    model_id = e.get("VOICEAGENT_BEDROCK_MODEL_ID")
-    if not region or not model_id:
+    if not model_id:
+        return None
+    if not url and not region:
         return None
     return BedrockConfig(
-        region=region, model_id=model_id,
-        access_key=access_key, secret_key=secret_key,
+        region=region or "", model_id=model_id,
+        access_key=access_key or "", secret_key=secret_key or "",
         session_token=e.get("AWS_SESSION_TOKEN"),
+        api_key=api_key or None,
+        url=url or None,
     )
 
 
@@ -220,25 +230,34 @@ class BedrockConverseClient:
              tool_choice: str | dict = "auto", temperature: float = 0.4,
              max_tokens: int = 512) -> FrontierReply:
         cfg = self.config
-        host = f"bedrock-runtime.{cfg.region}.amazonaws.com"
-        path = f"/model/{quote(cfg.model_id, safe='')}/converse"
         body = json.dumps(_to_converse(cfg.model_id, messages, tools,
                                        temperature, max_tokens)).encode("utf-8")
-        now = datetime.now(timezone.utc)
-        amzdate = now.strftime("%Y%m%dT%H%M%SZ")
-        datestamp = now.strftime("%Y%m%d")
-        to_sign = {
-            "host": host,
-            "x-amz-date": amzdate,
-            "x-amz-content-sha256": _sha256_hex(body),
-        }
-        if cfg.session_token:
-            to_sign["x-amz-security-token"] = cfg.session_token
-        authorization, _ = sigv4_sign(
-            cfg.access_key, cfg.secret_key, cfg.region, SERVICE,
-            "POST", path, "", to_sign, _sha256_hex(body), amzdate, datestamp)
-        headers = {**to_sign, "Authorization": authorization}
-        url = f"https://{host}{path}"
+        if cfg.url:
+            url = cfg.url
+        else:
+            host = f"bedrock-runtime.{cfg.region}.amazonaws.com"
+            path = f"/model/{quote(cfg.model_id, safe='')}/converse"
+            url = f"https://{host}{path}"
+        headers: dict[str, str] = {}
+        if cfg.api_key:
+            headers["Authorization"] = f"Bearer {cfg.api_key}"
+        else:
+            host = f"bedrock-runtime.{cfg.region}.amazonaws.com"
+            path = f"/model/{quote(cfg.model_id, safe='')}/converse"
+            now = datetime.now(timezone.utc)
+            amzdate = now.strftime("%Y%m%dT%H%M%SZ")
+            datestamp = now.strftime("%Y%m%d")
+            to_sign = {
+                "host": host,
+                "x-amz-date": amzdate,
+                "x-amz-content-sha256": _sha256_hex(body),
+            }
+            if cfg.session_token:
+                to_sign["x-amz-security-token"] = cfg.session_token
+            authorization, _ = sigv4_sign(
+                cfg.access_key, cfg.secret_key, cfg.region, SERVICE,
+                "POST", path, "", to_sign, _sha256_hex(body), amzdate, datestamp)
+            headers["Authorization"] = authorization
         t0 = time.perf_counter()
         raw = self._request_with_retries(url, body, headers)
         reply = _from_converse(raw, cfg.model_id)

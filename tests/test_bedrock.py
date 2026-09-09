@@ -119,3 +119,17 @@ def test_config_from_env_requires_all_fields():
     cfg = config_from_env(full)
     assert cfg is not None and cfg.model_id == "zai.glm-4.7-flash"
     assert cfg.region == "ap-south-1"
+
+
+def test_config_from_env_bearer_mode():
+    from voiceagent.swarm.bedrock import config_from_env
+    cfg = config_from_env({
+        "VOICEAGENT_BEDROCK_API_KEY": "ABSKxyz",
+        "VOICEAGENT_BEDROCK_MODEL_ID": "zai.glm-4.7-flash",
+        "VOICEAGENT_BEDROCK_REGION": "ap-south-1",
+    })
+    assert cfg is not None
+    assert cfg.api_key == "ABSKxyz"
+    assert cfg.region == "ap-south-1"
+    # no IAM creds needed when the API key is present
+    assert config_from_env({"VOICEAGENT_BEDROCK_MODEL_ID": "m"}) is None
