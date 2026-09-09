@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime
 import logging
 import os
 import sys
@@ -64,6 +65,8 @@ def main() -> int:
     parser.add_argument("--to", required=True, help="E.164 destination number")
     parser.add_argument("--room", required=True, help="Room name for the call")
     parser.add_argument("--trunk", default=None, help="Outbound trunk ID (default: LIVEKIT_TRUNK_ID)")
+    parser.add_argument("--allow-off-hours", action="store_true",
+                        help="TEST ONLY: override TRAI calling-hours window (DND registry still enforced)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -75,7 +78,15 @@ def main() -> int:
         print("missing trunk: pass --trunk or set LIVEKIT_TRUNK_ID")
         return 2
 
-    permitted, reason = RegulatoryDNDScrubber().scrub(args.to)
+    if args.allow_off_hours:
+        print("WARNING: TEST MODE - overriding TRAI calling-hours window "
+              "(self-test only; DND registry still enforced).", file=sys.stderr)
+        scrubber = RegulatoryDNDScrubber(
+            allowed_start=datetime.time(0, 0),
+            allowed_end=datetime.time(23, 59, 59))
+    else:
+        scrubber = RegulatoryDNDScrubber()
+    permitted, reason = scrubber.scrub(args.to)
     if not permitted:
         print(f"blocked: {reason} (no dial placed)")
         return 2
@@ -97,7 +108,7 @@ def main() -> int:
         args.room,
         args.to,
         trunk_id,
-        from_number=config.livekit_number,
+        from_number=os.environ.get("LIVEKIT_OUTBOUND_NUMBER") or config.livekit_number,
     )
     print(f"disposition: {disposition}")
     if disposition == "connected":
