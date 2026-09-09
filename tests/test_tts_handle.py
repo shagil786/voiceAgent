@@ -115,7 +115,7 @@ def test_tamil_falls_back_to_en_with_warning(tmp_path):
 
 
 def test_any_unregistered_language_warns_and_uses_en(tmp_path):
-    for bogus in ("bn", "mr", "xx", "kl"):
+    for bogus in ("ta", "gu", "kn", "pa", "xx", "kl"):
         calls, warns = [], []
         h = _make_handle(tmp_path, calls, warn=warns.append)
         h.speak("some words", language=bogus, out_path=_out(tmp_path, bogus))

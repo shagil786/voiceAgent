@@ -75,6 +75,30 @@ def _default_tts(text: str, language: str | None = None) -> bytes:
 
 # --- turn wiring --------------------------------------------------------------
 
+_RE_ENDERS = ("bye", "goodbye", "good night", "have a good day",
+              "have a great day", "that's all", "that is all", "that will be all")
+
+
+def _is_clear_farewell(text: str) -> bool:
+    """High-confidence call-ending signal, used as the hangup GUARD.
+
+    A single ambiguous utterance must never disconnect a live call: ASR
+    fabricates fluent farewells on noise/babble ('thank you guys, I'll see
+    you guys in my next video' was heard on a call where the caller said no
+    such thing) and long conversational lines are not clean endings. Only a
+    SHORT closing carrying a hard ender token ends the call; everything else
+    keeps the line open (the brain already replied, so the caller simply
+    continues)."""
+    t = text.strip().lower()
+    if not t or len(t) > 60:
+        return False  # long lines are conversations, not farewells
+    if any(h in t for h in _RE_ENDERS):
+        return True
+    if len(t) <= 16 and ("thank" in t or "thanks" in t or "ok bye" in t):
+        return True  # short thanks-only / ok-bye closes
+    return False
+
+
 def make_turn_fn(
     orchestrator: Any,
     session_id: str,
@@ -140,6 +164,7 @@ def make_turn_fn(
         # whole governed turn (no brain call, no reply) instead of answering
         # nobody. Real words (any script) always pass.
         _absorb_phone_digits(user_text)
+        raw_text = user_text  # pre-augmentation transcript (farewell check)
         user_text = _text_for_brain(user_text)
         stripped = user_text.strip()
         if not stripped:
@@ -163,7 +188,17 @@ def make_turn_fn(
         # after the fact.
         acts = getattr(result, "actions", None) or []
         if any(a.get("action") == "end_call" and a.get("ok") for a in acts):
-            turn_fn.call_ended = True  # room loop hangs up after playback
+            # Hangup guard: only a CLEAR short farewell disconnects. An
+            # end_call on a long/ambiguous transcript (often an ASR
+            # fabrication — e.g. a caller who never said goodbye) keeps the
+            # line open; the agent's reply already played, so the caller can
+            # just keep talking.
+            if _is_clear_farewell(raw_text):
+                turn_fn.call_ended = True  # room loop hangs up after playback
+            else:
+                logger.info(
+                    "end_call ALLOW but transcript %r is not a clear "
+                    "farewell — keeping the call alive", raw_text[:100])
         act_sig = "; ".join(
             f"{a.get('action')}={a.get('verdict')}/{'ok' if a.get('ok') else (a.get('error') or 'err')}"
             for a in acts)

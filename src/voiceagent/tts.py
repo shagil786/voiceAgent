@@ -12,7 +12,7 @@ Language decisions:
   English-ish), but speaking Hindi-accented audio is closer to the customer
   than dropping to the English voice. Quality caveat accepted, revisit if a
   dedicated hinglish voice becomes available.
-- Languages with no piper voice (ta, bn, mr, gu, kn, ml, pa, ...) fall back
+- Languages with no upstream piper voice (ta, gu, kn, pa, ...) fall back
   to the fallback voice with a warning. Production paths never raise.
 
 The M3 chunked/streaming synthesis (first chunk streams while later chunks
@@ -38,7 +38,10 @@ logger = logging.getLogger(__name__)
 # medium; te: maya medium (verified on HF te/te_IN, no medium Tamil exists).
 # Global target set verified on HF at authoring time (HEAD 200): es_MX-ald,
 # fr_FR-siwis, de_DE-thorsten, pt_BR-faber — the README's es/fr/de/pt callers
-# must not receive the en voice.
+# must not receive the en voice. th/ar/bn/mr/ml/ur verified the same way
+# (HEAD 200, 2026-09) after a live Thai incident: Thai replies were falling
+# back to the English voice, which cannot speak Thai script. ta/gu/kn/pa
+# have NO piper voice upstream — they still fall back with a warning.
 VOICE_REGISTRY = {
     "en": "en_US-lessac-medium",
     "hi": "hi_IN-priyamvada-medium",
@@ -47,6 +50,12 @@ VOICE_REGISTRY = {
     "fr": "fr_FR-siwis-medium",
     "de": "de_DE-thorsten-medium",
     "pt": "pt_BR-faber-medium",
+    "th": "th_TH-tsync2-medium",
+    "ar": "ar_JO-kareem-medium",
+    "bn": "bn_BD-google-medium",
+    "mr": "mr_IN-google-medium",
+    "ml": "ml_IN-meera-medium",
+    "ur": "ur_PK-fasih-medium",
 }
 
 # Speech rate: >1 slower, <1 faster. Env-overridable so deployments tune the
