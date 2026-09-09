@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -43,6 +44,21 @@ def _api(config):
     )
 
 
+def load_dotenv(path: Path) -> None:
+    """Tiny stdlib .env loader (repo pattern): KEY=value lines, '#' comments,
+    optional quotes. Never overrides existing environment variables."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--to", required=True, help="E.164 destination number")
@@ -51,6 +67,7 @@ def main() -> int:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     config = load_config()
 
     trunk_id = args.trunk or config.livekit_trunk_id

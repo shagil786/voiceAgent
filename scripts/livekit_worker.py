@@ -26,6 +26,21 @@ from voiceagent.telephony.inbound import run_room_session, webhook_handler
 logger = logging.getLogger("livekit_worker")
 
 
+def load_dotenv(path: Path) -> None:
+    """Tiny stdlib .env loader (repo pattern): KEY=value lines, '#' comments,
+    optional quotes. Never overrides existing environment variables."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def build_deps():
     """Assemble the governed Orchestrator for room sessions.
 
@@ -84,6 +99,7 @@ def main() -> None:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     config = load_config()
     deps = build_deps()
     if not os.environ.get("VOICEAGENT_TENANT"):
