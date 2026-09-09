@@ -288,6 +288,13 @@ class QwenASRHandle:
             return text, None
 
 
+def warmup_asr() -> None:
+    """Preload the routed ASR engine (whisper-small, the en/unknown fallback)
+    so the first real utterance never pays the model-load cold start
+    (observed ~116s on a live call: 460MB model load on CPU)."""
+    _get_whisper_small()._ensure_engine()
+
+
 def _get_whisper_small() -> WhisperASRHandle:
     """Lazy singleton for whisper small — the M5b-3 failure fallback engine
     (battle-tested, always available offline once cached)."""

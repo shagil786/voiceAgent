@@ -67,6 +67,14 @@ def build_deps():
         logger.info("frontier warmup ok")
     except Exception:
         logger.warning("frontier warmup failed (continuing)", exc_info=True)
+    # Warm the ASR engine (whisper-small CPU load is ~100s on first use —
+    # never make the first caller pay it).
+    try:
+        from voiceagent.asr import warmup_asr
+        warmup_asr()
+        logger.info("asr warmup ok")
+    except Exception:
+        logger.warning("asr warmup failed (continuing)", exc_info=True)
     language = os.environ.get("VOICEAGENT_DEFAULT_LANG") or None
     # Declared greeting (tenant data): instant pickup line, no brain roundtrip.
     greeting = getattr(orchestrator, "greeting", "") or ""
