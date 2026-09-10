@@ -1,5 +1,7 @@
 # Platform language data: Malayalam.
 code: ml
+asr_engine: indic
+tts_voice: ml_IN-meera-medium
 scripts: [Malayalam]
 digits: "൦൧൨൩൪൫൬൭൮൯"
 numbers:

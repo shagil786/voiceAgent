@@ -1,5 +1,6 @@
 # Platform language data: fr.
 code: fr
+tts_voice: fr_FR-siwis-medium
 detect_stage: global
 sentiment:
   - en colère

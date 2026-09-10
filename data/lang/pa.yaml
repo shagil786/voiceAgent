@@ -1,5 +1,6 @@
 # Platform language data: Punjabi (Gurmukhi).
 code: pa
+asr_engine: indic
 scripts: [Gurmukhi]
 digits: "੦੧੨੩੪੫੬੭੮੯"
 numbers:

@@ -2,6 +2,8 @@
 # digits with Hindi (no digits row needed) — hence detect_as: hi
 # (explicit data: script-identical, lexicon-ambiguous).
 code: mr
+asr_engine: indic
+tts_voice: mr_IN-google-medium
 scripts: [Devanagari]
 detect_as: hi
 numbers:

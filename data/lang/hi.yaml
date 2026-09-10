@@ -2,6 +2,7 @@
 # compounds, hence the full table (compositional languages need only
 # tens+units). Scales + garbles (observed ASR mishearings) included.
 code: hi
+tts_voice: hi_IN-priyamvada-medium
 scripts: [Devanagari]
 digits: "०१२३४५६७८९"
 numbers:

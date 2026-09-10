@@ -68,7 +68,7 @@ def _default_tts(text: str, language: str | None = None) -> bytes:
     script through the declared voice (the 2026-09 Thai shape). Detection
     without a voice keeps the declared voice (best effort, warn as usual).
     """
-    from voiceagent.tts import HINGLISH_VOICE_LANG, VOICE_REGISTRY, speak
+    from voiceagent.tts import VOICE_REGISTRY, resolve_voice_lang, speak
 
     effective = language
     if language:
@@ -78,9 +78,7 @@ def _default_tts(text: str, language: str | None = None) -> bytes:
             "_", "-").split("-")[0] or None
         if declared_base in VOICE_REGISTRY:
             effective = declared_base
-        detected = detect_language(text)
-        if detected == "hinglish":
-            detected = HINGLISH_VOICE_LANG  # same mapping as voice_for
+        detected = resolve_voice_lang(detect_language(text))
         if (detected != declared_base and detected in VOICE_REGISTRY):
             logger.warning(
                 "tts voice mismatch: trunk declares %r but reply detects "

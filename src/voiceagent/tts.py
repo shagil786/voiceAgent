@@ -2,18 +2,18 @@
 """M5b-1: multilingual TTS on top of piper.
 
 VOICE_REGISTRY maps a text language (as reported by voiceagent.langid) to a
-piper voice name from HF rhasspy/piper-voices. Voices download on demand into
+piper voice name — loaded from data/lang/*.yaml (`tts_voice:`), verified on
+HF rhasspy/piper-voices at authoring time. Voices download on demand into
 data/models/ (same pattern as voice.ensure_voice, guarded by one shared lock
 so concurrent first-uses never double-download).
 
-Language decisions:
-- "hinglish" (Romanized Hindi) routes to the hi voice. A Hindi voice reading
-  Latin-script Hindi is a known imperfect case (phonemization leans
-  English-ish), but speaking Hindi-accented audio is closer to the customer
-  than dropping to the English voice. Quality caveat accepted, revisit if a
-  dedicated hinglish voice becomes available.
-- Languages with no upstream piper voice (ta, gu, kn, pa, ...) fall back
-  to the fallback voice with a warning. Production paths never raise.
+Language decisions (mechanism, not data):
+- alias codes resolve to their concrete voice (`alias_of:` in the lang
+  file): Romanized Hindi speaks with the Hindi voice — Hindi-accented
+  audio beats dropping to English. Quality caveat accepted; revisit if a
+  dedicated voice appears (one data line, no code change).
+- Languages with no declared voice fall back to the fallback voice with a
+  warning. Production paths never raise.
 
 The M3 chunked/streaming synthesis (first chunk streams while later chunks
 generate) is preserved for every registered language.
@@ -29,34 +29,16 @@ import time
 import wave
 from typing import Callable
 
+from voiceagent.langdata import alias_for as _alias_for
+from voiceagent.langdata import voice_registry as _load_registry
 from voiceagent.langid import detect_language
 from voiceagent.voice import ensure_voice
 
 logger = logging.getLogger(__name__)
 
-# Text language -> piper voice name. en: the M3 English voice; hi: pratham
-# medium; te: maya medium (verified on HF te/te_IN, no medium Tamil exists).
-# Global target set verified on HF at authoring time (HEAD 200): es_MX-ald,
-# fr_FR-siwis, de_DE-thorsten, pt_BR-faber — the README's es/fr/de/pt callers
-# must not receive the en voice. th/ar/bn/mr/ml/ur verified the same way
-# (HEAD 200, 2026-09) after a live Thai incident: Thai replies were falling
-# back to the English voice, which cannot speak Thai script. ta/gu/kn/pa
-# have NO piper voice upstream — they still fall back with a warning.
-VOICE_REGISTRY = {
-    "en": "en_US-lessac-medium",
-    "hi": "hi_IN-priyamvada-medium",
-    "te": "te_IN-maya-medium",
-    "es": "es_MX-ald-medium",
-    "fr": "fr_FR-siwis-medium",
-    "de": "de_DE-thorsten-medium",
-    "pt": "pt_BR-faber-medium",
-    "th": "th_TH-tsync2-medium",
-    "ar": "ar_JO-kareem-medium",
-    "bn": "bn_BD-google-medium",
-    "mr": "mr_IN-google-medium",
-    "ml": "ml_IN-meera-medium",
-    "ur": "ur_PK-fasih-medium",
-}
+# Text language -> piper voice name, from lang files (add-a-voice =
+# add-a-line in data/lang/<code>.yaml).
+VOICE_REGISTRY = _load_registry()
 
 # Speech rate: >1 slower, <1 faster. Env-overridable so deployments tune the
 # perceived pace without code changes (1.0 = the voice's native rate).
@@ -78,8 +60,14 @@ def voice_overrides_from_env(env: dict[str, str] | None = None) -> dict[str, str
                 out[lang.strip()] = voice.strip()
     return out
 
-# Romanized Hindi -> Hindi voice (see module docstring for the quality caveat).
-HINGLISH_VOICE_LANG = "hi"
+def resolve_voice_lang(language: str | None) -> str | None:
+    """Language code -> voice-resolution code, following the lang file's
+    `alias_of:` (Romanized Hindi resolves to the Hindi voice). Detection
+    codes pass through untouched; only voice selection follows aliases."""
+
+    if not language:
+        return language
+    return _alias_for(language) or language
 
 # One shared lock guarding download+load across handles and threads.
 _VOICE_LOCK = threading.Lock()
@@ -167,9 +155,8 @@ class TTSHandle:
     def voice_for(self, language: str | None, text: str = "") -> tuple[str, str]:
         """Resolve (lang, voice_name). language=None -> langid auto-detect.
         Unregistered languages fall back (never raise) with a warning."""
-        lang = language if language else detect_language(text)
-        if lang == "hinglish":
-            lang = HINGLISH_VOICE_LANG
+        detected = language if language else detect_language(text)
+        lang = resolve_voice_lang(detected) or detected
         voice_name = self._registry.get(lang)
         if voice_name is None:
             fb_name = self._registry.get(self._fallback_voice, self._fallback_voice)

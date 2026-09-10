@@ -1,5 +1,7 @@
 # Platform language data: bn.
 code: bn
+asr_engine: indic
+tts_voice: bn_BD-google-medium
 scripts: [Bengali]
 digits: "০১২৩৪৫৬৭৮৯"
 numbers:

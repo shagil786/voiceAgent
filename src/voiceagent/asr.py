@@ -89,16 +89,21 @@ INDIC_DECODE = "ctc"
 # Conformer sample rate + piper's WAV rate (needs resampling to 16 kHz).
 INDIC_SAMPLE_RATE = 16000
 
-# The 22 languages from the indic-conformer-600m-multilingual model card.
-INDIC_CONFORMER_LANGUAGES = frozenset({
-    "as", "bn", "brx", "doi", "gu", "hi", "kn", "kok", "ks", "mai", "ml",
-    "mni", "mr", "ne", "or", "pa", "sa", "sat", "sd", "ta", "te", "ur",
-})
+# Engine routing tables are DATA (data/lang/*.yaml `asr_engine:` per
+# language, data/asr_engines.yaml third-party support lists). Everything
+# else — en/hi/unknown on the Qwen core, whisper-small as the failure
+# fallback — stays on the proven paths below.
+from voiceagent.langdata import alias_for as _alias_for
+from voiceagent.langdata import asr_routes as _load_routes
+from voiceagent.langdata import engine_languages as _load_engine_langs
 
-# Native languages from voiceagent.langid that we route to the conformer
-# (subset of the card list, verified 2026-09). Everything else — en, hi,
-# hinglish, None, unknown — stays on the proven whisper-small path.
-INDIC_ROUTE_LANGS = frozenset({"te", "ta", "bn", "mr", "gu", "kn", "ml", "pa"})
+_ASR_ROUTES = _load_routes()
+_INDIC_SUPPORTED = _load_engine_langs("indic")
+
+# Third-party support list for the conformer, from its model card
+# (data/asr_engines.yaml). A routed language outside this list falls back
+# to the Qwen core with a warning.
+INDIC_CONFORMER_LANGUAGES = _INDIC_SUPPORTED
 
 
 def _normalize_lang(lang: str | None) -> str | None:
@@ -150,8 +155,8 @@ class WhisperASRHandle:
         logging and known-language corroboration. The detected language is
         deliberately NOT used to reroute (see module docstring: whisper
         cannot reliably separate Hinglish from Indic-native audio)."""
-        hint = {"hinglish": "hi"}.get(_normalize_lang(language) or "",
-                                      _normalize_lang(language))
+        base = _normalize_lang(language) or ""
+        hint = _alias_for(base) or base or None
         engine = self._ensure_engine()
         segments, info = engine.transcribe(audio, language=hint)
         text = " ".join(s.text.strip() for s in segments if s.text.strip()).strip()
@@ -322,13 +327,12 @@ class QwenASRHandle:
     def _forced_code(cls, language: str | None) -> str | None:
         """Declared tag -> forceable Qwen code, or None (auto-detect).
 
-        "hinglish" is spoken Hindi -> "hi" (same mapping as whisper).
-        Anything outside FORCED_LANGUAGE_CODES (conformer-routed Indic
-        codes, garbage) stays unforced — never let an arbitrary string
-        reach the processor (it raises ValueError on unknown codes)."""
+        Alias codes resolve first (same mapping as whisper). Anything
+        outside FORCED_LANGUAGE_CODES (conformer-routed codes, garbage)
+        stays unforced — never let an arbitrary string reach the processor
+        (it raises ValueError on unknown codes)."""
         base = _normalize_lang(language)
-        if base == "hinglish":
-            base = "hi"
+        base = _alias_for(base or "") or base
         if base in cls.FORCED_LANGUAGE_CODES:
             return base
         return None
@@ -348,7 +352,7 @@ def warmup_asr_for_language(lang: str | None) -> str | None:
     model load mid-call. Returns the normalized code. Fail-open: callers
     wrap this (a warmup failure must never block worker startup)."""
     base = _normalize_lang(lang)
-    if base in INDIC_ROUTE_LANGS:
+    if _ASR_ROUTES.get(base or "") == "indic":
         _get_indic_asr()._ensure_model()
     elif base is not None:
         _get_qwen_asr()._ensure_engine()
@@ -393,16 +397,16 @@ def get_asr_for_language(lang: str | None, engines=None, supported=None,
     """Route a language to an ASR handle with a uniform
     transcribe(audio, language) interface.
 
-    M5b-3 routing (bake-off data): te/ta/bn/mr/gu/kn/ml/pa -> IndicConformer
-    (te WER 0.348 vs whisper 1.067 / Qwen 1.315, 0.11s warm); hi/hinglish/
-    en/None/unknown -> Qwen3-ASR-0.6B (hi 0.247 vs 0.423, code-switch
-    output). Declared languages are FORCED, never auto-detected: Qwen takes
-    a `language` forcing suffix (native processor support), whisper takes a
-    hint, the conformer requires its language per recipe. Tags normalize
-    ("en-US" -> "en") before routing. A native language outside the
-    conformer's card list falls back to the Qwen core with a warning.
-    `engines`/`supported`/`warn` are injectable for tests; default engines
-    are cached per engine kind (process-wide singletons).
+    Routing is data (M5b-3 bake-off): lang files declaring `asr_engine:
+    indic` take the IndicConformer, everything else (including unknown
+    codes) takes the Qwen3-ASR-0.6B core. Declared languages are FORCED,
+    never auto-detected: Qwen takes a `language` forcing suffix (native
+    processor support), whisper takes a hint, the conformer requires its
+    language per recipe. Tags normalize ("en-US" -> "en") before routing.
+    Alias codes resolve first (Romanized Hindi forces as Hindi). A routed
+    language outside the engine's card list falls back to the Qwen core
+    with a warning. `engines`/`supported`/`warn` are injectable for tests;
+    default engines are cached per engine kind (process-wide singletons).
     """
     if engines is None:
         engines = {"qwen": _get_qwen_asr, "indic": _get_indic_asr}
@@ -411,7 +415,7 @@ def get_asr_for_language(lang: str | None, engines=None, supported=None,
     if warn is None:
         warn = lambda msg: logger.warning(msg)  # noqa: E731
     base = _normalize_lang(lang)
-    if base in INDIC_ROUTE_LANGS:
+    if _ASR_ROUTES.get(base or "") == "indic":
         if base in supported:
             return engines["indic"]()
         warn(f"language '{base}' is not supported by "

@@ -1,5 +1,6 @@
 # Platform language data: es.
 code: es
+tts_voice: es_MX-ald-medium
 detect_stage: global
 sentiment:
   - enojado

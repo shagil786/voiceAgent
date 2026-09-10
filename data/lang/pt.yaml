@@ -1,5 +1,6 @@
 # Platform language data: pt.
 code: pt
+tts_voice: pt_BR-faber-medium
 detect_stage: global
 sentiment:
   - irritado

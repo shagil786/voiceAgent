@@ -1,5 +1,6 @@
 # Platform language data: Urdu. No scripts: claim — the Arabic block is shared with Arabic and only lexicons can tell ar from ur (open gap). Tables serve declared-language deployments (VOICEAGENT_DEFAULT_LANG=ur) via ASR forcing.
 code: ur
+tts_voice: ur_PK-fasih-medium
 digits: "۰۱۲۳۴۵۶۷۸۹"
 numbers:
   words:

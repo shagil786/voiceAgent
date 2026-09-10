@@ -1,6 +1,7 @@
 # Platform language data: Romanized Hindi (hinglish, Latin script).
 # Sentiment only — amounts parse via the English number engine.
 code: hinglish
+alias_of: hi
 detect_stage: hinglish
 sentiment:
   - bakwas

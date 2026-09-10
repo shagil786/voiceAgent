@@ -116,3 +116,34 @@ def test_new_vocabularies_parse():
     assert w(["ऐंशी", "हजार"]) == 80000
     assert e("वीस हजार रुपये", currency="₹").amount == 20000.0
     assert e("ORD-౪౮౨౧").order_id == "ORD-4821"  # Telugu digits (pinned)
+
+
+def test_voices_routing_alias_are_data_not_code():
+    import inspect
+    from voiceagent import asr as asr_mod
+    from voiceagent import tts as tts_mod
+    from voiceagent.telephony import inbound as inbound_mod
+    for mod in (asr_mod, tts_mod, inbound_mod):
+        src = inspect.getsource(mod)
+        for lit in ('INDIC_ROUTE_LANGS = frozenset',
+                    '{"hinglish": "hi"}', "{'hinglish': 'hi'}",
+                    'HINGLISH_VOICE_LANG =',
+                    '"te_IN-maya-medium"', '"hi_IN-priyamvada-medium"',
+                    'if base == "hinglish"', "if lang == \"hinglish\"",
+                    'if detected == "hinglish"'):
+            assert lit not in src, f"{lit!r} survives in {mod.__name__}"
+    # Loaded values equal the historical behavior, from files:
+    from voiceagent.tts import VOICE_REGISTRY, resolve_voice_lang
+    assert len(VOICE_REGISTRY) == 13
+    assert VOICE_REGISTRY["te"] == "te_IN-maya-medium"
+    assert VOICE_REGISTRY["ur"] == "ur_PK-fasih-medium"
+    assert "ta" not in VOICE_REGISTRY  # fallback path preserved
+    assert resolve_voice_lang("hinglish") == "hi"
+    assert resolve_voice_lang("te") == "te"
+    assert langdata.alias_for("hinglish") == "hi"
+    assert langdata.alias_for("te") == ""
+    assert langdata.asr_routes() == {
+        c: "indic" for c in
+        ["te", "ta", "bn", "mr", "gu", "kn", "ml", "pa"]}
+    assert len(langdata.engine_languages("indic")) == 22
+    assert langdata.engine_languages("nope") == frozenset()

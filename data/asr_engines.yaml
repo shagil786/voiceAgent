@@ -1,0 +1,10 @@
+# ASR engine language facts: which third-party model supports which codes.
+# The ROUTING decision (which engine a code takes) is per-language data
+# (data/lang/<code>.yaml `asr_engine:`); this file holds the ENGINES' own
+# support lists straight from their model cards, used for the supported
+# check + fallback warning. Absent engine = Qwen core default.
+engines:
+  indic:
+    model: ai4bharat/indic-conformer-600m-multilingual
+    languages: [as, bn, brx, doi, gu, hi, kn, kok, ks, mai, ml, mni, mr,
+                ne, or, pa, sa, sat, sd, ta, te, ur]

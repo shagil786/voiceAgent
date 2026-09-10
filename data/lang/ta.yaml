@@ -1,5 +1,6 @@
 # Platform language data: ta.
 code: ta
+asr_engine: indic
 scripts: [Tamil]
 digits: "௦௧௨௩௪௫௬௭௮௯"
 numbers:

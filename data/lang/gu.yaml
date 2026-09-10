@@ -1,5 +1,6 @@
 # Platform language data: Gujarati.
 code: gu
+asr_engine: indic
 scripts: [Gujarati]
 digits: "૦૧૨૩૪૫૬૭૮૯"
 numbers:

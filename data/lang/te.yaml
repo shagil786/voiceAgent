@@ -1,5 +1,7 @@
 # Platform language data: te.
 code: te
+asr_engine: indic
+tts_voice: te_IN-maya-medium
 scripts: [Telugu]
 digits: "౦౧౨౩౪౫౬౭౮౯"
 numbers:

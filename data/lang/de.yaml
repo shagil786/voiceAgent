@@ -1,5 +1,6 @@
 # Platform language data: de.
 code: de
+tts_voice: de_DE-thorsten-medium
 detect_stage: global
 sentiment:
   - wütend

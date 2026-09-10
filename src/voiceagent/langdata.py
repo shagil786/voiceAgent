@@ -50,6 +50,9 @@ def load_lang_tables(directory: str | Path = LANG_DIR) -> dict[str, dict]:
         detect_tokens = raw.get("detect_tokens") or []
         detect_stage = raw.get("detect_stage") or ""
         currency_words = raw.get("currency_words") or {}
+        tts_voice = raw.get("tts_voice") or ""
+        asr_engine = raw.get("asr_engine") or ""
+        alias_of = raw.get("alias_of") or ""
         out[code] = {
             "words": {str(k): int(v) for k, v in words.items()
                       if isinstance(v, int)},
@@ -68,6 +71,9 @@ def load_lang_tables(directory: str | Path = LANG_DIR) -> dict[str, dict]:
                 str(sym): [str(f) for f in (forms or []) if f]
                 for sym, forms in currency_words.items()
                 if isinstance(currency_words, dict)},
+            "tts_voice": str(tts_voice),
+            "asr_engine": str(asr_engine),
+            "alias_of": str(alias_of),
         }
     return out
 
@@ -115,6 +121,43 @@ def companions_for(code: str) -> tuple[str, ...]:
     """Sibling-script codes scanned alongside `code` (code-switching)."""
     entry = tables().get(code) or {}
     return tuple(entry.get("companions") or ())
+
+
+def alias_for(code: str) -> str:
+    """Concrete code for engine/voice resolution (`alias_of:` — Romanized
+    Hindi is spoken Hindi, so whisper hints, Qwen forcing, and TTS voices
+    all resolve it to hi). Detection keeps the original code; only engines
+    and voices follow the alias. Empty when the code stands alone."""
+    return (tables().get(code) or {}).get("alias_of") or ""
+
+
+def voice_registry() -> dict[str, str]:
+    """Text language -> piper voice name, from lang files' `tts_voice:`.
+    Codes without one (ta/gu/kn/pa) fall back downstream with a warning."""
+    return {code: e["tts_voice"] for code, e in tables().items()
+            if e.get("tts_voice")}
+
+
+def asr_routes() -> dict[str, str]:
+    """Language code -> engine name from lang files' `asr_engine:`.
+    Codes declaring nothing take the Qwen core default."""
+    return {code: e["asr_engine"] for code, e in tables().items()
+            if e.get("asr_engine")}
+
+
+def engine_languages(engine: str,
+                     path: str | Path | None = None) -> frozenset:
+    """Third-party support list for `engine` from data/asr_engines.yaml
+    (model-card facts, used for the supported check + fallback warning)."""
+    import yaml
+    d = (Path(path) if path else Path(__file__).resolve().parents[2]
+         / "data" / "asr_engines.yaml")
+    try:
+        raw = yaml.safe_load(d.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return frozenset()
+    langs = ((raw.get("engines") or {}).get(engine) or {}).get("languages")
+    return frozenset(str(c) for c in langs or [])
 
 
 def currency_words() -> dict[str, list[str]]:

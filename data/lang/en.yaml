@@ -2,6 +2,7 @@
 # (entities, sentiment) read these tables as opaque values — no per-language
 # branches exist in platform code.
 code: en
+tts_voice: en_US-lessac-medium
 numbers:
   words:
     zero: 0

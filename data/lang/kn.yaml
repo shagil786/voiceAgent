@@ -1,5 +1,6 @@
 # Platform language data: Kannada.
 code: kn
+asr_engine: indic
 scripts: [Kannada]
 digits: "೦೧೨೩೪೫೬೭೮೯"
 numbers:

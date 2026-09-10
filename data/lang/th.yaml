@@ -1,5 +1,6 @@
 # Platform language data: th.
 code: th
+tts_voice: th_TH-tsync2-medium
 scripts: [Thai]
 digits: "๐๑๒๓๔๕๖๗๘๙"
 numbers:

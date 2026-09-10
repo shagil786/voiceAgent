@@ -1,5 +1,6 @@
 # Platform language data: Arabic (MSA). Same detection gap as Urdu (shared Arabic block, no claim). Currency words stay tenant-configured.
 code: ar
+tts_voice: ar_JO-kareem-medium
 digits: "٠١٢٣٤٥٦٧٨٩"
 numbers:
   words:
