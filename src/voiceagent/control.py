@@ -276,25 +276,50 @@ class ControlServer(BaseHTTPRequestHandler):
                                       body.get("interview", {}))
                 self._send(200, out)
             elif path == "/api/control/onboard/deploy":
-                # v1: deploy from a preview payload the console re-sends with
-                # its approval + deploy_id (deterministic compile in deploy
-                # gate is idempotent). Real staged bundles come later.
+                # Deploy from the payload the console re-sends with its
+                # approval + deploy_id. The preview pipeline (deterministic
+                # compile + brain drafts) runs again so approval and deploy
+                # see identical surfaces; the approved draft then
+                # MATERIALIZES into a verified tenant bundle beside the
+                # deploy versions. Writes only on full pass, both gates.
                 interview = body.get("interview", {})
                 deploy_id = str(body.get("deploy_id") or "deployed")
                 source = body.get("source", {})
                 from voiceagent.deploy.compiler import compile_bundle
+                from voiceagent.deploy.draft import preview_bundle
                 from voiceagent.deploy.ingest import fetch_site, ingest_owner_paste
-                from voiceagent.deploy.bundle import Bundle  # noqa: F401
+                from voiceagent.deploy.materialize import materialize_tenant_bundle
                 crawled: list[dict] = []
                 pasted: list[dict] = []
                 if source.get("text"):
                     pasted.append(ingest_owner_paste(source["text"]))
                 if source.get("url"):
                     crawled = fetch_site(source["url"])
-                bundle = compile_bundle(deploy_id, list(pasted) + crawled,
-                                        interview)
+                chunks = list(pasted) + crawled
+                preview = preview_bundle(deploy_id, chunks, interview)
+                bundle = compile_bundle(deploy_id, chunks, interview)
                 root = self.deploy_root or Path("data/deploy")
+                tenant_name = str(body.get("tenant_name") or deploy_id)
+                tenant = materialize_tenant_bundle(
+                    {"tools": preview.get("tools", []),
+                     "intents": preview.get("intents", {}),
+                     "entities": preview.get("entities"),
+                     "policies": preview.get("policies", {})},
+                    interview, chunks, tenant_name,
+                    root / deploy_id / "tenant")
                 out = deploy_bundle(root / deploy_id, bundle)
+                checks = list(out.get("checks", []))
+                checks.append({
+                    "name": "tenant bundle verifies",
+                    "passed": bool(tenant["ok"]),
+                    "detail": ("tenant/" + " + ".join(tenant["files"][:4]) +
+                               ("…" if len(tenant["files"]) > 4 else ""))
+                    if tenant["ok"] else "; ".join(tenant["errors"][:3]),
+                })
+                if not tenant["ok"]:
+                    out["live"] = False
+                out["checks"] = checks
+                out["tenant"] = tenant
                 self._send(200, out)
             else:
                 self._send(404, {"error": f"no such endpoint {path}"})
