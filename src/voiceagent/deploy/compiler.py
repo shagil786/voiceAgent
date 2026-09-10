@@ -17,7 +17,12 @@ def _slug(text: str) -> str:
 
 def compile_bundle(deploy_id: str, chunks: list[dict], interview: dict) -> Bundle:
     offering = interview.get("offering", "")
-    top_asks = list(interview.get("top_asks", []))[:5]
+    asks = interview.get("top_asks", [])
+    # The console sends arrays; gap answers arrive as comma strings — both
+    # are lists by here (a bare string would char-split below).
+    if isinstance(asks, str):
+        asks = [a.strip() for a in asks.split(",")]
+    top_asks = list(asks)[:5]
     never = list(interview.get("never_promise", []))
     handoffs = list(interview.get("handoff_triggers", []))
     knowledge = [c for c in chunks if c.get("text")]

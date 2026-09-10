@@ -118,11 +118,12 @@ def summary(audit_db: Path | None, memory_db: Path | None) -> dict:
 
 def compile_preview(source: dict, interview: dict) -> dict:
     """Ingest + compile a bundle preview from {url} or {text}. Pure:
-    writes nothing, runs no self-checks, hits no model (deterministic
-    compiler). The console renders this for the owner's review; approval
-    happens at deploy."""
-    from voiceagent.deploy.bundle import Bundle
-    from voiceagent.deploy.compiler import compile_bundle
+    writes nothing, runs no self-checks. The deterministic compiler always
+    runs; the frontier brain additionally DRAFTS tools/intents/entities/
+    evals when configured (silent fallback otherwise). The console renders
+    this for the owner's review — including gap `questions` the owner must
+    answer; approval happens at deploy."""
+    from voiceagent.deploy.draft import preview_bundle
     from voiceagent.deploy.ingest import fetch_site, ingest_owner_paste
     url = (source or {}).get("url") or ""
     text = (source or {}).get("text") or ""
@@ -135,19 +136,9 @@ def compile_preview(source: dict, interview: dict) -> dict:
     if url:
         crawled = fetch_site(url)  # allowlist empty; scoped crawl
     chunks = list(pasted) + crawled
-    bundle: Bundle = compile_bundle(
-        deploy_id="preview", chunks=chunks, interview=interview or {})
-    return {
-        "deploy_id": bundle.deploy_id,
-        "spec": bundle.spec,
-        "knowledge": bundle.knowledge,
-        "tools": [{"name": t.name, "state": t.state,
-                   "description": t.description,
-                   "policy_action": t.policy_action} for t in bundle.tools],
-        "policies": bundle.policies,
-        "evals": [{"name": e.name, "turns": len(e.turns)} for e in bundle.evals],
-        "note": "preview only — nothing was written or approved",
-    }
+    out = preview_bundle("preview", chunks, interview or {})
+    out["note"] += " — preview only, nothing was written or approved"
+    return out
 
 
 def deploy_bundle(deploy_dir: str | Path, bundle, version: str = "v1") -> dict:
