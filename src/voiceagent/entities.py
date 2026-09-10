@@ -149,18 +149,48 @@ class Entities:
 
 
 def words_to_number(tokens: list[str]) -> int | None:
-    """Bilingual (English + Hindi) number words -> int: scale form, digit-list
+    """Number words (any loaded language) -> int: scale form, digit-list
     form, and digit+scale combos ('6 हजार' = 6000).
 
     Scale form:  ["four","thousand","eight","hundred","twenty","one"] -> 4821.
     Digit-list:  ["four","eight","two","one"] -> 4821 (IDs spoken digit-wise).
-    Hindi:       ["पचपन","हजार","छह","सौ","इकहत्तर"] -> 55671.
+    Compositional: ["ఇరవై","ఒకటి"] -> 21 (tens + units accumulate).
+
+    Hyphenated compounds ("trente-deux", "twenty-one", "dix-sept") split on
+    hyphens when the whole form is not itself a table entry (French 80
+    stays flat: "quatre-vingt" IS an entry, so 4x20 never mis-adds to 24).
+    Hyphens are punctuation mechanics, not language knowledge — the digit
+    tokenizer still excludes them (digit-cluster behavior unchanged).
     Returns None unless EVERY token is a number word — a partial match is
     not a number ("one agent" must not become 1).
     """
     clean = []
     for t in tokens:
         w = _canon_token(t)
+        if w is None and "-" in t:
+            # Greedy longest-match on hyphen parts: "quatre-vingt-dix"
+            # must resolve "quatre-vingt" -> 80 first (flat entry), never
+            # 4+20+10. Same rule serves "trente-deux" and "twenty-one".
+            parts = t.split("-")
+            expanded: list[str] | None = None
+            for i in range(len(parts), 0, -1):
+                head = _canon_token("-".join(parts[:i]))
+                if head is not None:
+                    tail = [head]
+                    ok = True
+                    for p in parts[i:]:
+                        c = _canon_token(p)
+                        if c is None:
+                            ok = False
+                            break
+                        tail.append(c)
+                    if ok:
+                        expanded = tail
+                        break
+            if expanded is None:
+                return None
+            clean.extend(expanded)
+            continue
         if w is None:
             return None
         clean.append(w)

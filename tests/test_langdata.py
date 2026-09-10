@@ -147,3 +147,28 @@ def test_voices_routing_alias_are_data_not_code():
         ["te", "ta", "bn", "mr", "gu", "kn", "ml", "pa"]}
     assert len(langdata.engine_languages("indic")) == 22
     assert langdata.engine_languages("nope") == frozenset()
+
+
+def test_european_parity_numbers_and_currency():
+    from voiceagent.entities import extract_entities as e
+    from voiceagent.entities import words_to_number as w
+    # Spanish / French / German / Portuguese ≅ Indic coverage now.
+    assert w(["veintidós", "mil"]) == 22000
+    assert e("cinco mil dólares", currency="$").amount == 5000.0
+    assert e("cinq mille euros", currency="€").amount == 5000.0
+    assert e("cinco mil reais", currency="R$").amount == 5000.0
+    # German productive compounds are unlisted tables: digits still parse,
+    # words await a data-driven compounding rule (documented open gap).
+    assert w(["dreihundert"]) is None
+    assert e("2500 Euro", currency="€").amount == 2500.0
+    # French hyphen mechanics: flat 80 wins over 4+20; 70s/90s compose.
+    assert w(["quatre-vingt"]) == 80
+    assert w(["quatre-vingt-dix"]) == 90
+    assert w(["quatre-vingt-dix-neuf"]) == 99
+    assert w(["soixante-dix-neuf"]) == 79
+    assert w(["trente-deux"]) == 32
+    assert w(["twenty-one"]) == 21  # same rule fixes English compounds
+    assert w(["one", "agent"]) is None
+    # Digit-cluster behavior unchanged by the hyphen rule.
+    assert e("ORD-4821").order_id == "ORD-4821"
+    assert e("call 4821 tomorrow") is not None
