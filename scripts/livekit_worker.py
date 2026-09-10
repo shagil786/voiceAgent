@@ -27,8 +27,13 @@ logger = logging.getLogger("livekit_worker")
 
 
 def load_dotenv(path: Path) -> None:
-    """Tiny stdlib .env loader (repo pattern): KEY=value lines, '#' comments,
-    optional quotes. Never overrides existing environment variables."""
+    """Same .env loader every other script entry point uses.
+        VOICEAGENT_DOTENV_PATH overrides the file location (tests point it at a
+        missing path so subprocess checks stay hermetic); an explicitly missing
+        override is honored (no fallback), an unset/empty one uses the default."""
+    override = os.environ.get("VOICEAGENT_DOTENV_PATH", "").strip()
+    if override:
+        path = Path(override)
     if not path.exists():
         return
     for line in path.read_text().splitlines():
@@ -57,6 +62,13 @@ def build_deps():
     from voiceagent.runtime import build_orchestrator
 
     orchestrator = build_orchestrator()
+    if orchestrator is None:
+        # No frontier configured: FAIL FAST before the warmups below (they
+        # load gigabytes of models + retry networks — minutes wasted for a
+        # worker that is about to refuse to start). main() repeats the
+        # configured-brain check with the user-facing error.
+        return {"orchestrator": None, "session_id": None,
+                "language": None, "greeting": ""}
     # Warm the frontier connection: the first real call must not pay TCP/TLS
     # + provider cold-start (observed 18.8s brain spikes). Fail-open — a
     # warmup failure means the provider is down; the call path reports it.

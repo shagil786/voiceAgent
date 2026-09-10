@@ -26,7 +26,13 @@ from voiceagent.runtime import build_orchestrator as _runtime_build_orchestrator
 
 
 def load_dotenv(path: Path) -> None:
-    """Tiny stdlib .env loader: KEY=VALUE lines, '#' comments, optional quotes."""
+    """Same .env loader every other script entry point uses.
+        VOICEAGENT_DOTENV_PATH overrides the file location (tests point it at a
+        missing path so subprocess checks stay hermetic); an explicitly missing
+        override is honored (no fallback), an unset/empty one uses the default."""
+    override = os.environ.get("VOICEAGENT_DOTENV_PATH", "").strip()
+    if override:
+        path = Path(override)
     if not path.exists():
         return
     for line in path.read_text().splitlines():
