@@ -7,7 +7,12 @@ import time
 from collections import defaultdict, deque
 from typing import Mapping
 
-PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>VoiceAgent demo</title>
+# Raw string: the inline JS below contains \n escapes that must reach the
+# browser AS backslash-n (JS string continuations). A non-raw string turns
+# them into literal newlines inside JS string literals -> SyntaxError ->
+# go() undefined -> the Send button silently does nothing.
+PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><title>VoiceAgent demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:system-ui;max-width:720px;margin:40px auto;padding:0 16px;color:#1a1a1a}
 textarea{width:100%;min-height:70px;font-size:15px;padding:8px;border:1px solid #ccc;border-radius:6px}
@@ -21,18 +26,35 @@ proposed action, and the policy decision with reasons.</p>
 <textarea id="q" placeholder="e.g. Bhai mera order abhi tak nahi aaya, order id ORD-55671 hai"></textarea>
 <label><input type="checkbox" id="auth"> authenticated session</label>
 <button onclick="go()">Send</button>
+<button type="button" onclick="newChat()">New conversation</button>
 <pre id="out">—</pre>
 <script>
+// Per-browser conversation id: every visitor starts fresh instead of sharing
+// one server-side 'demo-http' conversation (whose 50-turn cap then bricks
+// the demo for everyone, forever, until the DB is wiped by hand).
+let CONV_ID = 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+function newChat(){
+  CONV_ID = 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  document.getElementById('out').textContent = '—';
+}
 async function go(){
   const q=document.getElementById('q').value.trim(); if(!q)return;
   const auth=document.getElementById('auth').checked;
-  const r=await fetch('/api/turn',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({text:q,authenticated:auth})});
-  const d=await r.json();
-  let t='[agent] '+d.reply+'\n[action] '+(d.action||'none')+'  [policy] '+(d.decision||'n/a');
-  if(d.executed) t+='  [tool: EXECUTED]';
-  (d.reasons||[]).forEach(x=>t+='\n   · '+x);
-  document.getElementById('out').textContent=t;
+  const out=document.getElementById('out');
+  out.textContent='…thinking';
+  try{
+    const r=await fetch('/api/turn',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:q,authenticated:auth,conv_id:CONV_ID})});
+    const d=await r.json();
+    if(!r.ok){ out.textContent='[error] '+r.status+' — '+(d.error||'request failed'); return; }
+    if(d.error){ out.textContent='[error] '+d.error; return; }
+    let t='[agent] '+(d.reply||'')+'\n[action] '+(d.action||'none')+'  [policy] '+(d.decision||'n/a');
+    if(d.executed) t+='  [tool: EXECUTED]';
+    (d.reasons||[]).forEach(x=>t+='\n   · '+x);
+    out.textContent=t;
+  }catch(e){
+    out.textContent='[error] network: '+e;
+  }
 }
 </script></body></html>"""
 

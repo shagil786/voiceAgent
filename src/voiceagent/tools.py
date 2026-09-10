@@ -534,7 +534,7 @@ class ToolGateway:
                                     "reason": p.get("reason", "resolved")},
         "record_feedback": lambda erp, p: {"feedback_recorded": True,
                                            "rating": p["rating"],
-                                           "comment": p["comment"]},
+                                           "comment": p.get("comment", "")},
         "cancel_order": lambda erp, p: erp.cancel_order(p["order_id"], p["reason"]),
         "reschedule_delivery": lambda erp, p: erp.reschedule_delivery(p["order_id"], p["new_date"]),
         "initiate_refund": lambda erp, p: erp.initiate_refund(

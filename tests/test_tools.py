@@ -538,3 +538,7 @@ def test_end_call_and_feedback_tools_governed():
     assert r.ok and r.value["rating"] == 8.0
     bad = gw.execute("record_feedback", {"rating": "11"})
     assert not bad.ok and "out_of_range" in bad.error
+    # `comment` is optional (declared params are ("rating",) only): a caller
+    # that omits it must not crash the governed path with a bare KeyError.
+    no_comment = gw.execute("record_feedback", {"rating": "7"})
+    assert no_comment.ok and no_comment.value["comment"] == ""

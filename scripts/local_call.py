@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
-"""scripts/local_call.py - talk to the agent WITHOUT the phone.
+"""scripts/local_call.py - REPLICATE A CALL in your terminal. No phone, no LiveKit.
 
-For the agent this IS a call: the exact same utterance pipeline a LiveKit
-call runs (voiceagent.telephony.inbound.make_turn_fn - declared greeting,
-whisper ASR, governed brain over the real ERP backend, piper TTS, phone-
-digit slot, non-speech gate, farewell hangup guard, end_call). Only the
-transport differs: your Mac's mic/speakers instead of a SIP trunk.
+For the agent this IS a call: same governed orchestrator, same tenant
+persona, same real ERP backend, same greeting / farewell / end_call
+behaviour as a LiveKit call. Only the transport is local.
+
+Two modes:
+  [default] VOICE CALL   - you speak (mic), the agent speaks back (speakers).
+  --text    TEXT CALL    - you type, the agent SPEAKS its replies (speakers)
+                           and prints them. Same call, no mic needed.
 
 Usage:
-    PYTHONPATH=src .venv/bin/python scripts/local_call.py
-        Walkie-talkie: press Enter, speak, stop - the clip ends on ~0.7s of
-        silence (or 12s cap). Type 'quit' to leave. Replies are spoken via
-        afplay.
+    PYTHONPATH=src .venv/bin/python scripts/local_call.py            # voice
+    PYTHONPATH=src .venv/bin/python scripts/local_call.py --text     # typed
+    scripts/local_call.py --device ":1"     # pick another mic input
+    scripts/local_call.py --test-wav f.wav  # one-shot WAV through the turn
 
-    scripts/local_call.py --device ":1"
-        Pick a different ffmpeg avfoundation audio input (default ":0").
-
-    scripts/local_call.py --test-wav <file.wav>
-        Feed ONE pre-recorded WAV through the same turn and print the reply
-        - no mic needed (self-check).
-
-The same INFO lines the worker prints (caller transcript, turn timings,
-policy verdicts, reply) appear on stderr, so behaviour is directly
-comparable to a phone call.
+Flow (identical to a phone call):
+    greeting plays -> you talk/type -> agent replies (spoken + printed)
+    -> ... -> you say bye -> farewell guard ends the call cleanly.
+Type 'quit' to hang up manually. INFO logs (caller transcript, tool
+verdicts, timings) mirror the worker's, so you can compare 1:1.
 """
 from __future__ import annotations
 
@@ -60,15 +58,11 @@ def load_dotenv(path: Path) -> None:
             os.environ[key] = value
 
 
+# --- audio plumbing (stdlib + ffmpeg/afplay) --------------------------------
+
 def record_utterance(device: str, max_s: float = 12.0,
                      silence_s: float = 0.7) -> bytes:
-    """Record one utterance from the mic to raw 16k mono s16le PCM.
-
-    ffmpeg runs silencedetect on the live stream; we kill it when a
-    trailing silence >= silence_s starts AFTER >= 0.6s of audio (an
-    initial silence_start at 0.0 is ignored). Raw PCM has no WAV header,
-    so killing ffmpeg mid-stream leaves a readable buffer.
-    """
+    """Record one utterance from the mic to raw 16k mono s16le PCM."""
     raw_path = Path(tempfile.mkstemp(suffix=".pcm")[1])
     cmd = [
         "ffmpeg", "-hide_banner", "-loglevel", "info", "-nostats",
@@ -120,6 +114,17 @@ def play_pcm16(pcm16: bytes, tag: str = "reply") -> None:
     subprocess.run(["afplay", str(out)], check=False)
 
 
+def speak_text(text: str, language: str) -> None:
+    """Speak `text` out loud (piper) so a text call still sounds like a call."""
+    from voiceagent.telephony.inbound import _default_tts
+    if not text:
+        return
+    try:
+        play_pcm16(_default_tts(text, language), "spoken")
+    except Exception:
+        logger.warning("tts failed", exc_info=True)
+
+
 def build_call_env():
     """Same deps the LiveKit worker builds: governed orchestrator over the
     real ERP (VOICEAGENT_ERP_URL required) + warmed ASR/classifier."""
@@ -153,8 +158,22 @@ def build_call_env():
     return orchestrator
 
 
+def play_greeting(orchestrator, session_id: str, language: str) -> None:
+    """Call greeting parity: declared tenant greeting, else a governed turn."""
+    from voiceagent.telephony.inbound import GREETING_TRANSCRIPT, _default_tts
+    greeting = getattr(orchestrator, "greeting", "") or ""
+    if greeting.strip():
+        logger.info("greeting: declared text (%d chars)", len(greeting))
+        greet_pcm = _default_tts(greeting, language)
+    else:
+        greet_pcm = _default_tts(
+            orchestrator.handle_turn(session_id, GREETING_TRANSCRIPT).reply,
+            language)
+    play_pcm16(greet_pcm, "greeting")
+
+
 def run_utterance(turn_fn, pcm16: bytes) -> bool:
-    """Feed one utterance; returns True when the agent ended the call."""
+    """Feed one mic utterance through the call turn; True = agent ended call."""
     if not pcm16 or len(pcm16) < 320:
         logger.info("(empty clip - skipping)")
         return False
@@ -168,22 +187,12 @@ def run_utterance(turn_fn, pcm16: bytes) -> bool:
     return bool(getattr(turn_fn, "call_ended", False))
 
 
-def interactive_loop(orchestrator, language: str, device: str) -> None:
-    from voiceagent.telephony.inbound import (
-        GREETING_TRANSCRIPT, _default_tts, make_turn_fn)
-
+def voice_loop(orchestrator, language: str, device: str) -> None:
+    from voiceagent.telephony.inbound import make_turn_fn
     session_id = "local-call-%d" % int(time.time())
     turn_fn = make_turn_fn(orchestrator, session_id, language=language)
-    greeting = getattr(orchestrator, "greeting", "") or ""
-    if greeting.strip():
-        logger.info("greeting: declared text (%d chars)", len(greeting))
-        greet_pcm = _default_tts(greeting, language)
-    else:
-        greet_pcm = _default_tts(
-            orchestrator.handle_turn(session_id, GREETING_TRANSCRIPT).reply,
-            language)
-    play_pcm16(greet_pcm, "greeting")
-    print("Connected to the agent locally (same pipeline as a phone call).")
+    play_greeting(orchestrator, session_id, language)
+    print("VOICE CALL connected (same pipeline as a phone call).")
     print("Press Enter and speak - clip ends on ~0.7s silence. 'quit' exits.\n")
     while True:
         try:
@@ -204,11 +213,40 @@ def interactive_loop(orchestrator, language: str, device: str) -> None:
             break
 
 
+def text_loop(orchestrator, language: str) -> None:
+    """Typed call: agent replies spoken + printed, same brain/ERP/greeting."""
+    session_id = "local-call-%d" % int(time.time())
+    play_greeting(orchestrator, session_id, language)
+    print("TEXT CALL connected (agent thinks it is on a call).")
+    print("Type your side - the agent SPEAKS its replies. 'quit' hangs up.\n")
+    while True:
+        try:
+            line = input("You> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nbye")
+            break
+        if not line:
+            continue
+        if line.lower() in ("quit", "exit", "q"):
+            break
+        try:
+            result = orchestrator.handle_turn(session_id, line[:2000])
+        except Exception:
+            logger.warning("turn failed", exc_info=True)
+            continue
+        print("\nAGENT: %s\n" % result.reply)
+        speak_text(result.reply, language)
+        ended = any(a.get("action") == "end_call" and a.get("ok")
+                    for a in (getattr(result, "actions", None) or []))
+        if ended:
+            print("(call ended by agent - farewell guard fired)")
+            break
+
+
 def test_wav(orchestrator, language: str, wav_path: str) -> None:
     """One recorded WAV through the real turn (no mic)."""
     from voiceagent.telephony.audio import resample_to_16k
     from voiceagent.telephony.inbound import make_turn_fn
-
     with wave.open(wav_path, "rb") as w:
         rate = w.getframerate()
         pcm = resample_to_16k(w.readframes(w.getnframes()), rate)
@@ -221,6 +259,8 @@ def test_wav(orchestrator, language: str, wav_path: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--text", action="store_true",
+                        help="typed call instead of mic (agent still speaks)")
     parser.add_argument("--device", default=":0",
                         help="ffmpeg avfoundation audio input (default :0)")
     parser.add_argument("--test-wav", metavar="FILE",
@@ -231,8 +271,10 @@ def main() -> None:
     language = os.environ.get("VOICEAGENT_DEFAULT_LANG") or "en-US"
     if args.test_wav:
         test_wav(orchestrator, language, args.test_wav)
+    elif args.text:
+        text_loop(orchestrator, language)
     else:
-        interactive_loop(orchestrator, language, args.device)
+        voice_loop(orchestrator, language, args.device)
 
 
 if __name__ == "__main__":

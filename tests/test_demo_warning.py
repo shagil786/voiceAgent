@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def _run(script: str) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items()
            if k not in ("VOICEAGENT_FRONTIER_URL", "VOICEAGENT_TENANT")}
+    # Hermetic: point the (chat_server) .env loader at a missing file so
+    # local .env config cannot leak into the offline fail-fast contract.
+    env["VOICEAGENT_DOTENV_PATH"] = str(ROOT / "data" / "out" / "no-such-.env")
     return subprocess.run([sys.executable, str(ROOT / "scripts" / script)],
                           capture_output=True, text=True, env=env, cwd=ROOT,
                           timeout=120)
