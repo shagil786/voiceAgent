@@ -45,19 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger("local_call")
 
 
-def load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key, value = key.strip(), value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
-            os.environ[key] = value
-
-
+from voiceagent.dotenv import load_dotenv  # single source; call only inside main(), never at module level
 # --- audio plumbing (stdlib + ffmpeg/afplay) --------------------------------
 
 def record_utterance(device: str, max_s: float = 12.0,

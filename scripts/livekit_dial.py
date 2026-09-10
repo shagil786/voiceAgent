@@ -45,26 +45,7 @@ def _api(config):
     )
 
 
-def load_dotenv(path: Path) -> None:
-    """Same .env loader every other script entry point uses.
-        VOICEAGENT_DOTENV_PATH overrides the file location (tests point it at a
-        missing path so subprocess checks stay hermetic); an explicitly missing
-        override is honored (no fallback), an unset/empty one uses the default."""
-    override = os.environ.get("VOICEAGENT_DOTENV_PATH", "").strip()
-    if override:
-        path = Path(override)
-    if not path.exists():
-        return
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key, value = key.strip(), value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
-            os.environ[key] = value
-
-
+from voiceagent.dotenv import load_dotenv  # single source; call only inside main(), never at module level
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--to", required=True, help="E.164 destination number")
