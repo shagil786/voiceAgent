@@ -1,0 +1,32 @@
+# Platform language data: Arabic (MSA). Same detection gap as Urdu (shared Arabic block, no claim). Currency words stay tenant-configured.
+code: ar
+digits: "٠١٢٣٤٥٦٧٨٩"
+numbers:
+  words:
+    صفر: 0
+    واحد: 1
+    اثنان: 2
+    ثلاثة: 3
+    أربعة: 4
+    خمسة: 5
+    ستة: 6
+    سبعة: 7
+    ثمانية: 8
+    تسعة: 9
+    عشرة: 10
+    عشرون: 20
+    ثلاثون: 30
+    أربعون: 40
+    خمسون: 50
+    ستون: 60
+    سبعون: 70
+    ثمانون: 80
+    تسعون: 90
+  scales:
+    مائة: 100
+    مئات: 100
+    ألف: 1000
+    آلاف: 1000
+    مليون: 1000000
+    ملايين: 1000000
+  hundred: [مائة]

@@ -1,6 +1,7 @@
 # Platform language data: Romanized Hindi (hinglish, Latin script).
 # Sentiment only — amounts parse via the English number engine.
 code: hinglish
+detect_stage: hinglish
 sentiment:
   - bakwas
   - ghatiya
@@ -21,3 +22,45 @@ sentiment:
   - nahi ho raha
   - last time bol
 companions: [hi]
+detect_tokens:
+  - aayega
+  - aayegi
+  - abhi
+  - batao
+  - bhai
+  - chahiye
+  - do
+  - gaya
+  - gayi
+  - hai
+  - ho
+  - hua
+  - hui
+  - kab
+  - kaha
+  - kahan
+  - kar
+  - karke
+  - karna
+  - karo
+  - karu
+  - kitna
+  - kitni
+  - krna
+  - kro
+  - kya
+  - kyu
+  - kyun
+  - lag
+  - mera
+  - mere
+  - meri
+  - milega
+  - milenga
+  - nahi
+  - nhi
+  - paisa
+  - paise
+  - raha
+  - rahi
+  - wapas

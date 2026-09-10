@@ -1,5 +1,35 @@
-# Platform language data: Punjabi (Gurmukhi) — digits only for now (number
-# words + sentiment are open vocabulary gaps; amounts still parse
-# via digit normalization).
+# Platform language data: Punjabi (Gurmukhi).
 code: pa
+scripts: [Gurmukhi]
 digits: "੦੧੨੩੪੫੬੭੮੯"
+numbers:
+  words:
+    ਸਿਫ਼ਰ: 0
+    ਇੱਕ: 1
+    ਦੋ: 2
+    ਤਿੰਨ: 3
+    ਚਾਰ: 4
+    ਪੰਜ: 5
+    ਛੇ: 6
+    ਸੱਤ: 7
+    ਅੱਠ: 8
+    ਨੌਂ: 9
+    ਦਸ: 10
+    ਵੀਹ: 20
+    ਤਿਹ: 30
+    ਚਾਲੀ: 40
+    ਪੰਜਾਹ: 50
+    ਸੱਠ: 60
+    ਸੱਤਰ: 70
+    ਅੱਸੀ: 80
+    ਨੱਬੇ: 90
+  scales:
+    ਸੌ: 100
+    ਹਜ਼ਾਰ: 1000
+    ਲੱਖ: 100000
+    ਕਰੋੜ: 10000000
+  hundred: [ਸੌ]
+currency_words:
+  "₹":
+    - 'ਰੁਪਏ'
+    - 'ਰੁ\.?'

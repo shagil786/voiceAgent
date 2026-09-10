@@ -1,5 +1,34 @@
-# Platform language data: Malayalam — digits only for now (number
-# words + sentiment are open vocabulary gaps; amounts still parse
-# via digit normalization).
+# Platform language data: Malayalam.
 code: ml
+scripts: [Malayalam]
 digits: "൦൧൨൩൪൫൬൭൮൯"
+numbers:
+  words:
+    പൂജ്യം: 0
+    ഒന്ന്: 1
+    രണ്ട്: 2
+    മൂന്ന്: 3
+    നാല്: 4
+    അഞ്ച്: 5
+    ആറ്: 6
+    ഏഴ്: 7
+    എട്ട്: 8
+    ഒമ്പത്: 9
+    പത്ത്: 10
+    ഇരുപത്: 20
+    മുപ്പത്: 30
+    നാല്പത്: 40
+    അമ്പത്: 50
+    അറുപത്: 60
+    എഴുപത്: 70
+    എൺപത്: 80
+    തൊണ്ണൂറ്: 90
+  scales:
+    നൂറ്: 100
+    ആയിരം: 1000
+    ലക്ഷം: 100000
+    കോടി: 10000000
+  hundred: [നൂറ്]
+currency_words:
+  "₹":
+    - 'രൂപ'

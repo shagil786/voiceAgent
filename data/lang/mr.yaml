@@ -1,0 +1,34 @@
+# Platform language data: Marathi. Shares the Devanagari block and
+# digits with Hindi (no digits row needed) — hence detect_as: hi
+# (explicit data: script-identical, lexicon-ambiguous).
+code: mr
+scripts: [Devanagari]
+detect_as: hi
+numbers:
+  words:
+    शून्य: 0
+    एक: 1
+    दोन: 2
+    तीन: 3
+    चार: 4
+    पाच: 5
+    सहा: 6
+    सात: 7
+    आठ: 8
+    नऊ: 9
+    दहा: 10
+    वीस: 20
+    तीस: 30
+    चाळीस: 40
+    पन्नास: 50
+    साठ: 60
+    सत्तर: 70
+    ऐंशी: 80
+    नव्वद: 90
+  scales:
+    शे: 100
+    शंभर: 100
+    हजार: 1000
+    लाख: 100000
+    कोटी: 10000000
+  hundred: [शे, शंभर]

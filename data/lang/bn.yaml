@@ -1,5 +1,6 @@
 # Platform language data: bn.
 code: bn
+scripts: [Bengali]
 digits: "০১২৩৪৫৬৭৮৯"
 numbers:
   words:
@@ -45,3 +46,6 @@ sentiment:
   - বাজে
   - ঠকানো
   - যথেষ্ট হয়েছে
+currency_words:
+  "₹":
+    - 'টাকা'

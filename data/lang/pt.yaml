@@ -1,5 +1,6 @@
 # Platform language data: pt.
 code: pt
+detect_stage: global
 sentiment:
   - irritado
   - furioso
@@ -14,3 +15,20 @@ sentiment:
   - péssimo
   - pessimo
   - falar com o gerente
+detect_tokens:
+  - entrega
+  - fatura
+  - mas
+  - meu
+  - minha
+  - nao
+  - não
+  - obrigada
+  - obrigado
+  - onde
+  - pedido
+  - quando
+  - quero
+  - reembolso
+  - voce
+  - você

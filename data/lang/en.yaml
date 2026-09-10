@@ -66,3 +66,18 @@ sentiment:
   - demand
   - never again
   - cancel everything
+currency_words:
+  "$":
+    - 'dollars?'
+    - 'usd?'
+  "€":
+    - 'euros?'
+    - 'eur'
+  "£":
+    - 'pounds?'
+    - 'gbp?'
+    - 'sterling'
+  "¥":
+    - 'yuan?'
+    - 'renminbi?'
+    - 'yen'

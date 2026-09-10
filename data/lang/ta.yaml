@@ -1,5 +1,6 @@
 # Platform language data: ta.
 code: ta
+scripts: [Tamil]
 digits: "௦௧௨௩௪௫௬௭௮௯"
 numbers:
   words:
@@ -45,3 +46,7 @@ sentiment:
   - மோசம்
   - ஏமாற்று
   - போதும்
+currency_words:
+  "₹":
+    - 'ரூபாய்'
+    - 'ரூ\.?'

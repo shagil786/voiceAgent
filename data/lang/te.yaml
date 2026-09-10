@@ -1,5 +1,6 @@
 # Platform language data: te.
 code: te
+scripts: [Telugu]
 digits: "౦౧౨౩౪౫౬౭౮౯"
 numbers:
   words:
@@ -45,3 +46,7 @@ sentiment:
   - చెత్త
   - మోసం
   - చాలు
+currency_words:
+  "₹":
+    - 'రూపాయలు'
+    - 'రూ\.?'

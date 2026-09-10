@@ -1,5 +1,6 @@
 # Platform language data: th.
 code: th
+scripts: [Thai]
 digits: "๐๑๒๓๔๕๖๗๘๙"
 numbers:
   words:
@@ -36,3 +37,6 @@ sentiment:
   - หลอกลวง
   - ไม่พอใจ
   - พอแล้ว
+currency_words:
+  "฿":
+    - 'บาท'

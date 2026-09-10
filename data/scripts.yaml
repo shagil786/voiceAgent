@@ -1,0 +1,19 @@
+# Platform script table: unicode mechanical facts (script name -> codepoint
+# ranges). Languages CLAIM scripts in data/lang/<code>.yaml (`scripts:`);
+# detection resolves claims there (see langdata). Adding a script is a row
+# here + a claim in a lang file — never a code edit.
+scripts:
+  Devanagari: [[0x0900, 0x097F]]
+  Bengali: [[0x0980, 0x09FF]]
+  Gurmukhi: [[0x0A00, 0x0A7F]]
+  Gujarati: [[0x0A80, 0x0AFF]]
+  Tamil: [[0x0B80, 0x0BFF]]
+  Telugu: [[0x0C00, 0x0C7F]]
+  Kannada: [[0x0C80, 0x0CFF]]
+  Malayalam: [[0x0D00, 0x0D7F]]
+  Thai: [[0x0E00, 0x0E7F]]
+  # Arabic block covers the Arabic-Indic digits (U+0660-0669) and the
+  # Extended Arabic-Indic digits (U+06F0-06F9, Urdu). No language claims
+  # this script yet — ar/ur tables load for declared-language deployments,
+  # but script detection stays unmapped until lexicons can tell ar from ur.
+  Arabic: [[0x0600, 0x06FF]]

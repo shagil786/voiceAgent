@@ -1,0 +1,33 @@
+# Platform language data: Urdu. No scripts: claim — the Arabic block is shared with Arabic and only lexicons can tell ar from ur (open gap). Tables serve declared-language deployments (VOICEAGENT_DEFAULT_LANG=ur) via ASR forcing.
+code: ur
+digits: "۰۱۲۳۴۵۶۷۸۹"
+numbers:
+  words:
+    صفر: 0
+    ایک: 1
+    دو: 2
+    تین: 3
+    چار: 4
+    پانچ: 5
+    چھ: 6
+    سات: 7
+    آٹھ: 8
+    نو: 9
+    دس: 10
+    بیس: 20
+    تیس: 30
+    چالیس: 40
+    پچاس: 50
+    ساٹھ: 60
+    ستر: 70
+    اسی: 80
+    نوے: 90
+  scales:
+    سو: 100
+    ہزار: 1000
+    لاکھ: 100000
+    کروڑ: 10000000
+  hundred: [سو]
+currency_words:
+  "₹":
+    - 'روپے'

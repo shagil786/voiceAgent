@@ -16,11 +16,12 @@ def test_every_served_language_has_a_lang_file():
     # ASR routing) minus known vocabulary gaps must ship tables.
     from voiceagent.tts import VOICE_REGISTRY
     served = set(VOICE_REGISTRY)
-    known_gaps = {"ta", "gu", "kn", "pa", "mr", "ml", "ur", "ar"}
+    known_gaps = set()  # every voiced language now ships number tables
     have = {p.stem for p in LANG_DIR.glob("*.yaml")}
     missing = served - have - known_gaps
     assert not missing, f"served but undeclared: {sorted(missing)}"
-    assert {"en", "hi", "te", "ta", "bn", "th"} <= have
+    assert {"en", "hi", "te", "ta", "bn", "th", "mr", "gu", "kn", "ml",
+            "pa", "ur", "ar"} <= have
 
 
 def test_add_a_language_is_add_a_file(tmp_path, monkeypatch):
@@ -62,3 +63,56 @@ def test_companions_are_declared_not_coded():
     assert langdata.companions_for("hi") == ("hinglish",)
     assert langdata.companions_for("hinglish") == ("hi",)
     assert langdata.companions_for("te") == ()
+
+
+def test_script_claims_are_data_not_code():
+    import inspect
+    from voiceagent import langid as li
+    from voiceagent import entities as ent
+    for mod in (li, ent):
+        src = inspect.getsource(mod)
+        for lit in ("0x0900", "0x0E00", "097F", "0E7F", "\\u0900",
+                    "Devanagari", "Gurmukhi"):
+            assert lit not in src, f"script literal {lit!r} in {mod.__name__}"
+    claims = dict((c, (lo, hi)) for c, lo, hi in langdata.script_claims())
+    assert claims["hi"] == (0x0900, 0x097F)
+    assert claims["th"] == (0x0E00, 0x0E7F)
+    # Marathi shares Devanagari: explicit detect_as, no code branch.
+    assert langdata.tables()["mr"]["detect_as"] == "hi"
+    assert "mr" in langdata.native_script_codes()
+    # Arabic tokenizes (mechanical) but no file claims it (detection gap).
+    assert (0x0600, 0x06FF) in langdata.tokenizer_ranges()
+    assert "Arabic" not in [s for e in langdata.tables().values()
+                            for s in e["scripts"]]
+
+
+def test_detection_lexicons_come_from_files():
+    import inspect
+    from voiceagent import langid as li
+    src = inspect.getsource(li)
+    for token in ("quiero", "remboursement", "rückerstattung", "kya"):
+        assert token not in src, f"lexicon token {token!r} in langid code"
+    assert set(li.GLOBAL_LEXICONS) == {"de", "es", "fr", "pt"}
+    assert "kya" in li.HINGLISH_LEXICON and "hai" in li.HINGLISH_LEXICON
+    assert li.detect_language("où est mon remboursement merci beaucoup") \
+        == "fr"
+    assert li.detect_language("meri ORD-4821 kahan hai batao bhai") \
+        == "hinglish"
+
+
+def test_currency_forms_come_from_files():
+    import inspect
+    from voiceagent import entities as ent
+    src = inspect.getsource(ent)
+    assert "dollars?" not in src and "रुपये" not in src
+    assert "บาท" not in {**{}} and "บาท" in ent._CURRENCY_WORDS.get("฿", ())
+    assert "روپے" in ent._CURRENCY_WORDS.get("₹", ())
+
+
+def test_new_vocabularies_parse():
+    from voiceagent.entities import extract_entities as e
+    from voiceagent.entities import words_to_number as w
+    assert w(["पाच", "हजार"]) == 5000          # mr (Devanagari, hi digits)
+    assert w(["ऐंशी", "हजार"]) == 80000
+    assert e("वीस हजार रुपये", currency="₹").amount == 20000.0
+    assert e("ORD-౪౮౨౧").order_id == "ORD-4821"  # Telugu digits (pinned)

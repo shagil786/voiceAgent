@@ -1,5 +1,6 @@
 # Platform language data: de.
 code: de
+detect_stage: global
 sentiment:
   - wütend
   - wutend
@@ -9,3 +10,26 @@ sentiment:
   - lacherlich
   - betrogen
   - es reicht
+detect_tokens:
+  - bestellung
+  - bitte
+  - danke
+  - das
+  - der
+  - eine
+  - einen
+  - fuer
+  - für
+  - ich
+  - kommt
+  - lieferung
+  - mein
+  - meine
+  - mochte
+  - möchte
+  - nicht
+  - ruckerstattung
+  - rueckerstattung
+  - rückerstattung
+  - und
+  - wann

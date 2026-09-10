@@ -1,5 +1,6 @@
 # Platform language data: es.
 code: es
+detect_stage: global
 sentiment:
   - enojado
   - furioso
@@ -15,3 +16,18 @@ sentiment:
   - inútil
   - inutil
   - basta
+detect_tokens:
+  - cuando
+  - cuándo
+  - donde
+  - dónde
+  - factura
+  - gracias
+  - mi
+  - mis
+  - para
+  - pedido
+  - pero
+  - que
+  - quiero
+  - reembolso

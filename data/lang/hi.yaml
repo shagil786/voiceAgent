@@ -2,6 +2,7 @@
 # compounds, hence the full table (compositional languages need only
 # tens+units). Scales + garbles (observed ASR mishearings) included.
 code: hi
+scripts: [Devanagari]
 digits: "०१२३४५६७८९"
 numbers:
   words:
@@ -135,3 +136,9 @@ sentiment:
   - कितना दिन
   - अपमान
 companions: [hinglish]
+currency_words:
+  "₹":
+    - 'rs\.?'
+    - 'rupees?'
+    - 'रुपये?'
+    - 'रु\.?'

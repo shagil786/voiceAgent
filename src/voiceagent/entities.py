@@ -1,19 +1,18 @@
 # src/voiceagent/entities.py
 """Deterministic entity extraction from customer text — the inputs the
-policy engine needs (amount, order id) to make a real decision instead of
+policy engine needs (amount, record id) to make a real decision instead of
 assuming "no amount, unauthenticated" for everything.
 
-M5b-3: ASR engines may speak numbers as WORDS (Qwen3-ASR writes
-"ORD four thousand eight hundred twenty one"; IndicConformer writes Telugu
-number words; whisper-hi may emit Devanagari digits ४८२१). Number-words are
-normalized to digits before the regexes run: English scale form
-("four thousand eight hundred twenty one"), digit-list form ("four eight
-two one"), Devanagari digits, and — since 2026-09 — compositional
-Telugu/Tamil/Bengali/Thai words (tens + units accumulate: ఇరవై ఒకటి ->
-21) plus native-script digits for 9 scripts. Thai compounds are single
-orthographic words, longest-match split first (see _space_thai_numbers).
-New languages arrive as flat value tables + digit rows (data, never parser
-branches); the scale engine reads the unified lookups only."""
+M5b-3: ASR engines may speak numbers as WORDS ("ORD four thousand eight
+hundred twenty one") or native-script digits. Number-words normalize to
+digits before the regexes run: scale form, digit-list form, and
+compositional tens+units forms all accumulate in one scale engine over
+unified lookups. Every language table (words, scales, digits, currency
+forms) loads from data/lang/*.yaml; record-ID shapes load from the
+tenant bundle's entities.yaml. New languages/industries arrive as data
+files — never parser branches, never literals here. Thai compounds are
+single orthographic words, longest-match split first (vocabulary for the
+splitter also comes from the loaded tables)."""
 from __future__ import annotations
 
 import re
@@ -30,6 +29,7 @@ from voiceagent.langdata import (  # noqa: E402  (data loader is stdlib+yaml)
     garble_map,
     number_lookups,
     tables as _lang_tables,
+    tokenizer_ranges,
 )
 
 _WORD_VALUES, _SCALE_VALUES, _HUNDRED_WORDS = number_lookups()
@@ -276,21 +276,13 @@ def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
 
 
 # Currency WORD forms per currency symbol (regex fragments, `re.IGNORECASE`):
-# the words that may introduce or follow a money amount for THAT currency.
-# Scoped to the active currency only — "dollars" must not create amounts for
-# a ₹ tenant. Keep the rupee alternation byte-identical (hi/Devanagari
-# behaviour is pinned by tests). Later entries are additive extensions:
-# Tamil/Telugu rupee forms (South-Indian tenants) and £/¥ word forms —
-# each form mints amounts only for its own currency.
+# Currency word forms per symbol — loaded from data/lang/*.yaml
+# (`currency_words:`): each language declares its own money words, and each
+# form mints amounts only for its own currency (tenant isolation).
+from voiceagent.langdata import currency_words as _load_currency
+
 _CURRENCY_WORDS: dict[str, tuple[str, ...]] = {
-    "₹": (r"rs\.?", r"rupees?", r"रुपये?", r"रु\.?",
-          r"ரூபாய்", r"ரூ\.?", r"రూపాయలు", r"రూ\.?", r"টাকা"),
-    "$": (r"dollars?", r"usd?"),
-    "€": (r"euros?", r"eur"),
-    "£": (r"pounds?", r"gbp?", r"sterling"),
-    "¥": (r"yuan?", r"renminbi?", r"yen"),
-    "฿": (r"บาท",),
-}
+    sym: tuple(forms) for sym, forms in _load_currency().items()}
 
 
 def _currency_word_alts(currency: str) -> str:
@@ -411,18 +403,14 @@ def _levenshtein(a: str, b: str) -> int:
     return prev[-1]
 
 
-_DIGIT_TOKEN_RE = re.compile(
-    r"[A-Za-z"
-    r"\u0900-\u097F"  # Devanagari
-    r"\u0C00-\u0C7F"  # Telugu
-    r"\u0B80-\u0BFF"  # Tamil
-    r"\u0980-\u09FF"  # Bengali
-    r"\u0E00-\u0E7F"  # Thai
-    r"\u0A80-\u0AFF"  # Gujarati
-    r"\u0C80-\u0CFF"  # Kannada
-    r"\u0D00-\u0D7F"  # Malayalam
-    r"\u0A00-\u0A7F"  # Gurmukhi
-    r"0-9]+")
+def _token_class() -> str:
+    parts = ["A-Za-z"]
+    for lo, hi in tokenizer_ranges():
+        parts.append("\\u%04x-\\u%04x" % (lo, hi))
+    return "".join(parts) + "0-9"
+
+
+_DIGIT_TOKEN_RE = re.compile("[" + _token_class() + "]+")
 
 
 def _digit_clusters(text: str) -> list[str]:

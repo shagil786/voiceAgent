@@ -1,5 +1,6 @@
 # Platform language data: fr.
 code: fr
+detect_stage: global
 sentiment:
   - en colère
   - colere
@@ -10,3 +11,19 @@ sentiment:
   - j'en ai marre
   - marre
   - nul
+detect_tokens:
+  - commande
+  - je
+  - la
+  - le
+  - les
+  - livraison
+  - ma
+  - mais
+  - merci
+  - mon
+  - pas
+  - remboursement
+  - veux
+  - voudrais
+  - vous

@@ -1,5 +1,35 @@
-# Platform language data: Gujarati — digits only for now (number
-# words + sentiment are open vocabulary gaps; amounts still parse
-# via digit normalization).
+# Platform language data: Gujarati.
 code: gu
+scripts: [Gujarati]
 digits: "૦૧૨૩૪૫૬૭૮૯"
+numbers:
+  words:
+    શૂન્ય: 0
+    એક: 1
+    બે: 2
+    ત્રણ: 3
+    ચાર: 4
+    પાંચ: 5
+    છ: 6
+    સાત: 7
+    આઠ: 8
+    નવ: 9
+    દસ: 10
+    વીસ: 20
+    ત્રીસ: 30
+    ચાલીસ: 40
+    પચાસ: 50
+    સાઠ: 60
+    સિત્તેર: 70
+    એંસી: 80
+    નેવું: 90
+  scales:
+    સો: 100
+    હજાર: 1000
+    લાખ: 100000
+    કરોડ: 10000000
+  hundred: [સો]
+currency_words:
+  "₹":
+    - 'રૂપિયા'
+    - 'રૂ\.?'
