@@ -51,6 +51,9 @@ def main() -> int:
                         help="audit DB override (default: VOICEAGENT_AUDIT_DB)")
     parser.add_argument("--memory-db", default=None,
                         help="memory DB override (default: VOICEAGENT_MEMORY_DB)")
+    parser.add_argument("--chat-db", default=None,
+                        help="chat transcript DB override "
+                             "(default: VOICEAGENT_CHAT_MEMORY_DB)")
     args = parser.parse_args()
 
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -59,7 +62,8 @@ def main() -> int:
     if args.erase_session:
         out = ret.erase_session(args.erase_session, tenant=args.tenant,
                                 audit_db=args.audit_db,
-                                memory_db=args.memory_db)
+                                memory_db=args.memory_db,
+                                chat_db=args.chat_db)
         print(json.dumps({"erased": args.erase_session, "removed": out},
                          indent=2))
         return 0
@@ -72,7 +76,8 @@ def main() -> int:
               file=sys.stderr)
         return 2
     out = ret.purge_expired(days=days, audit_db=args.audit_db,
-                            memory_db=args.memory_db)
+                            memory_db=args.memory_db,
+                            chat_db=args.chat_db)
     print(json.dumps({"retention_days": days, "removed": out}, indent=2))
     return 0
 

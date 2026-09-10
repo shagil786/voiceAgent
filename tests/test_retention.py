@@ -149,3 +149,28 @@ def test_ratings_prune_with_episodes(tmp_path):
     assert store.prune_ratings_before("2026-01-01T00:00:00") == 1
     assert store.prune_ratings_before("2026-01-01T00:00:00") == 0
     store.close()
+
+
+def test_chat_memory_prune_and_erase(tmp_path):
+    from voiceagent.memory import SQLiteMemory, Turn
+    from voiceagent.retention import erase_session, purge_expired
+    db = tmp_path / "chat.sqlite"
+    mem = SQLiteMemory(str(db))
+    mem.append("s-old", Turn(ts="2020-01-01T00:00:00", role="user",
+                             text="hi", action=None, verdict=None, refs=[]))
+    mem.append("s-new", Turn(ts="2099-01-01T00:00:00", role="user",
+                             text="hello", action=None, verdict=None,
+                             refs=[]))
+    mem.close()
+    # env={}: ignore ambient os.environ (scripts/chat_server loads the repo
+    # .env at import, which would pull deployment DBs into the purge).
+    out = purge_expired(chat_db=str(db), days=30, env={})
+    assert out == {"chat_turns": 1}
+    mem = SQLiteMemory(str(db))
+    assert [t.text for t in mem.history("s-new")] == ["hello"]
+    mem.close()
+    out = erase_session("s-new", chat_db=str(db), env={})
+    assert out == {"chat_turns": 1}
+    mem = SQLiteMemory(str(db))
+    assert mem.history("s-new") == []
+    mem.close()

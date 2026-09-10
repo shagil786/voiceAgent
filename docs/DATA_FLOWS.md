@@ -12,6 +12,7 @@ files; only the rows marked CLOUD leave the host.
 |---|---|---|---|
 | Audit trail | `VOICEAGENT_AUDIT_DB` (unset = in-memory only) | turn decisions: ts, conv_id, action, verdict, reasons. **No phone numbers, no transcripts, no audio.** | `forget_caller.py --erase-session` / `--purge` |
 | Intent memory | `VOICEAGENT_MEMORY_DB` (unset = fully inert) | caller utterance fragments + ratings, keyed by tenant + session_id. **Raw caller text lives here** — the highest-sensitivity store. | same CLI; episodes also TTL-cull on consolidate |
+| Chat transcripts | `VOICEAGENT_CHAT_MEMORY_DB` (default `data/out/memory.db`) | **full turn text** for demo chat-server conversations | same CLI (`chat_turns`) |
 | ERP dev service | `data/erp/erp.sqlite` (gitignored) | demo orders/customers incl. phone numbers. Local dev only — production points `VOICEAGENT_ERP_URL` at the org's own system (the system of record; erasure there is the org's procedure). | delete the file (reseeds from fixtures) |
 
 No audio or transcripts are persisted anywhere by the platform. The phone

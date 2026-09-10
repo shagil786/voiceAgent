@@ -52,6 +52,7 @@ def cutoff_iso(days: int,
 
 def purge_expired(*, audit_db: str | None = None,
                   memory_db: str | None = None,
+                  chat_db: str | None = None,
                   days: int | None = None,
                   env: dict[str, str] | None = None) -> dict[str, int]:
     """Delete rows older than the retention window. Returns per-store
@@ -66,6 +67,7 @@ def purge_expired(*, audit_db: str | None = None,
     e = os.environ if env is None else env
     audit_db = audit_db or e.get("VOICEAGENT_AUDIT_DB")
     memory_db = memory_db or e.get("VOICEAGENT_MEMORY_DB")
+    chat_db = chat_db or e.get("VOICEAGENT_CHAT_MEMORY_DB")
     # sqlite3.connect creates missing files — never create a store just to
     # purge it; absent paths are skipped, not errors.
     if audit_db and os.path.exists(audit_db):
@@ -83,12 +85,20 @@ def purge_expired(*, audit_db: str | None = None,
             out["memory_ratings"] = store.prune_ratings_before(cutoff)
         finally:
             store.close()
+    if chat_db and os.path.exists(chat_db):
+        from voiceagent.memory import SQLiteMemory
+        mem = SQLiteMemory(chat_db)
+        try:
+            out["chat_turns"] = mem.prune_before(cutoff)
+        finally:
+            mem.close()
     return out
 
 
 def erase_session(conv_id: str, *,
                   audit_db: str | None = None,
                   memory_db: str | None = None,
+                  chat_db: str | None = None,
                   tenant: str | None = None,
                   env: dict[str, str] | None = None) -> dict[str, int]:
     """Erase one conversation everywhere the platform stores caller data.
@@ -97,6 +107,7 @@ def erase_session(conv_id: str, *,
     e = os.environ if env is None else env
     audit_db = audit_db or e.get("VOICEAGENT_AUDIT_DB")
     memory_db = memory_db or e.get("VOICEAGENT_MEMORY_DB")
+    chat_db = chat_db or e.get("VOICEAGENT_CHAT_MEMORY_DB")
     if audit_db and os.path.exists(audit_db):
         from voiceagent.decisionlog import SqliteDecisionLog
         log = SqliteDecisionLog(audit_db)
@@ -115,4 +126,13 @@ def erase_session(conv_id: str, *,
                 out["memory_prototypes"] = counts["prototypes"]
         finally:
             store.close()
+    if chat_db and os.path.exists(chat_db):
+        from voiceagent.memory import SQLiteMemory
+        mem = SQLiteMemory(chat_db)
+        try:
+            before = len(mem.history(conv_id))
+            mem.clear(conv_id)
+            out["chat_turns"] = before
+        finally:
+            mem.close()
     return out

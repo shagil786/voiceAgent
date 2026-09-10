@@ -118,6 +118,19 @@ class SQLiteMemory:
             self._conn.execute("DELETE FROM turns WHERE conv_id = ?", (conv_id,))
             self._conn.commit()
 
+    def prune_before(self, cutoff_iso: str) -> int:
+        """Retention: delete turns older than an ISO timestamp (ts < cutoff).
+        Returns the row count removed."""
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM turns WHERE ts < ?", (cutoff_iso,))
+            self._conn.commit()
+            return cur.rowcount
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
 
 def public_dict(turn: Turn) -> dict:
     """API view of a turn (the /api/history shape; internal refs omitted)."""

@@ -305,14 +305,35 @@ class Orchestrator:
         reply = self._chat(messages, tools)
         latency += reply.latency_s
         rounds = 0
+        # DENY-repeat short-circuit: a brain that re-proposes an action the
+        # policy already DENYed this turn (same action + same args) gets the
+        # cached DENY fed back and the loop closes text-only — no policy
+        # re-run, no execution, no burned rounds. Different args still get
+        # full evaluation (the caller may have fixed the amount).
+        denied: set[str] = set()
         while rounds < self.max_tool_rounds and reply.tool_calls:
             rounds += 1
             messages.append(self._assistant_message(reply))
             stop = False
             for call in reply.tool_calls:
                 raw_tool_calls += 1
-                payload, entry, is_escalation = self._dispatch_tool_call(
-                    call, state, session_id, frustration)
+                deny_key = self._deny_key(call)
+                if deny_key in denied:
+                    reason = ("already denied this turn — do not re-propose; "
+                              "answer in text or propose escalate_to_human")
+                    payload = {"ok": False, "verdict": "DENY",
+                               "reasons": [reason],
+                               "error": f"deny_repeat: {deny_key}"}
+                    entry = {"action": deny_key.split("|", 1)[0],
+                             "tool": call.name, "verdict": "DENY",
+                             "ok": False, "error": f"deny_repeat: {deny_key}",
+                             "reasons": [reason]}
+                    is_escalation = False
+                else:
+                    payload, entry, is_escalation = self._dispatch_tool_call(
+                        call, state, session_id, frustration)
+                    if entry is not None and entry.get("verdict") == "DENY":
+                        denied.add(self._deny_key(call, entry))
                 if entry is not None:
                     actions.append(entry)
                     if (entry.get("action") == "record_feedback"
@@ -632,6 +653,22 @@ class Orchestrator:
             payload["instruction"] = instruction
             return None
         return render_directive(directive)
+
+    def _deny_key(self, call: FrontierToolCall,
+                    entry: dict | None = None) -> str:
+        """Identity of a denied proposal: action + canonical args. A repeat
+        with different args is a NEW proposal (full evaluation); only the
+        exact repeat short-circuits."""
+        action = (entry or {}).get("action")
+        if action is None:
+            gmeta = self._gateway_tools.get(call.name) or {}
+            action = gmeta.get("action", call.name)
+        try:
+            args = json.dumps(call.arguments or {}, sort_keys=True,
+                              default=str)
+        except Exception:
+            args = ""
+        return f"{action}|{args}"
 
     def _ladder_slot(self, tool_name: str,
                      args: dict) -> tuple[str | None, str | None, str]:

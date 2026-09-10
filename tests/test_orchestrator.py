@@ -472,3 +472,32 @@ def test_rag_fallback_is_counted_in_metrics():
         orch_mod.retrieve_chunks = real
     assert "v" in block  # failed open to whole files
     assert metrics.snapshot()["events"] == {"rag_fallback": 1}
+
+
+def test_deny_repeat_short_circuits_without_reexecution():
+    """A stubborn brain re-proposing a DENYed action gets the cached DENY
+    (deny_repeat) — no policy re-run, no execution, no extra audit rows."""
+    from voiceagent.decisionlog import DecisionLog
+    erp = MockERP()
+    log = DecisionLog()
+    runner = GovernedToolRunner(ToolGateway(erp=erp),
+                                PolicyEngine({"order_status": {"allow": True}}),
+                                decision_log=log)
+    brain = ScriptedBrain([
+        reply(calls=[tc("t1", "cancel_order", order_id="ORD-4821",
+                        reason="x")]),
+        reply(calls=[tc("t2", "cancel_order", order_id="ORD-4821",
+                        reason="x")]),
+        reply("Fine, I will not cancel."),
+    ])
+    orch = make_orchestrator(brain, runner)
+    orch.decision_log = log
+    res = orch.handle_turn("s-rep", "cancel my order twice")
+    errs = [a.get("error", "") for a in res.actions]
+    assert errs[0].startswith("least privilege") or "DENY" in str(
+        res.actions[0].get("verdict"))
+    assert errs[1].startswith("deny_repeat:")
+    assert erp.get_order("ORD-4821")["status"] == "CONFIRMED"
+    denies = [e for e in log.entries() if e.verdict == "DENY"]
+    assert len(denies) == 1  # the repeat is fed back, not re-audited
+    assert res.reply == "Fine, I will not cancel."

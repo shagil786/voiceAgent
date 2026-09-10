@@ -37,6 +37,24 @@ def _build_live_orchestrator():
     return _runtime_build_orchestrator()
 
 
+def load_dotenv(path: Path) -> None:
+    """Same .env loader every other script entry point uses — chat_server was
+    the odd one out, so running it per README never saw .env config."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+
 class Handler(BaseHTTPRequestHandler):
     timeout = REQUEST_TIMEOUT_S  # per-socket-op timeout (BaseHTTPRequestHandler)
 
@@ -114,7 +132,11 @@ if __name__ == "__main__":
     # maps through (a 127.0.0.1 bind inside a container is unreachable).
     host = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1"
     Path("data/out").mkdir(parents=True, exist_ok=True)
-    MEMORY = SQLiteMemory("data/out/memory.db")
+    # Chat transcripts persist here (full turn text) — override the path
+    # per deployment and purge it on schedule (retention.purge_expired
+    # covers VOICEAGENT_CHAT_MEMORY_DB; unset keeps this default file).
+    MEMORY = SQLiteMemory(os.environ.get("VOICEAGENT_CHAT_MEMORY_DB")
+                          or "data/out/memory.db")
     RATE_LIMITER = rate_limiter_from_env()
     ORCH = _build_live_orchestrator()
     if not os.environ.get("VOICEAGENT_TENANT"):
