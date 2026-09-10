@@ -494,6 +494,8 @@ class Orchestrator:
         except Exception:
             logger.warning("knowledge retrieval failed; falling back to "
                            "the whole-file cap (fail-open)", exc_info=True)
+            if self.metrics is not None:
+                self.metrics.note("rag_fallback")
             capped = cap_knowledge(ck.source_texts, KNOWLEDGE_BUDGET_CHARS)
             if not capped:
                 return "", [], [], []

@@ -442,3 +442,33 @@ def test_undeclared_bridge_tool_denied_when_runner_wired():
     assert any(e.action == "book_site_visit" and e.verdict == "DENY"
                for e in log.entries())
     assert result.reply == "Sorry, I cannot do that."
+
+
+def test_rag_fallback_is_counted_in_metrics():
+    """A broken chunk index fails open AND leaves a counter — silent
+    whole-file fallback becomes observable in Metrics.snapshot()."""
+    from types import SimpleNamespace
+    from voiceagent.metrics import Metrics
+    from voiceagent.orchestrator import Deployment, Orchestrator
+    from voiceagent.swarm.frontier import FrontierAgentBridge
+
+    orch = Orchestrator(brain=FrontierAgentBridge(ScriptedBrain([])),
+                        runner=None,
+                        memory=__import__("voiceagent.memory",
+                                          fromlist=["InMemoryMemory"]).InMemoryMemory())
+    metrics = Metrics()
+    orch.metrics = metrics
+    orch.deploy(Deployment(
+        name="m", system_prompt="x", gateway_tools={},
+        knowledge={"k": "v"},
+        chunked_knowledge=SimpleNamespace(source_texts={"k": "v"})))
+    import voiceagent.orchestrator as orch_mod
+    real = orch_mod.retrieve_chunks
+    orch_mod.retrieve_chunks = lambda ck, q: (_ for _ in ()).throw(
+        RuntimeError("index down"))
+    try:
+        block, _, _, _ = orch._turn_knowledge_block("hello?")
+    finally:
+        orch_mod.retrieve_chunks = real
+    assert "v" in block  # failed open to whole files
+    assert metrics.snapshot()["events"] == {"rag_fallback": 1}

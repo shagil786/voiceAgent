@@ -17,10 +17,13 @@ MAX_SAMPLES = 10_000
 
 @dataclass
 class Metrics:
-    """Turn counters: count, latency samples (ms), verdict histogram."""
+    """Turn counters: count, latency samples (ms), verdict histogram,
+    plus a free-form event counter for fail-open/fallback paths
+    (retrieval fallback, ASR fallback, ...). Always-on, no I/O."""
     turns: int = 0
     lat_ms: list[int] = field(default_factory=list)
     verdicts: Counter = field(default_factory=Counter)
+    events: Counter = field(default_factory=Counter)
 
     def record(self, latency_s: float, verdict: str) -> None:
         """Record one turn: latency in seconds + primary policy verdict."""
@@ -29,8 +32,13 @@ class Metrics:
         del self.lat_ms[:-MAX_SAMPLES]  # ring-drop oldest past the cap
         self.verdicts[verdict] += 1
 
+    def note(self, event: str, n: int = 1) -> None:
+        """Count a fallback/fail-open occurrence (e.g. 'rag_fallback')."""
+        self.events[event] += n
+
     def snapshot(self) -> dict:
-        """Plain-data shape: {turns, avg_latency_ms, verdicts: {v: n}}."""
+        """Plain-data shape: {turns, avg_latency_ms, verdicts, events}."""
         avg = round(sum(self.lat_ms) / len(self.lat_ms)) if self.lat_ms else 0
         return {"turns": self.turns, "avg_latency_ms": avg,
-                "verdicts": dict(self.verdicts)}
+                "verdicts": dict(self.verdicts),
+                "events": dict(self.events)}
