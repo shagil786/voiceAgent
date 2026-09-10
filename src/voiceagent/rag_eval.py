@@ -97,6 +97,31 @@ SUITE_DEFAULT: list[tuple[str, str | None, str]] = [
 ]
 
 
+# Clinic-tenant ruler: the non-default-KB gap. Same schema, file ids match
+# data/tenants/example-clinic/knowledge/*.md. The clinic KB is English-only
+# while the tenant serves hi — the Hindi probes below measure exactly that
+# gap (glosses or a recorded miss, never a silent one).
+SUITE_CLINIC: list[tuple[str, str | None, str]] = [
+    ("what time do you open", "hours", "plain paraphrase"),
+    ("are you open on sundays", "hours", "hours question"),
+    ("when should I reach for my appointment", "hours", "check-in timing"),
+    ("can I cancel my appointment", "cancellation-policy", "policy question"),
+    ("reschedule my visit to friday", "cancellation-policy", "reschedule"),
+    ("do you take insurance", "billing-insurance", "insurance"),
+    ("can I pay by UPI", "billing-insurance", "payment mode"),
+    ("I want a bill adjustment", "billing-insurance", "adjustment"),
+    ("chest pain what should I do", "emergencies", "emergency redirect"),
+    ("is this line for emergencies", "emergencies", "scope"),
+    ("need a refill of my prescription", "prescription-refills", "refill"),
+    ("where do I collect my medicines", "prescription-refills", "pickup"),
+    ("clinic kab khulti hai", "hours", "hinglish hours (gap probe)"),
+    ("appointment cancel karna hai", "cancellation-policy",
+     "hinglish cancel (gap probe)"),
+    ("what is the capital of France", None, "gap: unrelated must not hit"),
+    ("tell me a joke", None, "gap: chit-chat must not hit"),
+]
+
+
 @dataclass
 class EvalResult:
     suite: str

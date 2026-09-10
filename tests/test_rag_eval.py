@@ -72,3 +72,18 @@ def test_ruler_gate_perfect():
     res = evaluate(files, SUITE_DEFAULT, k=6)
     assert res.gaps_correct == res.gaps_total
     assert res.hit_rate >= 1.0, f"ruler regressed: hit_rate={res.hit_rate:.2f} (baseline 1.00)"
+
+
+def test_clinic_ruler_gate_perfect():
+    """Non-default-KB ruler: the clinic tenant's 5-file KB scores 1.00
+    hit-rate with gaps intact (measured 0.929 -> 1.00 after a symptom
+    line fixed the chest-pain -> emergencies redirect — a safety miss,
+    fixed in data). If this drops, a retrieval change or KB edit
+    regressed a live tenant's answers."""
+    from voiceagent.rag_eval import SUITE_CLINIC, evaluate
+    from pathlib import Path as _P
+    kb = _P("data/tenants/example-clinic/knowledge")
+    files = {p.stem: p.read_text(encoding="utf-8") for p in sorted(kb.glob("*.md"))}
+    res = evaluate(files, SUITE_CLINIC, k=6)
+    assert res.gaps_correct == res.gaps_total
+    assert res.hit_rate >= 1.0, f"clinic ruler regressed: hit_rate={res.hit_rate:.2f} (baseline 1.00)"
