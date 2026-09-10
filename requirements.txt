@@ -23,3 +23,7 @@ pytest==8.3.4
 # `livekit-rtc` distribution exists on PyPI) + server API SDK.
 livekit==1.1.17
 livekit-api==1.2.1
+# Per-tenant LoRA adapters (scripts/train_adapter.py): base model frozen,
+# one adapter per tenant for reply-format/language following. Training-only
+# dep — the serving path never imports peft.
+peft==0.20.0
