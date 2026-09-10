@@ -15,7 +15,9 @@ files; only the rows marked CLOUD leave the host.
 | Chat transcripts | `VOICEAGENT_CHAT_MEMORY_DB` (default `data/out/memory.db`) | **full turn text** for demo chat-server conversations | same CLI (`chat_turns`) |
 | ERP dev service | `data/erp/erp.sqlite` (gitignored) | demo orders/customers incl. phone numbers. Local dev only — production points `VOICEAGENT_ERP_URL` at the org's own system (the system of record; erasure there is the org's procedure). | delete the file (reseeds from fixtures) |
 
-No audio or transcripts are persisted anywhere by the platform. The phone
+No audio is persisted anywhere by the platform. Turn transcripts persist
+in exactly two places — the opt-in intent-memory episodes and the chat
+transcript DB above — both covered by the erasure CLI. The phone
 slot (`inbound.py`) is per-call memory only.
 
 ## In flight (CLOUD egress)
