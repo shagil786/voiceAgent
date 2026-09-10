@@ -1,49 +1,18 @@
 # Deployment tool surface for the clinic tenant: the governed actions the
-# brain may PROPOSE. Tool bindings live in code (voiceagent.tools
-# .DEFAULT_TOOL_SPECS) — this file only declares which of them this
-# deployment exposes and carries the CLINIC descriptions the brain sees.
-# The tool names stay the platform's generic bindings; the domain language
-# ("appointment") enters here, through `action:` renames + description
-# overrides, and via intents/ — never through new platform tool names.
+# brain may PROPOSE.
+#
+# POSTURE: this bundle declares ONLY domain-neutral platform tools here
+# (escalate_to_human, end_call, record_feedback). Every appointment verb
+# the brain can propose (fetch_appointment_status, appointment_lookup,
+# cancel_appointment, reschedule_appointment, billing_adjustment) arrives
+# via proposals.yaml — tenant-declared tools over the clinic backend's
+# native GenericBackend surface. Zero order-words in the composed surface:
+# the platform never learns the word "appointment" (verify with
+# test_clinic_tenant.py::test_clinic_surface_has_no_order_words).
 # escalate_to_human is mandatory in any declared surface: the safety valve
 # must always be proposeable. This is NOT the ToolGateway.from_yaml shape
 # (params/preconditions) — execution bindings are code.
-#
-# Deliberately NOT composed: initiate_return (the pass-back verb is
-# front-desk-only, not caller-facing) — an omitted binding stays real in
-# code but is invisible to this brain and DENYed by least-privilege policy.
 tools:
-  fetch_order_status:
-    action: appointment_status
-    side_effects: false
-    description: "Look up the current status of a patient's appointment by id (e.g. APT-1042)."
-    # Sprint A3: the tool's reply CONTRACT as data — the customer-visible
-    # guarantee the echo guardrail enforces when the customer states it.
-    facts:
-      - appointment
-    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}}, 'required': ['order_id']}
-  order_lookup:
-    action: appointment_lookup
-    side_effects: false
-    description: "Find a caller's appointments by the phone number they booked with — use when the caller does not know their appointment id."
-    facts:
-      - appointment
-    parameters: {'type': 'object', 'properties': {phone: {"type": "string"}}, 'required': ['phone']}
-  cancel_order:
-    action: cancel_appointment
-    side_effects: true
-    description: "Cancel a patient's upcoming appointment (params: order_id, reason). Visits already underway or completed cannot be cancelled."
-    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}, reason: {"type": "string"}}, 'required': ['order_id', 'reason']}
-  reschedule_delivery:
-    action: reschedule_appointment
-    side_effects: true
-    description: "Reschedule a patient's appointment to a new date (params: order_id, new_date)."
-    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}, new_date: {"type": "string"}}, 'required': ['order_id', 'new_date']}
-  initiate_refund:
-    action: billing_adjustment
-    side_effects: true
-    description: "Request a billing adjustment on a visit invoice (params: order_id, amount, reason). Amounts over the declared threshold need human approval."
-    parameters: {'type': 'object', 'properties': {order_id: {"type": "string"}, amount: {"type": "string"}, reason: {"type": "string"}}, 'required': ['order_id', 'amount', 'reason']}
   escalate_to_human:
     action: escalate_to_human
     side_effects: true

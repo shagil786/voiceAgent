@@ -1,0 +1,8 @@
+# Per-tenant intent exemplars — requesting a billing adjustment on a visit
+# invoice (clinic proposals.yaml action: billing_adjustment). Distinct from
+# billing_question (asking what is owed): this is asking to CHANGE it.
+- I was double charged, please adjust my bill
+- reverse the extra charge on my visit invoice
+- mera bill adjust kar do, double charge hua hai
+- मेरे बिल में ज़्यादा पैसे लगे हैं, ठीक करो
+- बिल में ग़लत चार्ज है, सुधार करो

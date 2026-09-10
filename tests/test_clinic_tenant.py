@@ -51,10 +51,15 @@ FRONTIER_URL = {"VOICEAGENT_FRONTIER_URL": "https://fake/v1"}
 
 # The clinic's tools.yaml `action:` renames: tool name (code binding) ->
 # policy action (tenant data). The brain never sees a new tool name.
+# POSTURE (proposals-only surface): tools.yaml declares ONLY the
+# domain-neutral platform tools; appointment verbs arrive via
+# proposals.yaml (native GenericBackend tools, zero order-words).
 EXPECTED_SURFACE = {
-    "fetch_order_status", "order_lookup", "cancel_order",
-    "reschedule_delivery", "initiate_refund", "escalate_to_human",
-    "end_call", "record_feedback",
+    "escalate_to_human", "end_call", "record_feedback",
+}
+EXPECTED_PROPOSALS = {
+    "fetch_appointment_status", "appointment_lookup", "cancel_appointment",
+    "reschedule_appointment", "billing_adjustment",
 }
 
 
@@ -125,16 +130,14 @@ def test_clinic_backend_semantics_map_onto_the_generic_surface():
 def test_clinic_tenant_bundle_loads_and_composes():
     dep = make_deployment(tenant=Tenant.load(CLINIC))
     assert dep.name == "example-clinic"
-    # Only the composed bindings are proposeable — no un-composed tool.
+    # tools.yaml declares ONLY domain-neutral platform tools — no order
+    # verbs in the composed brain surface.
     assert set(dep.gateway_tools) == EXPECTED_SURFACE
-    # Clinic action names are tenant DATA bound onto the generic bindings.
-    assert dep.gateway_tools["fetch_order_status"]["action"] == \
-        "appointment_status"
-    assert dep.gateway_tools["cancel_order"]["action"] == "cancel_appointment"
-    assert dep.gateway_tools["initiate_refund"]["action"] == \
-        "billing_adjustment"
-    # The declared vocabulary: intents/ + tools.yaml actions (clinic words,
-    # no ecommerce taxonomy — the demo list never leaks).
+    # Clinic action names are tenant DATA (intents/ + tools.yaml actions)...
+    assert dep.gateway_tools["escalate_to_human"]["action"] == \
+        "escalate_to_human"
+    # ...and the declared vocabulary keeps the appointment actions (now
+    # sourced from intents/ + proposals-backed tools).
     assert dep.actions == [
         "appointment_lookup", "appointment_status", "billing_adjustment",
         "billing_question", "cancel_appointment", "clinic_hours",
@@ -276,60 +279,55 @@ def test_clinic_prompt_carries_clinic_language_not_ecommerce():
 
 
 def test_clinic_tool_descriptions_reach_the_brain_schemas():
-    # The clinic description overrides live in tools.yaml and become the
-    # brain's per-tool schema text — the second channel (besides the
-    # persona) through which "appointment" reaches the frontier brain.
-    dep = make_deployment(tenant=Tenant.load(CLINIC))
-    assert dep.gateway_tools["fetch_order_status"]["description"] == \
-        ("Look up the current status of a patient's appointment by id "
-         "(e.g. APT-1042).")
+    # Appointment descriptions live in proposals.yaml and become the
+    # brain's per-tool schema text — the channel (besides the persona)
+    # through which "appointment" reaches the frontier brain. No order
+    # verb survives in the composed surface.
+    import os
+    os.chdir(ROOT)
+    orch = build_orchestrator(env=dict(FRONTIER_URL),
+                              tenant="example-clinic",
+                              erp=ClinicBackend())
+    schema = {s["function"]["name"]: s["function"]
+              for s in orch.brain.tool_schemas()}
+    assert set(schema) == EXPECTED_SURFACE | EXPECTED_PROPOSALS
+    assert schema["fetch_appointment_status"]["description"] == (
+        "Look up the current status of a patient's appointment by its "
+        "appointment id (e.g. APT-1042).")
     assert "medical emergency" in \
-        dep.gateway_tools["escalate_to_human"]["description"]
+        schema["escalate_to_human"]["description"]
+    assert not any("order" in name for name in schema)
 
 
-# --- 5. a scripted-brain turn through the clinic deployment -------------------
+# --- 5. legacy order verbs are brain-invisible; the native turn -----------
 
-def test_scripted_brain_governed_appointment_status_turn(monkeypatch):
-    # build_orchestrator(tenant=..., erp=...): the clinic runs through the
-    # SAME assembly seam as any tenant — bundle policies + Deployment, the
-    # only swap being the backend adapter (bindings are code; erp is
-    # injectable without touching wiring).
+def test_legacy_order_verbs_not_proposeable_on_clinic(monkeypatch):
+    # The order-verb bindings still exist in code (legacy mapping path),
+    # but the clinic brain can never propose them: they are absent from
+    # the composed surface, and a brain that tries anyway gets a surfaced
+    # error — never an execution.
     monkeypatch.chdir(ROOT)  # bare bundle names resolve under data/tenants/
     log = DecisionLog()
     orch = build_orchestrator(env=dict(FRONTIER_URL),
                               tenant="example-clinic",
                               erp=ClinicBackend(), decision_log=log)
-    # The bundle's policy + currency are wired, not platform defaults.
-    assert orch.runner.policy.currency == "₹"
-    # The brain's tool schema carries the clinic description language.
-    schema = {s["function"]["name"]: s["function"]
-              for s in orch.brain.tool_schemas()}
-    assert "appointment" in schema["fetch_order_status"]["description"]
-    assert "initiate_return" not in schema  # un-composed: not proposeable
-
     orch.brain.client = ScriptedBrain([
         reply(calls=[tc("t1", "fetch_order_status", order_id="APT-1042")]),
-        reply("Your appointment APT-1042 with Dr. Meera Iyer is confirmed "
-              "for September 9 at 10:30."),
+        reply("Let me look that up another way."),
     ])
-    res = orch.handle_turn("s-clinic",
+    res = orch.handle_turn("s-clinic-legacy",
                            "what is the status of my appointment APT-1042?",
                            authenticated=True)
-    # The governed appointment-status turn executed against CLINIC data.
-    assert res.actions and res.actions[0]["tool"] == "fetch_order_status"
-    assert res.actions[0]["action"] == "appointment_status"
-    assert res.actions[0]["verdict"] == "ALLOW" and res.actions[0]["ok"]
-    assert res.actions[0]["value"]["patient_name"] == "Ravi Kumar"
-    assert res.reply.startswith("Your appointment APT-1042")
-    # The tool result was fed back to the brain before the final reply.
-    payload = json.loads(
-        tool_messages(orch.brain.client.calls[1])[0]["content"])
-    assert payload["ok"] is True
-    assert payload["value"]["clinician"] == "Dr. Meera Iyer"
-    # The decision log recorded the governed turn.
-    entry = log.entries()[-1]
-    assert entry.verdict == "ALLOW" and entry.action == "appointment_status"
-    assert entry.conv_id == "s-clinic" and entry.authenticated is True
+    # The bundle's policy + currency are still wired, not platform defaults.
+    assert orch.runner.policy.currency == "₹"
+    # DENYed by least privilege (undeclared tool name) — surfaced back to
+    # the brain, never executed.
+    assert len(res.actions) == 1
+    assert res.actions[0]["tool"] == "fetch_order_status"
+    assert res.actions[0]["verdict"] == "DENY" and not res.actions[0]["ok"]
+    assert "another way" in res.reply
+    # ...while the native tool executes the same turn governedly (see the
+    # section-6 native tests for the ALLOW + audit assertions).
 
 
 # --- 6. native appointment tools: bundle-declared, zero order-words  --------

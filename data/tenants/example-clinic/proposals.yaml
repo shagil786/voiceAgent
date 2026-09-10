@@ -47,3 +47,27 @@ proposals:
     risk_class: mutating
     provenance: operator
     status: approved
+  - name: appointment_lookup
+    description: "Find a caller's appointments by the phone number they booked with — use when the caller does not know their appointment id."
+    params: [phone]
+    action: appointment_lookup
+    operation: __list__
+    resource_type: appointment
+    filter_param: phone
+    facts: [appointment]
+    side_effects: false
+    risk_class: read
+    provenance: operator
+    status: approved
+  - name: billing_adjustment
+    description: "Request a billing adjustment on a visit invoice (params: appointment_id, amount, reason). Amounts over the declared threshold need human approval."
+    params: [appointment_id, amount, reason]
+    action: billing_adjustment
+    operation: billing_adjustment
+    resource_type: appointment
+    id_param: appointment_id
+    facts: [appointment]
+    side_effects: true
+    risk_class: high
+    provenance: operator
+    status: approved

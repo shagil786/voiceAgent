@@ -1,5 +1,5 @@
-# Per-tenant intent exemplars — cancelling a booked appointment maps to the
-# generic cancel binding (clinic tools.yaml action: cancel_appointment).
+# Per-tenant intent exemplars — cancelling a booked appointment (clinic
+# proposals.yaml action: cancel_appointment).
 - I want to cancel my appointment
 - cancel my appointment for tomorrow please
 - I can't make it to the clinic, cancel the visit

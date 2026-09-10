@@ -68,6 +68,10 @@ class ToolProposal:
     # tool param -> backend operation param (identity when absent)
     resource_type: str | None = None
     id_param: str | None = None
+    # __list__ lookups (e.g. find-by-phone): tool param carrying the key +
+    # backend filter key (defaults to the param name when absent).
+    filter_param: str | None = None
+    filter_key: str | None = None
     preconditions: tuple[dict, ...] = ()
     facts: tuple[str, ...] = ()
     side_effects: bool = False
@@ -99,6 +103,12 @@ def validate_proposal(prop: ToolProposal) -> list[str]:
         errs.append(f"{prop.name}: side_effects=true but risk_class=read")
     if prop.id_param and prop.id_param not in prop.params:
         errs.append(f"{prop.name}: id_param {prop.id_param!r} not in params")
+    if prop.operation == "__list__":
+        if not prop.resource_type:
+            errs.append(f"{prop.name}: __list__ requires resource_type")
+        if not prop.filter_param or prop.filter_param not in prop.params:
+            errs.append(f"{prop.name}: __list__ requires filter_param "
+                        f"in params")
     return errs
 
 
@@ -125,9 +135,15 @@ def compile_approved(gw: ToolGateway, backend: Any,
         # executor signature: (backend, tool_params) -> value
 
         def _make_executor(op: str, mapping: dict[str, str],
-                           rt: str | None, idp: str | None):
+                           rt: str | None, idp: str | None,
+                           fp: str | None = None, fk: str | None = None):
             if rt is not None and idp is not None and op == "__fetch__":
                 return lambda erp, p: erp.get_resource(rt, p[idp])
+            if rt is not None and op == "__list__":
+                # Alternate lookup (e.g. find-by-phone): unknown keys yield
+                # an empty list, never an error — the ladder's alternate leg.
+                return lambda erp, p: erp.list_resources(
+                    rt, {(fk or fp or "phone"): p[fp or "phone"]})
             return lambda erp, p: erp.execute_operation(
                 op, {mapping.get(k, k): v for k, v in p.items()})
 
@@ -149,7 +165,8 @@ def compile_approved(gw: ToolGateway, backend: Any,
         gw.register_binding(
             prop.name,
             _make_executor(prop.operation, prop.operation_params,
-                           prop.resource_type, prop.id_param))
+                           prop.resource_type, prop.id_param,
+                           prop.filter_param, prop.filter_key))
         registered.append(prop.name)
     return registered
 
@@ -192,6 +209,7 @@ def load_proposals_yaml(path: str | Path) -> list[ToolProposal]:
             raise ValueError(f"{path}: proposal #{i} must be a mapping")
         allowed = {"name", "description", "params", "action", "operation",
                    "operation_params", "resource_type", "id_param",
+                   "filter_param", "filter_key",
                    "preconditions", "facts", "side_effects", "risk_class",
                    "provenance", "status"}
         unknown = set(e) - allowed
@@ -208,6 +226,8 @@ def load_proposals_yaml(path: str | Path) -> list[ToolProposal]:
             operation_params=dict(e.get("operation_params", {})),
             resource_type=e.get("resource_type"),
             id_param=e.get("id_param"),
+            filter_param=e.get("filter_param"),
+            filter_key=e.get("filter_key"),
             preconditions=tuple(e.get("preconditions", [])),
             facts=tuple(e.get("facts", [])),
             side_effects=bool(e.get("side_effects", False)),
@@ -272,6 +292,8 @@ def draft_from_api_spec(spec: dict[str, Any], *,
             operation_params=dict(op.get("operation_params", {})),
             resource_type=op.get("resource_type"),
             id_param=op.get("id_param"),
+            filter_param=op.get("filter_param"),
+            filter_key=op.get("filter_key"),
             preconditions=tuple(op.get("preconditions", [])),
             facts=tuple(op.get("facts", [])),
             side_effects=bool(op.get("side_effects", False)),

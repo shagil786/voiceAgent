@@ -1,6 +1,7 @@
 # src/voiceagent/voice_agent.py
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -14,13 +15,20 @@ from voiceagent.tts import speak
 _MEMORY: SQLiteMemory | None = None
 
 
+def chat_memory_path() -> str:
+    """Working-memory store path: VOICEAGENT_CHAT_MEMORY_DB, default the
+    gitignored data/out/memory.db shared with the HTTP server's store.
+    Centralized here so retention/erasure covers every writer."""
+    return os.environ.get("VOICEAGENT_CHAT_MEMORY_DB") or "data/out/memory.db"
+
+
 def _default_memory() -> SQLiteMemory:
     """Shared working-memory store for the voice path (M4a). Lives in the
     gitignored data/out/ next to the HTTP server's store."""
     global _MEMORY
     if _MEMORY is None:
         Path("data/out").mkdir(parents=True, exist_ok=True)
-        _MEMORY = SQLiteMemory("data/out/memory.db")
+        _MEMORY = SQLiteMemory(chat_memory_path())
     return _MEMORY
 
 
