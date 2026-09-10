@@ -4,6 +4,7 @@ env wiring) and the live HTTP behavior (429 + Retry-After on /api/*) of the
 real server in scripts/chat_server.py."""
 import importlib.util
 import json
+import os
 import threading
 import urllib.error
 import urllib.request
@@ -20,11 +21,33 @@ demo_server = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(demo_server)
 
 
+def test_demo_server_import_does_not_leak_dotenv_into_process_env(monkeypatch):
+    # Regression: scripts/chat_server.py loaded .env at module level, so
+    # exec'ing it (as above) injected VOICEAGENT_TTS_VOICES into os.environ
+    # and rerouted every TTS voice suite-wide. Entry-point loading only.
+    monkeypatch.delenv("VOICEAGENT_TTS_VOICES", raising=False)
+    probe_spec = importlib.util.spec_from_file_location(
+        "demo_chat_server_probe", _SCRIPT)
+    assert probe_spec is not None and probe_spec.loader is not None
+    probe = importlib.util.module_from_spec(probe_spec)
+    probe_spec.loader.exec_module(probe)
+    assert "VOICEAGENT_TTS_VOICES" not in os.environ
+
+
 def test_build_html_has_form_and_endpoint():
     html = build_html()
     assert "textarea" in html
     assert "/api/turn" in html
     assert "fetch" in html
+    # The inline JS string escapes must survive as backslash-n (raw PAGE): a
+    # non-raw string interpolates them into literal newlines inside JS string
+    # literals -> SyntaxError -> go() undefined -> Send button dead.
+    assert "\\n[action]" in html
+    script = html.split("<script>", 1)[1]
+    # No string literal in the served JS may contain a raw newline.
+    for quote in ("'", '"'):
+        for chunk in script.split(quote)[1::2]:
+            assert "\n" not in chunk, f"raw newline inside JS string: {chunk!r}"
 
 
 # --- RateLimiter unit behavior ------------------------------------------------

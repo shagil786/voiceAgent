@@ -39,7 +39,13 @@ def _build_live_orchestrator():
 
 def load_dotenv(path: Path) -> None:
     """Same .env loader every other script entry point uses — chat_server was
-    the odd one out, so running it per README never saw .env config."""
+    the odd one out, so running it per README never saw .env config.
+    VOICEAGENT_DOTENV_PATH overrides the file location (tests point it at a
+    missing path so subprocess checks stay hermetic); an explicitly missing
+    override is honored (no fallback), an unset/empty one uses the default."""
+    override = os.environ.get("VOICEAGENT_DOTENV_PATH", "").strip()
+    if override:
+        path = Path(override)
     if not path.exists():
         return
     for line in path.read_text().splitlines():
@@ -50,9 +56,6 @@ def load_dotenv(path: Path) -> None:
         key, value = key.strip(), value.strip().strip('"').strip("'")
         if key and key not in os.environ:
             os.environ[key] = value
-
-
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -127,6 +130,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # Entry-point only: importing/exec'ing this module (tests, REPL) must
+    # never leak .env into the process env (it once overrode TTS voices
+    # suite-wide via VOICEAGENT_TTS_VOICES).
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     # Loopback-only by default; containers pass 0.0.0.0 so a published port
     # maps through (a 127.0.0.1 bind inside a container is unreachable).

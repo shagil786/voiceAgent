@@ -23,27 +23,29 @@ BUNDLE = ROOT / "data" / "tenants" / "default"
 # voiceagent.demo_data — the strings must survive the move byte-identically).
 IDENTITY = "You are Acme's voice support agent."
 KNOWLEDGE = {
-    # 2026-09-08 (2nd edit): the demo KB carries multilingual glosses for
-    # EVERY claimed language (RAG phase-2, global pattern) — hinglish/hindi/
-    # tanglish/banglish + es/fr/de/pt (latin space) + te/bn (native space).
-    # The latin-space floor was recalibrated 0.20 -> 0.32 on the expanded
-    # 24-fixture ruler (distractors <= 0.287, weakest content 0.426) because
-    # the glosses moved chit-chat above the old floor. Glosses are written
-    # WITHOUT question marks/periods inside the phrase list so the sentence
-    # splitter keeps each language's phrase inside ONE sentence. Byte-pins
-    # updated to the new deliberate content — the historical strings survive
-    # in git.
+    # 2026-09-09 (3rd edit): glosses extended to EVERY newly-served language
+    # (RAG ruler+14: ta/th/mr/gu/kn/ml/pa join the demo KB). Same contract —
+    # no question marks/periods inside the phrase list, one sentence per
+    # language. Byte-pins updated; the historical strings survive in git.
     "eta": "Deliveries occur between 9:00 and 19:00 local time.\n\n"
            "order kab aayega (hinglish), ऑर्डर कब डिलीवर होगा (hindi), eppo kedaikkum\n"
            "(tanglish), kobe delivery hobe (banglish), cuándo llega mi pedido (español),\n"
            "quand arrive ma commande (français), wann kommt meine Bestellung an\n"
            "(deutsch), quando chega meu pedido (português), డెలివరీ ఎప్పుడు ఉంటుంది\n"
-           "(తెలుగు), ডেলিভারি কবে হবে (বাংলা)",
+           "(తెలుగు), ডেলিভারি কবে হবে (বাংলা)\n"
+           "டெலிவரி எப்போது (tamil), จัดส่งเมื่อไหร่ (thai), डिलिव्हरी कधी होते (marathi), "
+           "ડિલિવરી ક્યારે થાય (gujarati), ಡೆಲಿವರಿ ಯಾವಾಗ (kannada), ഡെലിവറി എപ്പോൾ "
+           "(malayalam), ਡਿਲਿਵਰੀ ਕਦੋਂ ਹੁੰਦੀ ਹੈ (punjabi)\n",
     "cancel_policy": "Orders that already shipped cannot be cancelled.\n\n"
                      "puedo cancelar después del envío (español), puis-je annuler après\n"
                      "l'expédition (français), kann ich nach dem Versand stornieren (deutsch),\n"
                      "posso cancelar depois do envio (português), షిప్ అయ్యాక రద్దు చేయవచ్చా\n"
-                     "(తెలుగు), শিপ হওয়ার পর বাতিল করা যাবে (বাংলা)",
+                     "(తెలుగు), শিপ হওয়ার পর বাতিল করা যাবে (বাংলা)\n"
+                     "ஷிப் ஆன பிறகு ரத்து செய்யலாமா (tamil), จัดส่งแล้วขอยกเลิกได้ไหม (thai), "
+                     "शिप झाल्यावर रद्द करता येईल का (marathi), શિપ થયા પછી રદ્દ કરી શકાય "
+                     "(gujarati), ಶಿಪ್ ಆದ ನಂತರ ರದ್ದು ಮಾಡಬಹುದೇ (kannada), "
+                     "ഷിപ്പ് ചെയ്തതിന് ശേഷം റദ്ദാക്കാമോ (malayalam), "
+                     "ਸ਼ਿਪ ਹੋਣ ਤੋਂ ਬਾਅਦ ਰੱਦ ਕਰ ਸਕਦੇ ਹਾਂ (punjabi)\n",
 }
 
 
