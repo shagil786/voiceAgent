@@ -1,0 +1,23 @@
+# Platform language data: Romanized Hindi (hinglish, Latin script).
+# Sentiment only — amounts parse via the English number engine.
+code: hinglish
+sentiment:
+  - bakwas
+  - ghatiya
+  - bekaar
+  - bekara
+  - faltu
+  - pareshan
+  - pareshaan
+  - tang aa
+  - jhooth
+  - thag
+  - gussa
+  - naraz
+  - bar bar
+  - baar baar
+  - kitna din
+  - kitne din
+  - nahi ho raha
+  - last time bol
+companions: [hi]

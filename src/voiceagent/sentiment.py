@@ -14,64 +14,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-# Frustration phrases per language family. 'hinglish' text is Romanized
-# Hindi, 'hi' is Devanagari; European languages cover the US/EU market.
-# English is always scanned too — support frustration code-switches.
-LEXICON: dict[str, tuple[str, ...]] = {
-    "en": (
-        "angry", "furious", "ridiculous", "useless", "worst", "terrible",
-        "horrible", "unacceptable", "pathetic", "garbage", "awful",
-        "sick of", "fed up", "nonsense", "scam", "cheated", "cheating",
-        "incompetent", "last warning", "speak to a manager", "talk to a manager",
-        "escalate", "demand", "never again", "cancel everything",
-    ),
-    "hinglish": (
-        "bakwas", "ghatiya", "bekaar", "bekara", "faltu", "pareshan",
-        "pareshaan", "tang aa", "jhooth", "thag", "gussa", "naraz",
-        "bar bar", "baar baar", "kitna din", "kitne din", "nahi ho raha",
-        "last time bol",
-    ),
-    "hi": (
-        "गुस्सा", "नाराज़", "नाराज", "परेशान", "बेकार", "घटिया", "बकवास",
-        "झूठ", "ठग", "बार बार", "बार-बार", "फालतू", "कितने दिन", "कितना दिन",
-        "अपमान",
-    ),
-    "es": (
-        "enojado", "furioso", "inaceptable", "ridículo", "ridiculo",
-        "estafa", "estafado", "hartado", "harto", "pésimo", "pesimo",
-        "inútil", "inutil", "basta",
-    ),
-    "fr": (
-        "en colère", "colere", "furieux", "inacceptable", "ridicule",
-        "arnaque", "j'en ai marre", "marre", "nul",
-    ),
-    "de": (
-        "wütend", "wutend", "furchtbar", "unakzeptabel", "lächerlich",
-        "lacherlich", "betrogen", "es reicht",
-    ),
-    # 2026-09: lexicons for the newly-detected/served languages (pt has a
-    # langid lexicon but no frustration set; te/ta/bn/th are ASR+TTS
-    # supported). Small INITIAL native sets — same standing as the
-    # LLM-authored synthetic lists elsewhere: real-traffic validation
-    # pending, expand via the SentimentStore learned-phrase path.
-    "pt": (
-        "irritado", "furioso", "inaceitável", "inaceitavel", "ridículo",
-        "ridiculo", "golpe", "farto", "basta", "porcaria", "péssimo",
-        "pessimo", "falar com o gerente",
-    ),
-    "te": (
-        "కోపం", "విసుగు", "చెత్త", "మోసం", "చాలు",
-    ),
-    "ta": (
-        "கோபம்", "எரிச்சல்", "மோசம்", "ஏமாற்று", "போதும்",
-    ),
-    "bn": (
-        "রাগ", "বিরক্ত", "বাজে", "ঠকানো", "যথেষ্ট হয়েছে",
-    ),
-    "th": (
-        "โกรธ", "แย่", "หลอกลวง", "ไม่พอใจ", "พอแล้ว",
-    ),
-}
+# Frustration phrases per language — loaded from data/lang/*.yaml
+# ('sentiment:' section). English is always scanned too — support
+# frustration code-switches. Add-a-language = add-a-file.
+from voiceagent.langdata import sentiment_lexicon as _load_lexicon
+from voiceagent.langdata import companions_for as companions_for
+
+LEXICON: dict[str, tuple[str, ...]] = _load_lexicon()
 
 _INTENSITY_BANGS = re.compile(r"[!]{2,}|[?]{2,}")
 _SHOUTING = re.compile(r"\b[A-Z]{4,}\b")
@@ -103,11 +52,11 @@ def _phrases_for(language: str | None) -> list[str]:
     phrases = list(LEXICON["en"])
     if language != "en":
         phrases += LEXICON.get(language, ())
-        # hinglish and hi speakers code-switch into each other's script.
-        if language == "hinglish":
-            phrases += LEXICON["hi"]
-        elif language == "hi":
-            phrases += LEXICON["hinglish"]
+        # Declared script companions (data/lang/<code>.yaml `companions:`):
+        # speakers code-switch into a sibling script (hi <-> hinglish),
+        # so both lexicons scan. No language is named in code.
+        for companion in companions_for(language or ""):
+            phrases += LEXICON.get(companion, ())
     return phrases
 
 

@@ -1,0 +1,5 @@
+# Platform language data: Malayalam — digits only for now (number
+# words + sentiment are open vocabulary gaps; amounts still parse
+# via digit normalization).
+code: ml
+digits: "൦൧൨൩൪൫൬൭൮൯"

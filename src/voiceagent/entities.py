@@ -21,128 +21,35 @@ from dataclasses import dataclass
 
 from voiceagent.tenant import DEFAULT_CURRENCY
 
-# Native-script digits -> ASCII (whisper-hi / Qwen-hi sometimes emit ४८२१;
-# Indic conformers emit Telugu/Tamil/Bengali/Thai digits the same way).
-# One combined map applied everywhere Devanagari-only used to be.
-_SCRIPT_DIGITS = {
-    "०१२३४५६७८९": "0123456789",  # Devanagari
-    "౦౧౨౩౪౫౬౭౮౯": "0123456789",  # Telugu
-    "௦௧௨௩௪௫௬௭௮௯": "0123456789",  # Tamil
-    "০১২৩৪৫৬৭৮৯": "0123456789",  # Bengali
-    "๐๑๒๓๔๕๖๗๘๙": "0123456789",  # Thai
-    "૦૧૨૩૪૫૬૭૮૯": "0123456789",  # Gujarati
-    "೦೧೨೩೪೫೬೭೮೯": "0123456789",  # Kannada
-    "൦൧൨൩൪൫൬൭൮൯": "0123456789",  # Malayalam
-    "੦੧੨੩੪੫੬੭੮੯": "0123456789",  # Gurmukhi (Punjabi)
-}
-_NATIVE_DIGITS = str.maketrans("".join(_SCRIPT_DIGITS),
-                               "".join(_SCRIPT_DIGITS.values()))
+# Language tables (number words, scales, digits, garbles) live in
+# data/lang/*.yaml and load here — add-a-language = add-a-file. The names
+# below are the engine's unified lookups over whatever the files declare;
+# no per-language branch exists anywhere in this parser.
+from voiceagent.langdata import (  # noqa: E402  (data loader is stdlib+yaml)
+    digit_map,
+    garble_map,
+    number_lookups,
+    tables as _lang_tables,
+)
+
+_WORD_VALUES, _SCALE_VALUES, _HUNDRED_WORDS = number_lookups()
+_HI_GARBLES = garble_map()
+# English scales, for the bare-phrase currency-isolation rule below
+# ("five thousand" bare must not mint ₹ — only non-English scales do).
+_EN_SCALES = frozenset(
+    (_lang_tables().get("en", {}).get("scales") or {}))
+_NATIVE_DIGITS = str.maketrans(
+    "".join(sorted(digit_map())), "".join(digit_map()[c]
+                                          for c in sorted(digit_map())))
 _DEVANAGARI_DIGITS = _NATIVE_DIGITS  # historical name (same map)
 
-_NUM_WORDS = {
-    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
-    "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
-    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
-    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
-    "seventy": 70, "eighty": 80, "ninety": 90,
-}
-_SCALES = {"hundred": 100, "thousand": 1000, "lakh": 100000, "lac": 100000,
-           "million": 1000000, "crore": 10000000}
-
-# Hindi (Devanagari) number words 0-99 — irregular compounds, so this is a
-# full table, not composition rules. Scales: सौ/हज़ार(हजार)/लाख/करोड़.
-_HI_NUM_WORDS = {
-    "शून्य": 0, "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पाँच": 5, "पांच": 5,
-    "छह": 6, "छे": 6, "सात": 7, "आठ": 8, "नौ": 9, "दस": 10,
-    "ग्यारह": 11, "बारह": 12, "तेरह": 13, "चौदह": 14, "पंद्रह": 15,
-    "सोलह": 16, "सत्रह": 17, "अठारह": 18, "उन्नीस": 19, "उन्नीस": 19,
-    "बीस": 20, "इक्कीस": 21, "बाईस": 22, "तेईस": 23, "चौबीस": 24,
-    "पच्चीस": 25, "छब्बीस": 26, "सत्ताईस": 27, "अट्ठाईस": 28, "उनतीस": 29,
-    "तीस": 30, "इकतीस": 31, "बत्तीस": 32, "तैंतीस": 33, "चौंतीस": 34,
-    "पैंतीस": 35, "छत्तीस": 36, "सैंतीस": 37, "अड़तीस": 38, "उनतालीस": 39,
-    "चालीस": 40, "इकतालीस": 41, "बयालीस": 42, "तैंतालीस": 43,
-    "चवालीस": 44, "पैंतालीस": 45, "छियालीस": 46, "सैंतालीस": 47,
-    "अड़तालीस": 48, "उनचास": 49, "पचास": 50, "इक्यावन": 51, "बावन": 52,
-    "तिरपन": 53, "चौवन": 54, "पचपन": 55, "छप्पन": 56, "सत्तावन": 57,
-    "अट्ठावन": 58, "उनसठ": 59, "साठ": 60, "इकसठ": 61, "एकसठ": 61,
-    "बासठ": 62, "तिरसठ": 63, "चौंसठ": 64, "पैंसठ": 65, "छियासठ": 66,
-    "सड़सठ": 67, "अड़सठ": 68, "उनहत्तर": 69, "सत्तर": 70, "इकहत्तर": 71,
-    "बहत्तर": 72, "तिहत्तर": 73, "चौहत्तर": 74, "पचहत्तर": 75,
-    "छिहत्तर": 76, "सतहत्तर": 77, "अठहत्तर": 78, "उनासी": 79, "अस्सी": 80,
-    "इक्यासी": 81, "बयासी": 82, "तिरासी": 83, "चौरासी": 84, "पचासी": 85,
-    "छियासी": 86, "सतासी": 87, "अठासी": 88, "नवासी": 89, "नब्बे": 90,
-    "इक्यानवे": 91, "बानवे": 92, "तिरानवे": 93, "चौरानवे": 94,
-    "पचानवे": 95, "छियानवे": 96, "सत्तानवे": 97, "अट्ठानवे": 98,
-    "निन्यानवे": 99,
-}
-_HI_SCALES = {"सौ": 100, "हज़ार": 1000, "हजार": 1000, "लाख": 100000,
-              "करोड़": 10000000}
-
-# Observed ASR garbles of Hindi number words (from real loopback voice
-# transcripts, 2026-09-03): 'एकत्र' is how Qwen3-ASR heard 'इकहत्तर' in
-# "ORD-55671" spoken as "पचपन हजार छह सौ इकहत्तर". Extend as new garbles
-# are observed — each alias cites the transcript it came from.
-_HI_GARBLES = {"एकत्र": "इकहत्तर", "एकतर": "इकहत्तर"}
-
-# Compositional number words (te/ta/bn/th): tens + units accumulate in the
-# scale engine (ఇరవై ఒకటి -> 20+1), so these are FLAT value tables, not
-# 0-99 enumerations. Initial sets (2026-09) — same standing as the
-# synthetic lexicons elsewhere: expand from real transcripts as observed.
-# Thai compounds are single orthographic words (ยี่สิบเอ็ด); see
-# _space_thai_numbers, which longest-match splits them before this table.
-_TE_WORDS = {
-    "సున్నా": 0, "ఒకటి": 1, "ఒక": 1, "రెండు": 2, "మూడు": 3, "నాలుగు": 4,
-    "ఐదు": 5, "ఆరు": 6, "ఏడు": 7, "ఎనిమిది": 8, "తొమ్మిది": 9,
-    "పది": 10, "పదకొండు": 11, "పన్నెండు": 12, "పదమూడు": 13,
-    "పద్నాలుగు": 14, "పదిహేను": 15, "పదహారు": 16, "పదిహేడు": 17,
-    "పద్దెనిమిది": 18, "పందొమ్మిది": 19, "ఇరవై": 20, "ముప్పై": 30,
-    "నలభై": 40, "యాభై": 50, "అరవై": 60, "డెబ్బై": 70, "ఎనభై": 80,
-    "తొంభై": 90,
-}
-_TE_SCALES = {"వంద": 100, "వెయ్యి": 1000, "వేలు": 1000, "లక్ష": 100000,
-              "కోటి": 10000000}
-_TA_WORDS = {
-    "பூஜ்ஜியம்": 0, "சுழியம்": 0, "ஒன்று": 1, "ஒரு": 1, "இரண்டு": 2,
-    "மூன்று": 3, "நான்கு": 4, "ஐந்து": 5, "ஆறு": 6, "ஏழு": 7,
-    "எட்டு": 8, "ஒன்பது": 9, "பத்து": 10, "பதினொன்று": 11,
-    "பன்னிரண்டு": 12, "பதிமூன்று": 13, "பதினான்கு": 14, "பதினைந்து": 15,
-    "பதினாறு": 16, "பதினேழு": 17, "பதினெட்டு": 18, "பத்தொன்பது": 19,
-    "இருபது": 20, "முப்பது": 30, "நாற்பது": 40, "ஐம்பது": 50,
-    "அறுபது": 60, "எழுபது": 70, "எண்பது": 80, "தொண்ணூறு": 90,
-}
-_TA_SCALES = {"நூறு": 100, "ஆயிரம்": 1000, "லட்சம்": 100000,
-              "கோடி": 10000000}
-_BN_WORDS = {
-    "শূন্য": 0, "এক": 1, "দুই": 2, "তিন": 3, "চার": 4, "পাঁচ": 5,
-    "ছয়": 6, "সাত": 7, "আট": 8, "নয়": 9, "দশ": 10, "এগারো": 11,
-    "বারো": 12, "তেরো": 13, "চৌদ্দ": 14, "পনেরো": 15, "ষোলো": 16,
-    "সতেরো": 17, "আঠারো": 18, "উনিশ": 19, "বিশ": 20, "কুড়ি": 20,
-    "তিরিশ": 30, "চল্লিশ": 40, "পঞ্চাশ": 50, "ষাট": 60, "সত্তর": 70,
-    "আশি": 80, "নব্বই": 90,
-}
-_BN_SCALES = {"শত": 100, "হাজার": 1000, "লাখ": 100000, "লক্ষ": 100000,
-              "কোটি": 10000000}
-_TH_WORDS = {
-    "ศูนย์": 0, "หนึ่ง": 1, "เอ็ด": 1, "สอง": 2, "สาม": 3, "สี่": 4,
-    "ห้า": 5, "หก": 6, "เจ็ด": 7, "แปด": 8, "เก้า": 9, "สิบ": 10,
-    "ยี่สิบ": 20, "สามสิบ": 30, "สี่สิบ": 40, "ห้าสิบ": 50, "หกสิบ": 60,
-    "เจ็ดสิบ": 70, "แปดสิบ": 80, "เก้าสิบ": 90,
-}
-_TH_SCALES = {"ร้อย": 100, "พัน": 1000, "หมื่น": 10000, "แสน": 100000,
-              "ล้าน": 1000000}
-
-# Unified lookups: every engine check below reads these, so a new language
-# is a table above — never an `or w == ...` branch in the parser.
-_WORD_VALUES: dict[str, int] = {**_NUM_WORDS, **_HI_NUM_WORDS, **_TE_WORDS,
-                                **_TA_WORDS, **_BN_WORDS, **_TH_WORDS}
-_SCALE_VALUES: dict[str, int] = {**_SCALES, **_HI_SCALES, **_TE_SCALES,
-                                 **_TA_SCALES, **_BN_SCALES, **_TH_SCALES}
-_HUNDRED_WORDS = frozenset({"hundred", "सौ", "వంద", "நூறு", "শত", "ร้อย"})
-
-# Longest-match vocabulary for Thai runs (no whitespace in Thai script).
-_THAI_VOCAB = tuple(sorted(set(_TH_WORDS) | set(_TH_SCALES), key=len,
-                           reverse=True))
+# Longest-match vocabulary for Thai runs (no whitespace in Thai script):
+# every loaded word+scale written in the Thai block, longest first.
+_TH_WORDS_TH = frozenset(
+    w for w in list(_WORD_VALUES) + list(_SCALE_VALUES)
+    if w and "\u0e00" <= w[0] <= "\u0e7f")
+_THAI_VOCAB = tuple(
+    sorted(_TH_WORDS_TH, key=len, reverse=True))
 
 
 def _space_thai_numbers(text: str) -> str:
@@ -172,7 +79,7 @@ def _space_thai_numbers(text: str) -> str:
             i += 1
     return "".join(out)
 
-_NUM_TOKENS = set(_NUM_WORDS) | set(_SCALES) | {"and"}
+_NUM_TOKENS = set(_WORD_VALUES) | set(_SCALE_VALUES) | {"and"}
 
 _ORDER_RE = re.compile(r"\b(?:ORD[-#]?\s*)(\d{4,10})\b", re.IGNORECASE)
 # \bORD\b: must not match the "ord" inside the word "order".
@@ -324,7 +231,7 @@ def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
         # bare English scale words ("five thousand dollars" on a ₹ tenant)
         # must keep requiring explicit currency anchoring — otherwise
         # amounts leak across the currency isolation boundary.
-        if not any(w in _SCALE_VALUES and w not in _SCALES
+        if not any(w in _SCALE_VALUES and w not in _EN_SCALES
                    and _SCALE_VALUES[w] >= 1000 for w in run):
             continue
         n = words_to_number(run)
