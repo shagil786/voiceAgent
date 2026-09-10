@@ -33,7 +33,7 @@ from voiceagent.langdata import (  # noqa: E402  (data loader is stdlib+yaml)
 )
 
 _WORD_VALUES, _SCALE_VALUES, _HUNDRED_WORDS = number_lookups()
-_HI_GARBLES = garble_map()
+_GARBLES = garble_map()  # ASR-mishearing -> canonical word, all languages
 # English scales, for the bare-phrase currency-isolation rule below
 # ("five thousand" bare must not mint ₹ — only non-English scales do).
 _EN_SCALES = frozenset(
@@ -106,11 +106,11 @@ _PUNCT = ".,;:!?\"'()[]{}"
 
 
 def _canon_token(tok: str) -> str | None:
-    """Canonical number token (en or hi) from a raw token, else None.
-    Pure digits count too ('6 हजार' = 6000)."""
+    """Canonical number token (any loaded language) from a raw token, else
+    None. Pure digits count too ('6 हजार' = 6000)."""
     w = tok.strip(_PUNCT).lower()
-    if w in _HI_GARBLES:
-        w = _HI_GARBLES[w]
+    if w in _GARBLES:
+        w = _GARBLES[w]
     if w in _WORD_VALUES or w in _SCALE_VALUES or w == "and":
         return w
     if w.isdigit():
