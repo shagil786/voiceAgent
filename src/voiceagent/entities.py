@@ -25,7 +25,9 @@ from voiceagent.tenant import DEFAULT_CURRENCY
 # below are the engine's unified lookups over whatever the files declare;
 # no per-language branch exists anywhere in this parser.
 from voiceagent.langdata import (  # noqa: E402  (data loader is stdlib+yaml)
+    compound_joiners,
     digit_map,
+    fused_scales_enabled,
     garble_map,
     number_lookups,
     tables as _lang_tables,
@@ -105,9 +107,10 @@ def _resolve_shapes(id_shapes: list[dict] | None) -> list[dict]:
 _PUNCT = ".,;:!?\"'()[]{}"
 
 
-def _canon_token(tok: str) -> str | None:
+def _canon_token(tok: str, _memo: dict | None = None) -> str | None:
     """Canonical number token (any loaded language) from a raw token, else
-    None. Pure digits count too ('6 हजार' = 6000)."""
+    None. Pure digits count too ('6 हजार' = 6000). _memo threads the
+    compound-expansion cache through nested calls (see _compound_value)."""
     w = tok.strip(_PUNCT).lower()
     if w in _GARBLES:
         w = _GARBLES[w]
@@ -115,6 +118,11 @@ def _canon_token(tok: str) -> str | None:
         return w
     if w.isdigit():
         return w
+    # Fused compounds (data-declared rules): return the value as a digit
+    # string so the scale engine's existing digit path handles it.
+    n = _compound_value(w)
+    if n is not None:
+        return str(n)
     return None
 
 
@@ -124,6 +132,87 @@ def _token_value(w: str) -> int | None:
         return v
     if w.isdigit():
         return int(w)
+    return None
+
+
+def _part_value(w: str | None) -> int | None:
+    """Canonical word (or None) -> int, covering words, scales, digits."""
+    if w is None:
+        return None
+    v = _WORD_VALUES.get(w)
+    if v is not None:
+        return v
+    v = _SCALE_VALUES.get(w)
+    if v is not None:
+        return v
+    if w.isdigit():
+        return int(w)
+    return None
+
+
+def _compound_value(tok: str, depth: int = 0,
+                      _memo: dict | None = None) -> int | None:
+    """Fused number compounds from DATA-declared rules (lang files), for
+    tokens no table knows. Two generic rules, both strict (every part must
+    resolve, else None — garbage never mints numbers):
+
+    - joiners (`joiners: [und]`): split on the infix joiner and SUM
+      (ein+und+zwanzig = 21);
+    - fused scales (`fused_scales:`): shortest-prefix-first split into
+      number + scale + rest (zweitausend = 2x1000; fünftausendfünfhundert
+      = 5000+500, never 500500 — the short-prefix bias picks the
+      correct segmentation).
+
+    Parts recurse (strictly shorter every level; depth capped). Results
+    memoize per top-level token — without it, prefix re-entry is
+    exponential (quatre-vingt-dix took 5s). Returns None for ordinary
+    words — "understand" splits to ["erstand"], which resolves to
+    nothing."""
+    if _memo is None:
+        _memo = {}
+    if tok in _memo:
+        return _memo[tok]
+    result = _compound_inner(tok, depth, _memo)
+    _memo[tok] = result
+    return result
+
+
+def _compound_inner(tok: str, depth: int, _memo: dict) -> int | None:
+    if depth > 6 or not tok:
+        return None
+    for j in compound_joiners():
+        if j in tok:
+            parts = [p for p in tok.split(j) if p]
+            if len(parts) >= 2:
+                vals = [_part_value(_canon_token(p, _memo)) for p in parts]
+                if all(v is not None for v in vals):
+                    return sum(vals)  # type: ignore[arg-type]
+                sub = [_compound_value(p, depth + 1, _memo)
+                       if v is None else v
+                       for p, v in zip(parts, vals)]
+                if all(v is not None for v in sub):
+                    return sum(sub)  # type: ignore[arg-type]
+    if fused_scales_enabled() and any(
+            s in tok for s in _SCALE_VALUES):
+        for i in range(1, len(tok)):
+            p, rest = tok[:i], tok[i:]
+            pv = _part_value(_canon_token(p, _memo))
+            if pv is None:
+                pv = _compound_value(p, depth + 1, _memo)
+            if pv is None:
+                continue
+            for s in sorted(_SCALE_VALUES, key=len, reverse=True):
+                if rest == s or rest.startswith(s):
+                    tail = rest[len(s):]
+                    if not tail:
+                        tv: int | None = 0
+                    else:
+                        tv = _part_value(_canon_token(tail, _memo))
+                        if tv is None:
+                            tv = _compound_value(tail, depth + 1, _memo)
+                    if tv is None:
+                        continue
+                    return pv * _SCALE_VALUES[s] + tv
     return None
 
 
@@ -289,9 +378,12 @@ def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
         # Bengali/Thai ASR often drops the currency word ("6 हजार"), while
         # bare English scale words ("five thousand dollars" on a ₹ tenant)
         # must keep requiring explicit currency anchoring — otherwise
-        # amounts leak across the currency isolation boundary.
-        if not any(w in _SCALE_VALUES and w not in _EN_SCALES
-                   and _SCALE_VALUES[w] >= 1000 for w in run):
+        # amounts leak across the currency isolation boundary. Fused
+        # compounds ("zweitausend" -> "2000") carry their own magnitude, so
+        # they qualify without a scale word beside them.
+        if not any((w in _SCALE_VALUES and w not in _EN_SCALES
+                    and _SCALE_VALUES[w] >= 1000)
+                   or (w.isdigit() and int(w) >= 100) for w in run):
             continue
         n = words_to_number(run)
         if n is None or n < 100:
@@ -321,13 +413,23 @@ def _currency_word_alts(currency: str) -> str:
                     + _CURRENCY_WORDS.get(currency, ()))
 
 
+def _run_has_magnitude(tokens: list[str]) -> bool:
+    """A run qualifies by a scale word — or by a self-sufficient magnitude:
+    a fused compound arrives as a digit string ("zweitausend" -> "2000"),
+    and a bare >=100 magnitude is unambiguous without a scale word beside
+    it. Pure literal-digit runs are unaffected (the digit path already
+    caught those at the same value)."""
+    return any(w in _SCALE_VALUES or (w.isdigit() and int(w) >= 100)
+               for w in tokens)
+
+
 def _amount_from_words(text: str, currency: str = DEFAULT_CURRENCY) -> float | None:
     """Prefix form: 'rupees five thousand and two hundred' -> 5200.00. Same
     >=min guard as the digit path; non-currency number words ("one agent")
     never qualify because the phrase must contain a scale word (hundred+)."""
     tokens = _words_after(text, re.compile(
         r"\b(?:" + _currency_word_alts(currency) + r")\s*", re.IGNORECASE))
-    if not any(t in _SCALE_VALUES for t in tokens):
+    if not _run_has_magnitude(tokens):
         return None
     n = words_to_number(tokens)
     return float(n) if n is not None and n >= 100 else None
@@ -353,7 +455,7 @@ def _amount_from_words_suffix(text: str, currency: str) -> float | None:
                 break
             run.append(w)
         run.reverse()
-        if not run or not any(w in _SCALE_VALUES for w in run):
+        if not run or not _run_has_magnitude(run):
             continue
         n = words_to_number(run)
         if n is not None and n >= 100:

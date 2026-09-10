@@ -92,7 +92,7 @@ def test_detection_lexicons_come_from_files():
     src = inspect.getsource(li)
     for token in ("quiero", "remboursement", "rückerstattung", "kya"):
         assert token not in src, f"lexicon token {token!r} in langid code"
-    assert set(li.GLOBAL_LEXICONS) == {"de", "es", "fr", "pt"}
+    assert set(li.GLOBAL_LEXICONS) == {"de", "es", "fr", "it", "pt"}
     assert "kya" in li.HINGLISH_LEXICON and "hai" in li.HINGLISH_LEXICON
     assert li.detect_language("où est mon remboursement merci beaucoup") \
         == "fr"
@@ -157,9 +157,8 @@ def test_european_parity_numbers_and_currency():
     assert e("cinco mil dólares", currency="$").amount == 5000.0
     assert e("cinq mille euros", currency="€").amount == 5000.0
     assert e("cinco mil reais", currency="R$").amount == 5000.0
-    # German productive compounds are unlisted tables: digits still parse,
-    # words await a data-driven compounding rule (documented open gap).
-    assert w(["dreihundert"]) is None
+    # German productive compounds now resolve through the engine.
+    assert w(["dreihundert"]) == 300
     assert e("2500 Euro", currency="€").amount == 2500.0
     # French hyphen mechanics: flat 80 wins over 4+20; 70s/90s compose.
     assert w(["quatre-vingt"]) == 80
@@ -172,3 +171,51 @@ def test_european_parity_numbers_and_currency():
     # Digit-cluster behavior unchanged by the hyphen rule.
     assert e("ORD-4821").order_id == "ORD-4821"
     assert e("call 4821 tomorrow") is not None
+
+
+def test_compounding_is_data_driven_and_general():
+    from voiceagent import langdata
+    from voiceagent.entities import extract_entities as e
+    from voiceagent.entities import words_to_number as w
+    # Declared in de.yaml, served by the generic engine (no German branch).
+    assert langdata.tables()["de"]["joiners"] == ["und"]
+    assert langdata.tables()["de"]["fused_scales"] is True
+    assert w(["zweitausend"]) == 2000
+    assert w(["einundzwanzig"]) == 21
+    assert w(["fünftausendfünfhundert"]) == 5500
+    assert w(["hunderttausend"]) == 100000
+    assert e("zweitausend Euro", currency="€").amount == 2000.0
+    assert e("fünftausendfünfhundert Euro", currency="€").amount == 5500.0
+    # Sub-100 amounts stay out in EVERY language (min-amount floor):
+    # word forms need digits, and digit forms need >= min_amount.
+    assert e("einundzwanzig Euro", currency="€").amount is None
+    assert e("21 Euro", currency="€").amount is None
+    assert e("250 Euro", currency="€").amount == 250.0
+    # Garbage never mints numbers through the compound path.
+    assert w(["understand"]) is None
+    assert w(["thousands"]) is None
+    assert w(["abundant"]) is None
+    # Joiners are disjoint from every number word (language-blind safety).
+    words = set()
+    for entry in langdata.tables().values():
+        words.update(entry["words"])
+        words.update(entry["scales"])
+    for j in langdata.compound_joiners():
+        assert j not in words
+
+
+def test_hindi_obliques_and_italian_file():
+    from voiceagent.entities import extract_entities as e
+    from voiceagent.entities import words_to_number as w
+    from voiceagent.langid import detect_language as d
+    assert w(["पाँच", "हजारों"]) == 5000
+    assert e("पाँच हजारों रुपये", currency="₹").amount == 5000.0
+    assert w(["cinquemila"]) is None  # Italian fuses differently: digits cover
+    assert w(["cinque", "mila".replace("mila", "mille")]) == 5000
+    assert e("cinquemila euro", currency="€").amount is None
+    assert e("5000 euro", currency="€").amount == 5000.0
+    assert e("mille euro", currency="€").amount is None  # sub-100 floor
+    assert d("dove il mio rimborso grazie") == "it"
+    # Italian has no medium upstream voice: honest fallback, still detected.
+    from voiceagent.tts import VOICE_REGISTRY
+    assert "it" not in VOICE_REGISTRY

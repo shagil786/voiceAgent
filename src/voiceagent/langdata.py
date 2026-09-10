@@ -53,6 +53,8 @@ def load_lang_tables(directory: str | Path = LANG_DIR) -> dict[str, dict]:
         tts_voice = raw.get("tts_voice") or ""
         asr_engine = raw.get("asr_engine") or ""
         alias_of = raw.get("alias_of") or ""
+        joiners = raw.get("joiners") or []
+        fused_scales = raw.get("fused_scales") or False
         out[code] = {
             "words": {str(k): int(v) for k, v in words.items()
                       if isinstance(v, int)},
@@ -74,6 +76,8 @@ def load_lang_tables(directory: str | Path = LANG_DIR) -> dict[str, dict]:
             "tts_voice": str(tts_voice),
             "asr_engine": str(asr_engine),
             "alias_of": str(alias_of),
+            "joiners": [str(j) for j in joiners if j],
+            "fused_scales": bool(fused_scales),
         }
     return out
 
@@ -121,6 +125,24 @@ def companions_for(code: str) -> tuple[str, ...]:
     """Sibling-script codes scanned alongside `code` (code-switching)."""
     entry = tables().get(code) or {}
     return tuple(entry.get("companions") or ())
+
+
+def compound_joiners() -> frozenset:
+    """Infix joiners merged across lang files (`joiners: [und]`): a fused
+    token splits on the joiner and SUMS its parts (ein+und+zwanzig).
+    Loader-level audit (tests) pins joiners disjoint from every number
+    word, so the rule can run language-blind."""
+    out: set[str] = set()
+    for entry in tables().values():
+        out.update(entry.get("joiners") or [])
+    return frozenset(out)
+
+
+def fused_scales_enabled() -> bool:
+    """Whether ANY loaded language declares `fused_scales:` (number+scale
+    written as one token: zweitausend). The engine applies the rule to
+    unknown tokens only — table entries always win whole."""
+    return any(bool(e.get("fused_scales")) for e in tables().values())
 
 
 def alias_for(code: str) -> str:

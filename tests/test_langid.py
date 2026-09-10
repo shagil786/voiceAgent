@@ -137,7 +137,7 @@ def test_global_language_detection(lang, text):
 
 
 def test_global_lexicons_cover_exactly_the_target_set():
-    assert set(GLOBAL_LEXICONS) == {"es", "fr", "de", "pt"}
+    assert set(GLOBAL_LEXICONS) == {"es", "fr", "de", "pt", "it"}
 
 
 def test_native_script_still_wins_over_latin_lexicons():
