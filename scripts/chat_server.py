@@ -132,11 +132,11 @@ if __name__ == "__main__":
     # maps through (a 127.0.0.1 bind inside a container is unreachable).
     host = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1"
     Path("data/out").mkdir(parents=True, exist_ok=True)
-    # Chat transcripts persist here (full turn text) — override the path
-    # per deployment and purge it on schedule (retention.purge_expired
-    # covers VOICEAGENT_CHAT_MEMORY_DB; unset keeps this default file).
-    MEMORY = SQLiteMemory(os.environ.get("VOICEAGENT_CHAT_MEMORY_DB")
-                          or "data/out/memory.db")
+    # Chat transcripts persist here (full turn text) — path centralized in
+    # voiceagent.voice_agent.chat_memory_path (VOICEAGENT_CHAT_MEMORY_DB),
+    # covered by retention.purge_expired / erase_session.
+    from voiceagent.voice_agent import chat_memory_path
+    MEMORY = SQLiteMemory(chat_memory_path())
     RATE_LIMITER = rate_limiter_from_env()
     ORCH = _build_live_orchestrator()
     if not os.environ.get("VOICEAGENT_TENANT"):

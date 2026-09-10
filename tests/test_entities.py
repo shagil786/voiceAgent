@@ -204,3 +204,38 @@ def test_new_currency_words_isolated_across_tenants():
                             currency="¥").amount is None
     assert extract_entities("refund of five thousand dollars please",
                             currency="£").amount is None
+
+
+def test_compositional_number_words_te_ta_bn():
+    from voiceagent.entities import extract_entities as e
+    from voiceagent.entities import words_to_number as w
+    assert w(["ఇరవై", "ఒకటి"]) == 21
+    assert w(["ఐదు", "వెయ్యి"]) == 5000
+    assert w(["இருபது", "ஒன்று"]) == 21
+    assert w(["ஐந்து", "ஆயிரம்"]) == 5000
+    assert w(["বিশ", "দুই"]) == 22
+    assert w(["পাঁচ", "হাজার"]) == 5000
+    assert e("ఐదు వేలు రూపాయలు", currency="₹").amount == 5000.0
+    assert e("ஐந்து ஆயிரம் ரூபாய்", currency="₹").amount == 5000.0
+    assert e("পাঁচ হাজার টাকা", currency="₹").amount == 5000.0
+
+
+def test_thai_compounds_split_and_parse():
+    from voiceagent.entities import _space_thai_numbers as sp
+    from voiceagent.entities import extract_entities as e
+    from voiceagent.entities import words_to_number as w
+    assert "ยี่สิบ" in sp("ยี่สิบเอ็ด") and "เอ็ด" in sp("ยี่สิบเอ็ด")
+    assert "คำสั่งซื้อ" in sp("คำสั่งซื้อยี่สิบเอ็ด")
+    assert w(["ยี่สิบ", "เอ็ด"]) == 21
+    assert w(["ห้า", "พัน"]) == 5000
+    assert e("ห้าพันบาท", currency="฿").amount == 5000.0
+    # English/Hindi behavior pinned unchanged
+    assert e("ORD-4821").order_id == "ORD-4821"
+    assert e("five thousand dollars", currency="$").amount == 5000.0
+
+
+def test_native_script_digits_normalize():
+    from voiceagent.entities import extract_entities as e
+    assert e("ORD-౪౮౨౧").order_id == "ORD-4821"
+    assert e("ORD-৪৮২১").order_id == "ORD-4821"
+    assert e("ORD-๔๘๒๑").order_id == "ORD-4821"

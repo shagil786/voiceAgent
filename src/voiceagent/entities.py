@@ -6,11 +6,14 @@ assuming "no amount, unauthenticated" for everything.
 M5b-3: ASR engines may speak numbers as WORDS (Qwen3-ASR writes
 "ORD four thousand eight hundred twenty one"; IndicConformer writes Telugu
 number words; whisper-hi may emit Devanagari digits ४८२१). Number-words are
-normalized to digits before the regexes run — currently English scale form
+normalized to digits before the regexes run: English scale form
 ("four thousand eight hundred twenty one"), digit-list form ("four eight
-two one"), and Devanagari digits. Hindi/Telugu number WORDS need per-language
-0-99 word tables (deferred — data task, not code).
-"""
+two one"), Devanagari digits, and — since 2026-09 — compositional
+Telugu/Tamil/Bengali/Thai words (tens + units accumulate: ఇరవై ఒకటి ->
+21) plus native-script digits for 9 scripts. Thai compounds are single
+orthographic words, longest-match split first (see _space_thai_numbers).
+New languages arrive as flat value tables + digit rows (data, never parser
+branches); the scale engine reads the unified lookups only."""
 from __future__ import annotations
 
 import re
@@ -18,8 +21,23 @@ from dataclasses import dataclass
 
 from voiceagent.tenant import DEFAULT_CURRENCY
 
-# Devanagari digits -> ASCII (whisper-hi / Qwen-hi sometimes emit ४८२१).
-_DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
+# Native-script digits -> ASCII (whisper-hi / Qwen-hi sometimes emit ४८२१;
+# Indic conformers emit Telugu/Tamil/Bengali/Thai digits the same way).
+# One combined map applied everywhere Devanagari-only used to be.
+_SCRIPT_DIGITS = {
+    "०१२३४५६७८९": "0123456789",  # Devanagari
+    "౦౧౨౩౪౫౬౭౮౯": "0123456789",  # Telugu
+    "௦௧௨௩௪௫௬௭௮௯": "0123456789",  # Tamil
+    "০১২৩৪৫৬৭৮৯": "0123456789",  # Bengali
+    "๐๑๒๓๔๕๖๗๘๙": "0123456789",  # Thai
+    "૦૧૨૩૪૫૬૭૮૯": "0123456789",  # Gujarati
+    "೦೧೨೩೪೫೬೭೮೯": "0123456789",  # Kannada
+    "൦൧൨൩൪൫൬൭൮൯": "0123456789",  # Malayalam
+    "੦੧੨੩੪੫੬੭੮੯": "0123456789",  # Gurmukhi (Punjabi)
+}
+_NATIVE_DIGITS = str.maketrans("".join(_SCRIPT_DIGITS),
+                               "".join(_SCRIPT_DIGITS.values()))
+_DEVANAGARI_DIGITS = _NATIVE_DIGITS  # historical name (same map)
 
 _NUM_WORDS = {
     "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -67,6 +85,93 @@ _HI_SCALES = {"सौ": 100, "हज़ार": 1000, "हजार": 1000, "ल
 # are observed — each alias cites the transcript it came from.
 _HI_GARBLES = {"एकत्र": "इकहत्तर", "एकतर": "इकहत्तर"}
 
+# Compositional number words (te/ta/bn/th): tens + units accumulate in the
+# scale engine (ఇరవై ఒకటి -> 20+1), so these are FLAT value tables, not
+# 0-99 enumerations. Initial sets (2026-09) — same standing as the
+# synthetic lexicons elsewhere: expand from real transcripts as observed.
+# Thai compounds are single orthographic words (ยี่สิบเอ็ด); see
+# _space_thai_numbers, which longest-match splits them before this table.
+_TE_WORDS = {
+    "సున్నా": 0, "ఒకటి": 1, "ఒక": 1, "రెండు": 2, "మూడు": 3, "నాలుగు": 4,
+    "ఐదు": 5, "ఆరు": 6, "ఏడు": 7, "ఎనిమిది": 8, "తొమ్మిది": 9,
+    "పది": 10, "పదకొండు": 11, "పన్నెండు": 12, "పదమూడు": 13,
+    "పద్నాలుగు": 14, "పదిహేను": 15, "పదహారు": 16, "పదిహేడు": 17,
+    "పద్దెనిమిది": 18, "పందొమ్మిది": 19, "ఇరవై": 20, "ముప్పై": 30,
+    "నలభై": 40, "యాభై": 50, "అరవై": 60, "డెబ్బై": 70, "ఎనభై": 80,
+    "తొంభై": 90,
+}
+_TE_SCALES = {"వంద": 100, "వెయ్యి": 1000, "వేలు": 1000, "లక్ష": 100000,
+              "కోటి": 10000000}
+_TA_WORDS = {
+    "பூஜ்ஜியம்": 0, "சுழியம்": 0, "ஒன்று": 1, "ஒரு": 1, "இரண்டு": 2,
+    "மூன்று": 3, "நான்கு": 4, "ஐந்து": 5, "ஆறு": 6, "ஏழு": 7,
+    "எட்டு": 8, "ஒன்பது": 9, "பத்து": 10, "பதினொன்று": 11,
+    "பன்னிரண்டு": 12, "பதிமூன்று": 13, "பதினான்கு": 14, "பதினைந்து": 15,
+    "பதினாறு": 16, "பதினேழு": 17, "பதினெட்டு": 18, "பத்தொன்பது": 19,
+    "இருபது": 20, "முப்பது": 30, "நாற்பது": 40, "ஐம்பது": 50,
+    "அறுபது": 60, "எழுபது": 70, "எண்பது": 80, "தொண்ணூறு": 90,
+}
+_TA_SCALES = {"நூறு": 100, "ஆயிரம்": 1000, "லட்சம்": 100000,
+              "கோடி": 10000000}
+_BN_WORDS = {
+    "শূন্য": 0, "এক": 1, "দুই": 2, "তিন": 3, "চার": 4, "পাঁচ": 5,
+    "ছয়": 6, "সাত": 7, "আট": 8, "নয়": 9, "দশ": 10, "এগারো": 11,
+    "বারো": 12, "তেরো": 13, "চৌদ্দ": 14, "পনেরো": 15, "ষোলো": 16,
+    "সতেরো": 17, "আঠারো": 18, "উনিশ": 19, "বিশ": 20, "কুড়ি": 20,
+    "তিরিশ": 30, "চল্লিশ": 40, "পঞ্চাশ": 50, "ষাট": 60, "সত্তর": 70,
+    "আশি": 80, "নব্বই": 90,
+}
+_BN_SCALES = {"শত": 100, "হাজার": 1000, "লাখ": 100000, "লক্ষ": 100000,
+              "কোটি": 10000000}
+_TH_WORDS = {
+    "ศูนย์": 0, "หนึ่ง": 1, "เอ็ด": 1, "สอง": 2, "สาม": 3, "สี่": 4,
+    "ห้า": 5, "หก": 6, "เจ็ด": 7, "แปด": 8, "เก้า": 9, "สิบ": 10,
+    "ยี่สิบ": 20, "สามสิบ": 30, "สี่สิบ": 40, "ห้าสิบ": 50, "หกสิบ": 60,
+    "เจ็ดสิบ": 70, "แปดสิบ": 80, "เก้าสิบ": 90,
+}
+_TH_SCALES = {"ร้อย": 100, "พัน": 1000, "หมื่น": 10000, "แสน": 100000,
+              "ล้าน": 1000000}
+
+# Unified lookups: every engine check below reads these, so a new language
+# is a table above — never an `or w == ...` branch in the parser.
+_WORD_VALUES: dict[str, int] = {**_NUM_WORDS, **_HI_NUM_WORDS, **_TE_WORDS,
+                                **_TA_WORDS, **_BN_WORDS, **_TH_WORDS}
+_SCALE_VALUES: dict[str, int] = {**_SCALES, **_HI_SCALES, **_TE_SCALES,
+                                 **_TA_SCALES, **_BN_SCALES, **_TH_SCALES}
+_HUNDRED_WORDS = frozenset({"hundred", "सौ", "వంద", "நூறு", "শত", "ร้อย"})
+
+# Longest-match vocabulary for Thai runs (no whitespace in Thai script).
+_THAI_VOCAB = tuple(sorted(set(_TH_WORDS) | set(_TH_SCALES), key=len,
+                           reverse=True))
+
+
+def _space_thai_numbers(text: str) -> str:
+    """Insert spaces around Thai number words inside Thai-script runs.
+    Thai compounds are single orthographic words (ยี่สิบเอ็ด = 21); greedy
+    longest-match decomposes them into table entries the scale engine
+    accumulates (20+1). Non-number Thai text passes through byte-identical.
+    """
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if "\u0e00" <= ch <= "\u0e7f":
+            matched = None
+            for word in _THAI_VOCAB:
+                if text.startswith(word, i):
+                    matched = word
+                    break
+            if matched is not None:
+                out.append(" " + matched + " ")
+                i += len(matched)
+                continue
+            out.append(ch)
+            i += 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
 _NUM_TOKENS = set(_NUM_WORDS) | set(_SCALES) | {"and"}
 
 _ORDER_RE = re.compile(r"\b(?:ORD[-#]?\s*)(\d{4,10})\b", re.IGNORECASE)
@@ -81,8 +186,7 @@ def _canon_token(tok: str) -> str | None:
     w = tok.strip(_PUNCT).lower()
     if w in _HI_GARBLES:
         w = _HI_GARBLES[w]
-    if (w in _NUM_WORDS or w in _SCALES or w in _HI_NUM_WORDS
-            or w in _HI_SCALES or w == "and"):
+    if w in _WORD_VALUES or w in _SCALE_VALUES or w == "and":
         return w
     if w.isdigit():
         return w
@@ -90,10 +194,9 @@ def _canon_token(tok: str) -> str | None:
 
 
 def _token_value(w: str) -> int | None:
-    if w in _NUM_WORDS:
-        return _NUM_WORDS[w]
-    if w in _HI_NUM_WORDS:
-        return _HI_NUM_WORDS[w]
+    v = _WORD_VALUES.get(w)
+    if v is not None:
+        return v
     if w.isdigit():
         return int(w)
     return None
@@ -140,13 +243,13 @@ def words_to_number(tokens: list[str]) -> int | None:
     scale_seen = False
     unit_digits: list[int] = []  # consecutive unit words before any scale
     for w in clean:
-        if w in _SCALES or w in _HI_SCALES:
-            scale = _SCALES.get(w) or _HI_SCALES[w]
+        if w in _SCALE_VALUES:
+            scale = _SCALE_VALUES[w]
             scale_total += max(current, 1) * scale
             current = 0
             scale_seen = True
             unit_digits = []
-        elif w == "hundred" or w == "सौ":
+        elif w in _HUNDRED_WORDS:
             current = max(current, 1) * 100
             scale_seen = True
             unit_digits = []
@@ -193,9 +296,15 @@ def _order_id_span(text: str) -> tuple[str | None, tuple[int, int] | None]:
 
 
 def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
-    """Hindi bare scale phrases ('6 हजार', 'पाँच हजार रुपये' without the
-    currency word captured) — in support speech a 'X हजार' phrase is money.
-    Requires हजार/लाख/करोड़ (सौ alone is too ambiguous without currency)."""
+    """Bare scale phrases ('6 हजार', 'ఐదు వేలు', 'ห้าพัน' without the
+    currency word captured) — in support speech an 'X scale' phrase is
+    money. Requires a NON-English scale >= 1000 (Hindi/Telugu/Tamil/
+    Bengali/Thai ASR drops currency words; bare English scale words keep
+    requiring explicit currency anchoring so amounts never leak across the
+    currency isolation boundary). Hindi notes preserved: long multi-part
+    phrases without an explicit digit are order-id-shaped ('पचपन हजार छह
+    सौ इकहत्तर' = an ORD id, not ₹55,671). Money shorthand is '6 हजार'
+    (digit present) or a short phrase ('पाँच हजार')."""
     runs: list[list[str]] = []
     run: list[str] = []
     for tok in order_text.split():
@@ -210,7 +319,13 @@ def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
         runs.append(run)
     best: float | None = None
     for run in runs:
-        if not any(w in _HI_SCALES and _HI_SCALES[w] >= 1000 for w in run):
+        # Bare-phrase convention is NON-English only: Hindi/Telugu/Tamil/
+        # Bengali/Thai ASR often drops the currency word ("6 हजार"), while
+        # bare English scale words ("five thousand dollars" on a ₹ tenant)
+        # must keep requiring explicit currency anchoring — otherwise
+        # amounts leak across the currency isolation boundary.
+        if not any(w in _SCALE_VALUES and w not in _SCALES
+                   and _SCALE_VALUES[w] >= 1000 for w in run):
             continue
         n = words_to_number(run)
         if n is None or n < 100:
@@ -233,11 +348,12 @@ def _amount_from_bare_hi_phrase(order_text: str) -> float | None:
 # each form mints amounts only for its own currency.
 _CURRENCY_WORDS: dict[str, tuple[str, ...]] = {
     "₹": (r"rs\.?", r"rupees?", r"रुपये?", r"रु\.?",
-          r"ரூபாய்", r"ரூ\.?", r"రూపాయలు", r"రూ\.?"),
+          r"ரூபாய்", r"ரூ\.?", r"రూపాయలు", r"రూ\.?", r"টাকা"),
     "$": (r"dollars?", r"usd?"),
     "€": (r"euros?", r"eur"),
     "£": (r"pounds?", r"gbp?", r"sterling"),
     "¥": (r"yuan?", r"renminbi?", r"yen"),
+    "฿": (r"บาท",),
 }
 
 
@@ -253,7 +369,7 @@ def _amount_from_words(text: str, currency: str = DEFAULT_CURRENCY) -> float | N
     never qualify because the phrase must contain a scale word (hundred+)."""
     tokens = _words_after(text, re.compile(
         r"\b(?:" + _currency_word_alts(currency) + r")\s*", re.IGNORECASE))
-    if not any(t in _SCALES for t in tokens):
+    if not any(t in _SCALE_VALUES for t in tokens):
         return None
     n = words_to_number(tokens)
     return float(n) if n is not None and n >= 100 else None
@@ -279,7 +395,7 @@ def _amount_from_words_suffix(text: str, currency: str) -> float | None:
                 break
             run.append(w)
         run.reverse()
-        if not run or not any(w in _SCALES for w in run):
+        if not run or not any(w in _SCALE_VALUES for w in run):
             continue
         n = words_to_number(run)
         if n is not None and n >= 100:
@@ -298,7 +414,7 @@ def extract_entities(text: str, currency: str = DEFAULT_CURRENCY,
     money-word patterns are scoped to the ACTIVE currency's word forms
     (dollars/USD for "$", rupees/रुपये for "₹", ...); a bare number >=
     min_amount still counts as an amount either way."""
-    text = text.translate(_DEVANAGARI_DIGITS)
+    text = _space_thai_numbers(text.translate(_NATIVE_DIGITS))
     sym = re.escape(currency)
     words = _currency_word_alts(currency)
     amount_re = re.compile(
@@ -356,7 +472,18 @@ def _levenshtein(a: str, b: str) -> int:
     return prev[-1]
 
 
-_DIGIT_TOKEN_RE = re.compile(r"[A-Za-z\u0900-\u097F0-9]+")
+_DIGIT_TOKEN_RE = re.compile(
+    r"[A-Za-z"
+    r"\u0900-\u097F"  # Devanagari
+    r"\u0C00-\u0C7F"  # Telugu
+    r"\u0B80-\u0BFF"  # Tamil
+    r"\u0980-\u09FF"  # Bengali
+    r"\u0E00-\u0E7F"  # Thai
+    r"\u0A80-\u0AFF"  # Gujarati
+    r"\u0C80-\u0CFF"  # Kannada
+    r"\u0D00-\u0D7F"  # Malayalam
+    r"\u0A00-\u0A7F"  # Gurmukhi
+    r"0-9]+")
 
 
 def _digit_clusters(text: str) -> list[str]:
@@ -413,10 +540,12 @@ def extract_order_id(text: str,
     2. If nothing exact and candidates are known, snap garbled digit
        clusters to the closest candidate above min_confidence.
     """
-    order_id, _ = _order_id_span(text.translate(_DEVANAGARI_DIGITS))
+    order_id, _ = _order_id_span(
+        _space_thai_numbers(text.translate(_NATIVE_DIGITS)))
     if order_id:
         return order_id
     if candidate_orders:
-        return _snap_order_id(text.translate(_DEVANAGARI_DIGITS),
-                              candidate_orders, min_confidence)
+        return _snap_order_id(
+            _space_thai_numbers(text.translate(_NATIVE_DIGITS)),
+            candidate_orders, min_confidence)
     return None
