@@ -5,3 +5,4 @@ order kab aayega (hinglish), ऑर्डर कब डिलीवर होग
 quand arrive ma commande (français), wann kommt meine Bestellung an
 (deutsch), quando chega meu pedido (português), డెలివరీ ఎప్పుడు ఉంటుంది
 (తెలుగు), ডেলিভারি কবে হবে (বাংলা)
+டெலிவரி எப்போது (tamil), จัดส่งเมื่อไหร่ (thai), डिलिव्हरी कधी होते (marathi), ડિલિવરી ક્યારે થાય (gujarati), ಡೆಲಿವರಿ ಯಾವಾಗ (kannada), ഡെലിവറി എപ്പോൾ (malayalam), ਡਿਲਿਵਰੀ ਕਦੋਂ ਹੁੰਦੀ ਹੈ (punjabi)

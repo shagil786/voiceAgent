@@ -74,6 +74,23 @@ SUITE_DEFAULT: list[tuple[str, str | None, str]] = [
     ("posso cancelar depois do envio?", "cancel_policy", "pt policy"),
     ("షిప్ అయ్యాక రద్దు చేయవచ్చా?", "cancel_policy", "te policy"),
     ("শিপ হওয়ার পর বাতিল করা যাবে?", "cancel_policy", "bn policy"),
+    # 2026-09: the routed-but-untested languages — ta/th/mr/gu/kn/ml/pa
+    # now have KB glosses (eta.md/cancel_policy.md tail lines). Initial
+    # phrasings, same standing as the earlier gloss sets.
+    ("டெலிவரி எப்போது?", "eta", "ta paraphrase"),
+    ("จัดส่งเมื่อไหร่?", "eta", "th paraphrase"),
+    ("डिलिव्हरी कधी होते?", "eta", "mr paraphrase"),
+    ("ડિલિવરી ક્યારે થાય?", "eta", "gu paraphrase"),
+    ("ಡೆಲಿವರಿ ಯಾವಾಗ?", "eta", "kn paraphrase"),
+    ("ഡെലിവറി എപ്പോൾ?", "eta", "ml paraphrase"),
+    ("ਡਿਲਿਵਰੀ ਕਦੋਂ ਹੁੰਦੀ ਹੈ?", "eta", "pa paraphrase"),
+    ("ஷிப் ஆன பிறகு ரத்து செய்யலாமா?", "cancel_policy", "ta policy"),
+    ("จัดส่งแล้วขอยกเลิกได้ไหม?", "cancel_policy", "th policy"),
+    ("शिप झाल्यावर रद्द करता येईल का?", "cancel_policy", "mr policy"),
+    ("શિપ થયા પછી રદ્દ કરી શકાય?", "cancel_policy", "gu policy"),
+    ("ಶಿಪ್ ಆದ ನಂತರ ರದ್ದು ಮಾಡಬಹುದೇ?", "cancel_policy", "kn policy"),
+    ("ഷിപ്പ് ചെയ്തതിന് ശേഷം റദ്ദാക്കാമോ?", "cancel_policy", "ml policy"),
+    ("ਸ਼ਿਪ ਹੋਣ ਤੋਂ ਬਾਅਦ ਰੱਦ ਕਰ ਸਕਦੇ ਹਾਂ?", "cancel_policy", "pa policy"),
     ("what is the capital of France", None, "gap: unrelated must not hit"),
     ("tell me a joke", None, "gap: chit-chat must not hit"),
     ("mazak kar raha tha", None, "gap: hinglish chit-chat must not hit"),
