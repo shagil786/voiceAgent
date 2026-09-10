@@ -110,11 +110,29 @@ def test_read_cache_metadata_missing_file_returns_none(tmp_path):
 
 
 def test_read_cache_metadata_reads_legacy_v1_pickle(tmp_path):
+    # Pre-sidecar pickles are NOT loaded (no digest -> miss -> rebuild):
+    # unpickling an unverified file is arbitrary-code-on-load.
     p = tmp_path / "handle.pkl"
     with open(p, "wb") as f:
         pickle.dump({"ids": ["a"], "texts": ["x"], "sections": ["s"]}, f)
-    meta = read_cache_metadata(p)
-    assert meta is not None and "version" not in meta  # unversioned -> invalid
+    assert read_cache_metadata(p) is None
+
+
+def test_cache_roundtrip_writes_sidecar(fake_st, tmp_path):
+    docs = _tiny_docs(tmp_path)
+    cache = tmp_path / "handle.pkl"
+    load_or_build_index(docs, model_name="fake-native",
+                        latin_model_name="fake-latin", cache_path=cache)
+    sidecar = tmp_path / "handle.pkl.sha256"
+    assert sidecar.exists()
+    import hashlib
+    assert sidecar.read_text().strip() == hashlib.sha256(
+        cache.read_bytes()).hexdigest()
+    # Tampering invalidates: flip a byte, the read misses.
+    data = bytearray(cache.read_bytes())
+    data[len(data) // 2] ^= 0xFF
+    cache.write_bytes(bytes(data))
+    assert read_cache_metadata(cache) is None
 
 
 # --- full roundtrip with the fake embedder (no downloads) ------------------

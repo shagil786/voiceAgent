@@ -201,12 +201,55 @@ def docs_hash(docs: list[dict]) -> str:
 
 
 def read_cache_metadata(cache_path: str | Path = DEFAULT_CACHE_PATH) -> dict | None:
-    """Load the pickled index cache payload (None if missing/corrupt)."""
+    """Load the pickled index cache payload (None if missing/corrupt).
+
+    Integrity: every save writes a `<path>.sha256` sidecar; a missing or
+    mismatched digest is a miss (None), so a tampered or half-written cache
+    never reaches pickle.load (arbitrary-code-on-load). Caches written
+    before sidecars existed simply rebuild once."""
     try:
-        with open(cache_path, "rb") as f:
-            return pickle.load(f)
-    except (OSError, EOFError, pickle.UnpicklingError):
+        return _read_verified(cache_path)
+    except (OSError, EOFError, pickle.UnpicklingError, ValueError):
         return None
+
+
+def _sidecar_path(cache_path: str | Path) -> Path:
+    return Path(str(cache_path) + ".sha256")
+
+
+def _write_verified(cache_path: str | Path, payload: dict) -> None:
+    """Pickle + sha256 sidecar (single writer helper for both caches)."""
+    import hashlib as _hashlib
+    import pickle as _pickle
+    data = _pickle.dumps(payload, protocol=_pickle.HIGHEST_PROTOCOL)
+    p = Path(cache_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "wb") as f:
+        f.write(data)
+    with open(_sidecar_path(p), "w", encoding="utf-8") as f:
+        f.write(_hashlib.sha256(data).hexdigest())
+
+
+def _read_verified(cache_path: str | Path) -> dict | None:
+    """Verified read: digest mismatch/missing sidecar -> None (callers
+    treat it as a cache miss and rebuild)."""
+    import hashlib as _hashlib
+    import pickle as _pickle
+    p = Path(cache_path)
+    try:
+        expected = _sidecar_path(p).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    with open(p, "rb") as f:
+        data = f.read()
+    actual = _hashlib.sha256(data).hexdigest()
+    if not expected or len(expected) != len(actual):
+        return None
+    import hmac as _hmac
+    if not _hmac.compare_digest(expected, actual):
+        return None
+    obj = _pickle.loads(data)
+    return obj if isinstance(obj, dict) else None
 
 
 def cache_is_valid(meta: dict | None, model_name: str, corpus_hash: str,
@@ -278,8 +321,7 @@ def save_index(handle: IndexHandle, docs: list[dict],
             for space, rec in handle._spaces.items()
         },
     }
-    with open(p, "wb") as f:
-        pickle.dump(payload, f)
+    _write_verified(p, payload)
 
 
 def load_or_build_index(docs: list[dict],

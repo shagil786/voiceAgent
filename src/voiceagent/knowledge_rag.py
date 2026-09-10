@@ -392,16 +392,18 @@ def build_chunked_index(
 
     spaces: dict[str, np.ndarray] | None = None
     if cache_path is not None and chunks:
+        from voiceagent.knowledge import _read_verified
+        meta = _read_verified(cache_path)
         try:
-            with open(cache_path, "rb") as f:
-                meta = pickle.load(f)
-            if _cache_is_valid(meta, model_name, latin_model_name,
-                               corpus_hash, len(chunks)):
+            if meta is not None and _cache_is_valid(
+                    meta, model_name, latin_model_name,
+                    corpus_hash, len(chunks)):
                 spaces = {space: rec["embeddings"]
                           for space, rec in meta["spaces"].items()}
                 sentence_vectors = meta.get("sentence_vectors") or {}
                 sentence_owner = meta.get("sentence_owner")
-        except (OSError, EOFError, pickle.UnpicklingError, ValueError):
+        except (EOFError, pickle.UnpicklingError, ValueError, KeyError,
+                TypeError):
             spaces = None
     if spaces is not None:
         # Cache hit: still TOUCH both space encoders once now — a lazy first
@@ -456,8 +458,6 @@ def _save_cache(cache_path: str | Path, model_name: str,
     contract."""
     from voiceagent.knowledge import LATIN_SPACE, NATIVE_SPACE
     names = {NATIVE_SPACE: model_name, LATIN_SPACE: latin_model_name}
-    p = Path(cache_path)
-    p.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": _cache_version(),
         "model_name": model_name,
@@ -471,8 +471,8 @@ def _save_cache(cache_path: str | Path, model_name: str,
         "sentence_vectors": sentence_vectors,
         "sentence_owner": sentence_owner,
     }
-    with open(p, "wb") as f:
-        pickle.dump(payload, f)
+    from voiceagent.knowledge import _write_verified
+    _write_verified(cache_path, payload)
 
 
 # --- retrieval -------------------------------------------------------------------
