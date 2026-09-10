@@ -1,0 +1,10 @@
+# Tenant-declared record-ID shapes for the clinic: appointment references
+# ("APT-1042"). Same schema as the default bundle's entities.yaml — the
+# platform extractor applies these with zero order-words anywhere.
+record_ids:
+  - code: APT
+    digit_pattern: '\b(?:APT[-#]?\s*)(\d{4,10})\b'
+    prefix_pattern: '\bAPT\b[-#\s:]*'
+    bare_digits: true
+    min_digits: 4
+    max_digits: 10

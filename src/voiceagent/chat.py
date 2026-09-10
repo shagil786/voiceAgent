@@ -64,8 +64,12 @@ def run_turn(agent, user_text: str, authenticated: bool = False,
     governed = hasattr(agent, "handle_turn")
 
     if memory is not None:
+        # Turn records use the agent's declared ID shapes when it exposes
+        # them (duck-typed: test doubles may not) — else the default bundle.
+        shapes = getattr(agent, "record_id_shapes", None)
         memory.append(conv_id, Turn(ts=now_ts(), role="user", text=user_text,
-                                    refs=extract_required_references(user_text)))
+                                    refs=extract_required_references(
+                                        user_text, id_shapes=shapes)))
     # Legacy replay seam: with a memory store attached, the legacy Agent
     # receives the recent transcript INCLUDING the just-appended user turn;
     # the governed Orchestrator owns its own per-session blackboard history,

@@ -78,6 +78,16 @@ def validate(root: Path) -> list[str]:
         except ValueError as e:
             errors.append(f"{tools_yaml}: {e}")
 
+    ent_yaml = root / "entities.yaml"
+    if ent_yaml.exists():
+        # Record-ID shapes: same validation Tenant.record_id_shapes applies
+        # at load time — patterns must compile with a group(1).
+        try:
+            from voiceagent.tenant import Tenant
+            Tenant(root).record_id_shapes()
+        except ValueError as e:
+            errors.append(f"{ent_yaml}: {e}")
+
     pol = root / "policies.yaml"
     if pol.exists():
         import yaml

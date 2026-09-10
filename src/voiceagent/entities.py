@@ -81,9 +81,27 @@ def _space_thai_numbers(text: str) -> str:
 
 _NUM_TOKENS = set(_WORD_VALUES) | set(_SCALE_VALUES) | {"and"}
 
-_ORDER_RE = re.compile(r"\b(?:ORD[-#]?\s*)(\d{4,10})\b", re.IGNORECASE)
-# \bORD\b: must not match the "ord" inside the word "order".
-_ORDER_PREFIX_RE = re.compile(r"\bORD\b[-#\s:]*", re.IGNORECASE)
+# Record-ID shapes: tenant data (Tenant.record_id_shapes over the bundle's
+# entities.yaml). No ID literal lives in this module — the default bundle's
+# ORD declaration is the no-shapes fallback, loaded once (repo-root
+# anchored, like langdata). A tenant that declares nothing gets the default
+# bundle's shapes: the DEFAULT DEPLOYMENT is ecommerce, the platform is not.
+_DEFAULT_ID_SHAPES: list[dict] | None = None
+
+
+def _default_id_shapes() -> list[dict]:
+    global _DEFAULT_ID_SHAPES
+    if _DEFAULT_ID_SHAPES is None:
+        from voiceagent.tenant import Tenant
+        from pathlib import Path as _Path
+        root = (_Path(__file__).resolve().parents[2]
+                / "data" / "tenants" / "default")
+        _DEFAULT_ID_SHAPES = Tenant.load(root).record_id_shapes() or []
+    return _DEFAULT_ID_SHAPES
+
+
+def _resolve_shapes(id_shapes: list[dict] | None) -> list[dict]:
+    return _default_id_shapes() if id_shapes is None else id_shapes
 _PUNCT = ".,;:!?\"'()[]{}"
 
 
@@ -179,26 +197,37 @@ def words_to_number(tokens: list[str]) -> int | None:
     return scale_total + current
 
 
-def _order_id_span(text: str) -> tuple[str | None, tuple[int, int] | None]:
-    """Order id + its char span, digit form ('ORD-4821') or number-words form
-    ('ORD four thousand eight hundred twenty one')."""
-    m = _ORDER_RE.search(text)
-    if m:
-        return f"ORD-{m.group(1)}", m.span()
-    pm = _ORDER_PREFIX_RE.search(text)
-    if not pm:
-        return None, None
-    end = pm.end()
-    consumed: list[str] = []
-    for tok in re.finditer(r"\S+", text[pm.end():]):
-        w = _canon_token(tok.group(0))
-        if w is None:
-            break
-        consumed.append(w)
-        end = pm.end() + tok.end()
-    n = words_to_number(consumed) if consumed else None
-    if n is not None and 4 <= len(str(n)) <= 10:  # same shape as _ORDER_RE
-        return f"ORD-{n}", (pm.start(), end)
+def _record_id_span(text: str, shapes: list[dict]
+                    ) -> tuple[str | None, tuple[int, int] | None]:
+    """First record id + its char span across the tenant's declared shapes:
+    digit form ('ORD-4821' / 'APT-1042') or number-words form after a
+    declared prefix ('ORD four thousand eight hundred twenty one'). The
+    output prefix is the shape's normalized code — the platform never
+    invents or assumes one."""
+    for shape in shapes:
+        code = shape["code"]
+        lo, hi = shape["min_digits"], shape["max_digits"]
+        m = re.compile(shape["digit_pattern"],
+                       re.IGNORECASE).search(text)
+        if m:
+            return f"{code}-{m.group(1)}", m.span()
+        prefix = shape.get("prefix_pattern")
+        if not prefix:
+            continue
+        pm = re.compile(prefix, re.IGNORECASE).search(text)
+        if not pm:
+            continue
+        end = pm.end()
+        consumed: list[str] = []
+        for tok in re.finditer(r"\S+", text[pm.end():]):
+            w = _canon_token(tok.group(0))
+            if w is None:
+                break
+            consumed.append(w)
+            end = pm.end() + tok.end()
+        n = words_to_number(consumed) if consumed else None
+        if n is not None and lo <= len(str(n)) <= hi:
+            return f"{code}-{n}", (pm.start(), end)
     return None, None
 
 
@@ -312,15 +341,18 @@ def _amount_from_words_suffix(text: str, currency: str) -> float | None:
 
 
 def extract_entities(text: str, currency: str = DEFAULT_CURRENCY,
-                     min_amount: float = 100.0) -> Entities:
-    """Extract an amount and an order id (ORD-xxxxx) from customer text.
-    Pure regex + number-word normalization, no LLM — deterministic and cheap.
+                     min_amount: float = 100.0,
+                     id_shapes: list[dict] | None = None) -> Entities:
+    """Extract an amount and a record id from customer text. Pure regex +
+    number-word normalization, no LLM — deterministic and cheap.
 
-    currency/min_amount are tenant config (M6a): both default to the platform
-    defaults (tenant.DEFAULT_CURRENCY, $ 100). The digit regex and the
-    money-word patterns are scoped to the ACTIVE currency's word forms
-    (dollars/USD for "$", rupees/रुपये for "₹", ...); a bare number >=
-    min_amount still counts as an amount either way."""
+    currency/min_amount are tenant config (M6a). id_shapes are the tenant's
+    declared ID shapes (Tenant.record_id_shapes); None resolves to the
+    DEFAULT BUNDLE's declaration — the platform itself knows no ID shape,
+    so a non-default industry passes its own shapes and ORD never appears.
+    The digit regex and the money-word patterns are scoped to the ACTIVE
+    currency's word forms; a bare number >= min_amount still counts either
+    way."""
     text = _space_thai_numbers(text.translate(_NATIVE_DIGITS))
     sym = re.escape(currency)
     words = _currency_word_alts(currency)
@@ -330,8 +362,8 @@ def extract_entities(text: str, currency: str = DEFAULT_CURRENCY,
         re.IGNORECASE,
     )
 
-    order_id, order_span = _order_id_span(text)
-    # Cut the order-id span so its number can't double as an amount
+    order_id, order_span = _record_id_span(text, _resolve_shapes(id_shapes))
+    # Cut the record-id span so its number can't double as an amount
     # ("ORD-4821" must not read as ₹4821).
     order_text = text if order_span is None else \
         text[:order_span[0]] + " " + text[order_span[1]:]
@@ -439,16 +471,21 @@ def _snap_order_id(text: str, candidate_orders: list[str],
 
 def extract_order_id(text: str,
                      candidate_orders: list[str] | None = None,
-                     min_confidence: float = SNAP_MIN_CONFIDENCE) -> str | None:
-    """Order-id extraction with contextual snapping.
+                     min_confidence: float = SNAP_MIN_CONFIDENCE,
+                     id_shapes: list[dict] | None = None) -> str | None:
+    """Record-id extraction with contextual snapping. (The name is legacy —
+    the id CODE comes from the tenant's declared shapes, so this returns
+    APT-1042 on the clinic bundle.)
 
-    1. Exact paths first: clean 'ORD-XXXXX' digits, spaced digits after an
-       ORD marker, and Hindi/English number-words (incl. Devanagari digits).
+    1. Exact paths first: clean prefixed digits, spaced digits after a
+       declared prefix marker, and number-words in any loaded language
+       (incl. native-script digits).
     2. If nothing exact and candidates are known, snap garbled digit
        clusters to the closest candidate above min_confidence.
     """
-    order_id, _ = _order_id_span(
-        _space_thai_numbers(text.translate(_NATIVE_DIGITS)))
+    order_id, _ = _record_id_span(
+        _space_thai_numbers(text.translate(_NATIVE_DIGITS)),
+        _resolve_shapes(id_shapes))
     if order_id:
         return order_id
     if candidate_orders:

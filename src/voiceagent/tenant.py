@@ -213,5 +213,54 @@ class Tenant:
         d = self.root / "knowledge"
         return str(d) if d.is_dir() else None
 
+    def record_id_shapes(self) -> list[dict] | None:
+        """Record-ID shapes this bundle DECLARES (entities.yaml `record_ids`:
+        code + digit/prefix patterns + digit bounds). The platform extractor
+        applies these verbatim — it knows no ID shape of its own — so a new
+        industry is a data file, never a regex in code. None when the bundle
+        declares none (callers fall back to the default bundle's shapes)."""
+        f = self.root / "entities.yaml"
+        if not f.exists():
+            return None
+        import yaml
+        raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        shapes = raw.get("record_ids") or []
+        if not isinstance(shapes, list):
+            raise ValueError(f"{f}: 'record_ids' must be a list")
+        out: list[dict] = []
+        for i, s in enumerate(shapes):
+            if not isinstance(s, dict):
+                raise ValueError(f"{f}: record_ids[{i}] must be a mapping")
+            import re
+            code = s.get("code")
+            digit = s.get("digit_pattern")
+            if not code or not digit:
+                raise ValueError(
+                    f"{f}: record_ids[{i}] needs 'code' + 'digit_pattern'")
+            try:
+                rx = re.compile(str(digit), re.IGNORECASE)
+            except re.error as e:
+                raise ValueError(
+                    f"{f}: record_ids[{i}] bad digit_pattern: {e}")
+            if rx.groups < 1:
+                raise ValueError(
+                    f"{f}: record_ids[{i}] digit_pattern needs a group(1)")
+            prefix = s.get("prefix_pattern")
+            if prefix:
+                try:
+                    re.compile(str(prefix), re.IGNORECASE)
+                except re.error as e:
+                    raise ValueError(
+                        f"{f}: record_ids[{i}] bad prefix_pattern: {e}")
+            out.append({
+                "code": str(code).upper(),
+                "digit_pattern": str(digit),
+                "prefix_pattern": str(prefix) if prefix else None,
+                "bare_digits": bool(s.get("bare_digits", False)),
+                "min_digits": int(s.get("min_digits", 4)),
+                "max_digits": int(s.get("max_digits", 10)),
+            })
+        return out or None
+
     def language_set(self) -> list[str] | None:
         return self.config.persona.languages

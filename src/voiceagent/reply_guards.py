@@ -27,10 +27,36 @@ if TYPE_CHECKING:  # Turn is duck-typed at runtime (no import cycle)
     from voiceagent.memory import Turn
 
 ACTION_RE = re.compile(r"ACTION:\s*([a-z_]+)", re.IGNORECASE)
-# Order IDs / reference numbers the customer may state (Latin or Devanagari).
-ORDER_ID_RE = re.compile(
-    r"\b(?:ORD[-#]?\s*)?(\d{4,10})\b", re.IGNORECASE
-)
+# Record-id patterns are TENANT DATA (bundle entities.yaml), never literals
+# here. The default bundle's declaration is the no-shapes fallback, loaded
+# once — same posture as entities.py: the default deployment is ecommerce,
+# the platform is not.
+_DEFAULT_ID_SHAPES: list[dict] | None = None
+
+
+def _default_id_shapes() -> list[dict]:
+    global _DEFAULT_ID_SHAPES
+    if _DEFAULT_ID_SHAPES is None:
+        from pathlib import Path
+        from voiceagent.tenant import Tenant
+        root = (Path(__file__).resolve().parents[2]
+                / "data" / "tenants" / "default")
+        _DEFAULT_ID_SHAPES = Tenant.load(root).record_id_shapes() or []
+    return _DEFAULT_ID_SHAPES
+
+
+def _id_digit_res(shapes: list[dict] | None) -> list:
+    """Compiled digit patterns for echo/history scans: each shape's declared
+    pattern, plus a bare min..max-digit run wherever the shape allows it
+    (the historical bare-digits behavior for the default bundle)."""
+    shapes = _default_id_shapes() if shapes is None else shapes
+    out = []
+    for s in shapes:
+        out.append(re.compile(s["digit_pattern"], re.IGNORECASE))
+        if s.get("bare_digits"):
+            lo, hi = s["min_digits"], s["max_digits"]
+            out.append(re.compile(r"\b(\d{%d,%d})\b" % (lo, hi)))
+    return out
 
 # Intent keywords that must appear in the reply when the customer states them
 # are TOOL-CONTRACT data now (Sprint A3): ToolSpec.facts on the deployment's
@@ -61,19 +87,32 @@ def echo_spec_registry(specs: "dict | None", demo: bool = True) -> dict:
 
 def extract_required_references(user_text: str,
                                 specs: "dict | None" = None,
-                                demo: bool = True) -> list[str]:
-    """References the reply must contain: the customer's stated order id(s)
+                                demo: bool = True,
+                                id_shapes: "list[dict] | None" = None
+                                ) -> list[str]:
+    """References the reply must contain: the customer's stated record id(s)
     and any declared tool-contract fact the customer stated. Shared with
     chat.py (turn records) and the echo guardrail. The scan is
     FIRST-MATCH-PER-SPEC (one fact per spec, then move on) — exactly the
     historical KEYWORD_FACTS group semantics: e.g. "my recharge failed" pins
     only 'fail' (recharge's first fact), never both 'fail' and 'recharge'.
     specs=None resolves the demo registry (the historical default for callers
-    with no tool surface)."""
+    with no tool surface). id_shapes=None resolves the default bundle's ID
+    declaration."""
     registry = echo_spec_registry(specs, demo)
     refs: list[str] = []
-    for m in ORDER_ID_RE.finditer(user_text):
-        refs.append(m.group(0))
+    seen_spans: list[tuple[int, int]] = []
+    for rx in _id_digit_res(id_shapes):
+        for m in rx.finditer(user_text):
+            # The declared pattern fires first; a bare-digits match fully
+            # inside an already-taken span is the same reference restated
+            # ("ORD-7777" matched whole, then "7777" inside it) — skip it.
+            # A genuinely separate digit run ("call 4821 tomorrow") is kept.
+            if any(m.start() >= s and m.end() <= e
+                   for s, e in seen_spans):
+                continue
+            seen_spans.append(m.span())
+            refs.append(m.group(0))
     lower = user_text.lower()
     for spec in registry.values():
         for f in spec.facts:
@@ -89,17 +128,25 @@ def extract_action(text: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
-def find_order_id(text: str) -> str | None:
-    """First order-id match in text ('ORD-1234' or bare digits), else None.
-    The single entry point to ORDER_ID_RE outside this module."""
-    m = ORDER_ID_RE.search(text)
-    return m.group(0) if m else None
+def find_order_id(text: str,
+                    id_shapes: "list[dict] | None" = None) -> str | None:
+    """First record-id match in text ('ORD-1234' or bare digits on the
+    default bundle; 'APT-1042' on the clinic), else None. (Name is legacy;
+    the shapes are the tenant's.) The single entry point to the ID patterns
+    outside this module."""
+    for rx in _id_digit_res(id_shapes):
+        m = rx.search(text)
+        if m:
+            return m.group(0)
+    return None
 
 
-def find_recent_order_id(history: list["Turn"]) -> str | None:
-    """Most recent order id in a conversation (scan newest -> oldest)."""
+def find_recent_order_id(history: list["Turn"],
+                         id_shapes: "list[dict] | None" = None
+                         ) -> str | None:
+    """Most recent record id in a conversation (scan newest -> oldest)."""
     for t in reversed(history):
-        oid = find_order_id(t.text)
+        oid = find_order_id(t.text, id_shapes)
         if oid:
             return oid
     return None

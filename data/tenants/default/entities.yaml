@@ -1,0 +1,16 @@
+# Tenant-declared record-ID shapes: the reference numbers this deployment's
+# customers state ("ORD-4821" here). PLATFORM CODE KNOWS NO ID SHAPE — the
+# extractor below applies whatever shapes the tenant bundle declares, so a
+# clinic declares APT-####, a bank declares account masks, etc.
+#
+# Schema per entry: code (normalized output prefix), digit_pattern (regex,
+# group(1) = the digits), prefix_pattern (optional words-form prefix, e.g.
+# "ORD four thousand ..."), bare_digits (also match un-prefixed digit runs
+# of min/max length for echo + history inheritance), min/max_digits.
+record_ids:
+  - code: ORD
+    digit_pattern: '\b(?:ORD[-#]?\s*)(\d{4,10})\b'
+    prefix_pattern: '\bORD\b[-#\s:]*'
+    bare_digits: true
+    min_digits: 4
+    max_digits: 10

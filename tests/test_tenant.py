@@ -197,3 +197,59 @@ def test_example_acme_declares_its_vocabulary():
     assert "order_status" in vocab and "escalate_to_human" in vocab
     # Derived from bundle data, NOT the demo e-commerce list.
     assert "recharge" not in vocab and "roaming" not in vocab
+
+
+def test_record_id_shapes_default_bundle_declares_ord():
+    from voiceagent.tenant import Tenant
+    shapes = Tenant.load("data/tenants/default").record_id_shapes()
+    assert shapes and shapes[0]["code"] == "ORD"
+    assert (shapes[0]["min_digits"], shapes[0]["max_digits"]) == (4, 10)
+
+
+def test_record_id_shapes_clinic_declares_apt():
+    from voiceagent.tenant import Tenant
+    from voiceagent.entities import extract_entities, extract_order_id
+    shapes = Tenant.load(
+        "data/tenants/example-clinic").record_id_shapes()
+    assert shapes and shapes[0]["code"] == "APT"
+    assert extract_order_id("status of APT-1042?",
+                            id_shapes=shapes) == "APT-1042"
+    assert extract_entities("status of APT-1042?",
+                            id_shapes=shapes).order_id == "APT-1042"
+    # Clinic shapes never mint ORD: no order-words leak across industries.
+    assert extract_order_id("status of ORD-4821?",
+                            id_shapes=shapes) is None
+
+
+def test_record_id_shapes_missing_file_is_none(tmp_path):
+    from voiceagent.tenant import Tenant
+    (tmp_path / "tenant.json").write_text('{"name": "x"}',
+                                          encoding="utf-8")
+    assert Tenant.load(tmp_path).record_id_shapes() is None
+
+
+def test_record_id_shapes_reject_bad_patterns(tmp_path):
+    import pytest
+    from voiceagent.tenant import Tenant
+    (tmp_path / "tenant.json").write_text('{"name": "x"}',
+                                          encoding="utf-8")
+    (tmp_path / "entities.yaml").write_text(
+        "record_ids:\n  - code: ZZ\n    digit_pattern: '(unclosed'\n",
+        encoding="utf-8")
+    with pytest.raises(ValueError, match="bad digit_pattern"):
+        Tenant.load(tmp_path).record_id_shapes()
+    (tmp_path / "entities.yaml").write_text(
+        "record_ids:\n  - code: ZZ\n    digit_pattern: '\\\\d+'\n",
+        encoding="utf-8")
+    with pytest.raises(ValueError, match="group\\(1\\)"):
+        Tenant.load(tmp_path).record_id_shapes()
+
+
+def test_no_id_literal_in_platform_code():
+    import inspect
+    from voiceagent import entities as ent
+    from voiceagent import reply_guards as rg
+    for mod in (ent, rg):
+        src = inspect.getsource(mod)
+        assert "ORD[-#" not in src and "ORD\\b" not in src, \
+            f"ID literal survives in {mod.__name__}"

@@ -38,7 +38,6 @@ from voiceagent.demo_data import (DEMO_TENANT_ACTIONS,  # noqa: F401
 # imports below re-export both surfaces, so `from voiceagent.agent import X`
 # keeps working unchanged for every existing caller.
 from voiceagent.reply_guards import (ACTION_RE,  # noqa: F401
-                                     ORDER_ID_RE,  # noqa: F401
                                      _APOLOGY_MARKERS,  # noqa: F401
                                      _SERVED_REPLY_LANGS,  # noqa: F401
                                      _acceptable_reply_langs,  # noqa: F401
@@ -202,6 +201,17 @@ class Agent:
         # choice there, byte-identically.
         self._frontier = bool(getattr(llm, "frontier", False))
 
+    @property
+    def record_id_shapes(self) -> "list[dict] | None":
+        """This deployment's declared ID shapes (tenant bundle entities.yaml),
+        or None — downstream resolves None to the default bundle's
+        declaration. chat.py reads this so turn records use the same shapes
+        as the echo guardrail."""
+        shapes_attr = getattr(self._tenant, "record_id_shapes", None)
+        resolved = shapes_attr() if callable(shapes_attr) else shapes_attr
+        assert resolved is None or isinstance(resolved, list)
+        return resolved
+
     def handle(self, user_text: str, authenticated: bool = False,
                amount: float | None = None, conv_id: str = "",
                *, history: list["Turn"] | None = None,
@@ -320,13 +330,16 @@ class Agent:
         required: list[str] = []
         if self._classifier is not None:
             required = extract_required_references(
-                user_text, specs=self._echo_specs, demo=self._echo_demo)
+                user_text, specs=self._echo_specs, demo=self._echo_demo,
+                id_shapes=self.record_id_shapes)
             # Reference inheritance: a follow-up like "and when will it
-            # arrive?" states no order id — inherit the most recent one from
+            # arrive?" states no record id — inherit the most recent one from
             # the conversation so the guardrail keeps the reply pinned to the
             # customer's reference. No LLM involved.
-            if history and find_order_id(user_text) is None:
-                inherited = find_recent_order_id(history)
+            if history and find_order_id(
+                    user_text, self.record_id_shapes) is None:
+                inherited = find_recent_order_id(history,
+                                                 self.record_id_shapes)
                 if inherited:
                     required.append(inherited)
         missing = [r for r in required if r.lower() not in clean.lower()]
