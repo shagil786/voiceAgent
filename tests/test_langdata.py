@@ -210,9 +210,9 @@ def test_hindi_obliques_and_italian_file():
     from voiceagent.langid import detect_language as d
     assert w(["पाँच", "हजारों"]) == 5000
     assert e("पाँच हजारों रुपये", currency="₹").amount == 5000.0
-    assert w(["cinquemila"]) is None  # Italian fuses differently: digits cover
+    assert w(["cinquemila"]) == 5000  # fused cinque+mila via scales data
     assert w(["cinque", "mila".replace("mila", "mille")]) == 5000
-    assert e("cinquemila euro", currency="€").amount is None
+    assert e("cinquemila euro", currency="€").amount == 5000.0
     assert e("5000 euro", currency="€").amount == 5000.0
     assert e("mille euro", currency="€").amount is None  # sub-100 floor
     assert d("dove il mio rimborso grazie") == "it"

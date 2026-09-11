@@ -239,3 +239,30 @@ def test_native_script_digits_normalize():
     assert e("ORD-౪౮౨౧").order_id == "ORD-4821"
     assert e("ORD-৪৮২১").order_id == "ORD-4821"
     assert e("ORD-๔๘๒๑").order_id == "ORD-4821"
+
+
+# --------------------------------------------------------------------------
+# Scale plurals/inflections are DATA (lang/*.yaml), never code branches:
+# zwei millionen, two millions, dos millones, trois millions, ...
+# --------------------------------------------------------------------------
+
+def test_scale_plurals_parse_in_six_languages():
+    from voiceagent.entities import words_to_number as w
+    assert w(["zwei", "millionen"]) == 2000000
+    assert w(["zwei", "milliarden"]) == 2000000000
+    assert w(["two", "millions"]) == 2000000
+    assert w(["three", "thousands"]) == 3000
+    assert w(["five", "lakhs"]) == 500000
+    assert w(["dos", "millones"]) == 2000000
+    assert w(["tres", "miles"]) == 3000
+    assert w(["trois", "millions"]) == 3000000
+    assert w(["un", "milliard"]) == 1000000000
+    assert w(["dois", "milhões"]) == 2000000
+    assert w(["tre", "milioni"]) == 3000000
+    assert w(["due", "mila"]) == 2000
+
+
+def test_german_fused_compound_with_plural_scale():
+    from voiceagent.entities import _compound_value
+    assert _compound_value("zweimillionen") == 2000000
+    assert _compound_value("dreimilliarden") == 3000000000

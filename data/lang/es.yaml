@@ -71,9 +71,12 @@ numbers:
   scales:
     cien: 100
     ciento: 100
+    cientos: 100
     mil: 1000
+    miles: 1000
     millón: 1000000
     millon: 1000000
+    millones: 1000000
   hundred: [cien, ciento]
 currency_words:
   "$":

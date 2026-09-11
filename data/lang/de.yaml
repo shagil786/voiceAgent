@@ -77,6 +77,9 @@ numbers:
     hundert: 100
     tausend: 1000
     million: 1000000
+    millionen: 1000000
+    milliarde: 1000000000
+    milliarden: 1000000000
   hundred: [hundert]
 currency_words:
   "€":

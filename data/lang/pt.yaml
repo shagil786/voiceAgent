@@ -69,9 +69,16 @@ numbers:
   scales:
     cem: 100
     cento: 100
+    centos: 100
     mil: 1000
     milhão: 1000000
     milhao: 1000000
+    milhões: 1000000
+    milhoes: 1000000
+    bilhão: 1000000000
+    bilhao: 1000000000
+    bilhões: 1000000000
+    bilhoes: 1000000000
   hundred: [cem, cento]
 currency_words:
   "R$":
