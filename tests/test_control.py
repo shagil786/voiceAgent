@@ -229,3 +229,61 @@ def test_rollback_fails_closed_on_broken_tenant(ctl):
     assert out["tenant_errors"]
     from voiceagent.deploy.bundle import read_live_deploy
     assert read_live_deploy(root) is None
+
+
+def test_viewer_role_reads_but_cannot_mutate(tmp_path):
+    import json
+    import threading
+    import urllib.error
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from voiceagent.control import server_from_env
+    cls = server_from_env({"VOICEAGENT_CONTROL_TOKEN": "adm",
+                           "VOICEAGENT_VIEW_TOKEN": "view",
+                           "VOICEAGENT_DEPLOY_ROOT": str(tmp_path / "deploy")})
+
+    def raw(method, path, token, body=None):
+        r = urllib.request.Request(
+            base + path, method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(r) as resp:
+                return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), cls)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        code, out = raw("GET", "/api/control/status", "view")
+        assert code == 200 and out["role"] == "viewer"
+        code, out = raw("GET", "/api/control/status", "adm")
+        assert code == 200 and out["role"] == "admin"
+        code, _ = raw("GET", "/api/control/summary", "view")
+        assert code == 200
+        code, out = raw("POST", "/api/control/deploy/rollback", "view",
+                        {"deploy_id": "x"})
+        assert code == 403 and "view-only" in out["error"]
+        code, _ = raw("POST", "/api/control/onboard/deploy", "view",
+                      {"deploy_id": "x"})
+        assert code == 403
+        code, _ = raw("GET", "/api/control/summary", "wrong")
+        assert code == 401
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_no_view_token_means_single_operator(ctl):
+    # The shared ctl fixture configures no view token: anything but the
+    # control token is unauthorized, and status reports admin.
+    import urllib.error
+    req, _ = ctl
+    try:
+        req("GET", "/api/control/summary", token="view")
+    except urllib.error.HTTPError as e:
+        assert e.code == 401
+    else:
+        raise AssertionError("view token accepted without configuration")

@@ -11,9 +11,12 @@ Design contract (2026-09-09 product discussion):
       the ratings table in memory.py (VOICEAGENT_MEMORY_DB)
     * wizard compile: deploy/ ingest + compiler (deterministic, no LLM)
     * wizard deploy: deploy/ selfcheck + go_live (mechanical, gated)
-- Fail-closed: every /api/control/* request requires the bearer token
-  (VOICEAGENT_CONTROL_TOKEN). No token configured => control routes refuse
-  (401) — an unauthenticated control plane is a worse failure than no plane.
+# Fail-closed: every /api/control/* request requires the bearer token
+# (VOICEAGENT_CONTROL_TOKEN). No token configured => control routes refuse
+# (401) - an unauthenticated control plane is a worse failure than no plane.
+# Two roles, no user DB: the control token is admin (everything), the
+# optional VOICEAGENT_VIEW_TOKEN is viewer (GET + preview only - deploy and
+# rollback answer 403). Share the view token with staff; keep admin.
 - No new dependencies: stdlib http.server, matching scripts/chat_server.py.
 
 Endpoints (all JSON):
@@ -165,6 +168,7 @@ class ControlServer(BaseHTTPRequestHandler):
     memory_db: Path | None = None
     deploy_root: Path | None = None
     token: str | None = None
+    view_token: str | None = None
     cors_origins: str = "*"  # set from VOICEAGENT_CORS_ORIGINS at startup
 
     def log_message(self, *a):  # silence per-request stderr
@@ -202,11 +206,28 @@ class ControlServer(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
-    def _authorized(self) -> bool:
+    def _role(self) -> str | None:
+        """Bearer role: 'admin' (control token), 'viewer' (view token),
+        None (unauthorized). Two tokens, no user DB: the owner keeps the
+        control token; staff get the view token (eyes, no hands)."""
         if not self.token:  # fail closed: no token configured
-            return False
+            return None
         auth = self.headers.get("Authorization", "")
-        return auth == f"Bearer {self.token}"
+        if auth == f"Bearer {self.token}":
+            return "admin"
+        if self.view_token and auth == f"Bearer {self.view_token}":
+            return "viewer"
+        return None
+
+    def _authorized(self) -> bool:
+        return self._role() is not None
+
+    def _require_admin(self) -> bool:
+        """True when the caller may mutate. Sends 403 otherwise."""
+        if self._role() == "admin":
+            return True
+        self._send(403, {"error": "admin token required — this token is view-only"})
+        return False
 
     def _read_json(self) -> dict:
         n = int(self.headers.get("Content-Length") or 0)
@@ -231,6 +252,7 @@ class ControlServer(BaseHTTPRequestHandler):
             if path == "/api/control/status":
                 self._send(200, {
                     "ok": True,
+                    "role": self._role(),
                     "audit_db": str(self.audit_db) if self.audit_db else None,
                     "memory_db": str(self.memory_db) if self.memory_db else None,
                     "deploy_root": str(self.deploy_root)
@@ -287,6 +309,8 @@ class ControlServer(BaseHTTPRequestHandler):
                                       body.get("interview", {}))
                 self._send(200, out)
             elif path == "/api/control/onboard/deploy":
+                if not self._require_admin():
+                    return
                 # Deploy from the payload the console re-sends with its
                 # approval + deploy_id. The preview pipeline (deterministic
                 # compile + brain drafts) runs again so approval and deploy
@@ -344,6 +368,8 @@ class ControlServer(BaseHTTPRequestHandler):
                     _wld(root, deploy_id)
                 self._send(200, out)
             elif path == "/api/control/deploy/rollback":
+                if not self._require_admin():
+                    return
                 from voiceagent.deploy.bundle import (
                     load_bundle, safe_deploy_id, write_live_deploy,
                 )
@@ -391,6 +417,7 @@ def server_from_env(env: Mapping[str, str] | None = None):
     """Class-level config from env (injectable for tests). None => os.environ."""
     e = os.environ if env is None else env
     ControlServer.token = (e.get("VOICEAGENT_CONTROL_TOKEN") or "").strip() or None
+    ControlServer.view_token = (e.get("VOICEAGENT_VIEW_TOKEN") or "").strip() or None
     audit = (e.get("VOICEAGENT_AUDIT_DB") or "").strip()
     memory = (e.get("VOICEAGENT_MEMORY_DB") or "").strip()
     deploy_root = (e.get("VOICEAGENT_DEPLOY_ROOT") or "").strip()
