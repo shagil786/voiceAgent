@@ -165,6 +165,7 @@ class ControlServer(BaseHTTPRequestHandler):
     memory_db: Path | None = None
     deploy_root: Path | None = None
     token: str | None = None
+    cors_origins: str = "*"  # set from VOICEAGENT_CORS_ORIGINS at startup
 
     def log_message(self, *a):  # silence per-request stderr
         pass
@@ -182,10 +183,15 @@ class ControlServer(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def _cors(self) -> None:
-        # The console app runs on a different origin (dev :5173/:5174). The
-        # bearer token is the access gate; CORS is scoped to simple requests
-        # (Authorization + Content-Type) — no cookies, no credentials mode.
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # The console app runs on a different origin (dev :5173/:5174, dist
+        # on its own port). The bearer token is the access gate; CORS is
+        # scoped to simple requests (Authorization + Content-Type) — no
+        # cookies, no credentials mode. Operators lock this down with
+        # VOICEAGENT_CORS_ORIGINS (comma-separated; "*" keeps local dev).
+        origin = (self.headers.get("Origin") or "").strip()
+        allowed = [o.strip() for o in (self.cors_origins or "*").split(",") if o.strip()]
+        if "*" in allowed or origin in allowed:
+            self.send_header("Access-Control-Allow-Origin", origin if "*" not in allowed and origin else "*")
         self.send_header("Access-Control-Allow-Headers",
                          "Authorization, Content-Type")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -347,4 +353,5 @@ def server_from_env(env: Mapping[str, str] | None = None):
     ControlServer.audit_db = Path(audit) if audit else None
     ControlServer.memory_db = Path(memory) if memory else None
     ControlServer.deploy_root = Path(deploy_root) if deploy_root else None
+    ControlServer.cors_origins = (e.get("VOICEAGENT_CORS_ORIGINS") or "*").strip() or "*"
     return ControlServer

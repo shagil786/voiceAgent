@@ -116,3 +116,34 @@ def test_preview_requires_a_source(ctl):
     with pytest.raises(urllib.error.HTTPError) as ei:
         req("POST", "/api/control/onboard/preview", {"source": {}})
     assert ei.value.code == 400
+
+
+def test_cors_defaults_to_wildcard_for_local_dev(ctl):
+    # req helper hides raw headers; the class attr is the contract here
+    # (live echo behavior is pinned by the restricted test below).
+    from voiceagent.control import ControlServer
+    assert ControlServer.cors_origins == "*"
+
+
+def test_cors_restricted_echoes_allowed_origin(tmp_path):
+    import threading
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from voiceagent.control import server_from_env
+    cls = server_from_env({"VOICEAGENT_CONTROL_TOKEN": "tok",
+                           "VOICEAGENT_CORS_ORIGINS": "http://127.0.0.1:8321"})
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), cls)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        r = urllib.request.Request(base + "/api/control/status", method="OPTIONS",
+                                   headers={"Origin": "http://127.0.0.1:8321"})
+        with urllib.request.urlopen(r) as resp:
+            assert resp.headers.get("Access-Control-Allow-Origin") == "http://127.0.0.1:8321"
+        r2 = urllib.request.Request(base + "/api/control/status", method="OPTIONS",
+                                    headers={"Origin": "https://evil.example"})
+        with urllib.request.urlopen(r2) as resp2:
+            assert resp2.headers.get("Access-Control-Allow-Origin") is None
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
