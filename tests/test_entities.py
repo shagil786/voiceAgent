@@ -266,3 +266,56 @@ def test_german_fused_compound_with_plural_scale():
     from voiceagent.entities import _compound_value
     assert _compound_value("zweimillionen") == 2000000
     assert _compound_value("dreimilliarden") == 3000000000
+
+
+# --------------------------------------------------------------------------
+# Scale plurals/obliques, tier 2: verified against external references,
+# never invented. Urdu obliques + arab/kharab (usage evidence); Telugu
+# kotlu/lakshalu (Wiktionary head entries); the rest are the regular
+# plural/oblique of the already-shipped singular (same paradigm as the
+# in-repo Hindi हजारों/लाखों/करोड़ों).
+# --------------------------------------------------------------------------
+
+def test_urdu_obliques_and_extended_scales():
+    from voiceagent.entities import words_to_number as w
+    assert w(["دو", "ہزاروں"]) == 2000
+    assert w(["پانچ", "لاکھوں"]) == 500000
+    assert w(["تین", "کروڑوں"]) == 30000000
+    assert w(["ایک", "ارب"]) == 1000000000
+
+
+def test_telugu_plurals_wiktionary_attested():
+    from voiceagent.entities import words_to_number as w
+    assert w(["రెండు", "లక్షలు"]) == 200000
+    assert w(["మూడు", "కోట్లు"]) == 30000000
+    assert w(["ఒక", "నూరువేలు"]) == 100000
+
+
+def test_indic_scale_plurals_regular_formation():
+    from voiceagent.entities import words_to_number as w
+    # Tamil -கள்
+    assert w(["இரண்டு", "ஆயிரங்கள்"]) == 2000
+    assert w(["ஐந்து", "லட்சங்கள்"]) == 500000
+    assert w(["மூன்று", "கோடிகள்"]) == 30000000
+    # Kannada -ಗಳು
+    assert w(["ಎರಡು", "ಸಾವಿರಗಳು"]) == 2000
+    assert w(["ಐದು", "ಲಕ್ಷಗಳು"]) == 500000
+    assert w(["ಮೂರು", "ಕೋಟಿಗಳು"]) == 30000000
+    # Malayalam -ങ്ങൾ
+    assert w(["രണ്ട്", "ആയിരങ്ങൾ"]) == 2000
+    assert w(["അഞ്ച്", "ലക്ഷങ്ങൾ"]) == 500000
+    assert w(["മൂന്ന്", "കോടികൾ"]) == 30000000
+    # Gujarati -ો
+    assert w(["બે", "હજારો"]) == 2000
+    assert w(["પાંચ", "લાખો"]) == 500000
+    assert w(["ત્રણ", "કરોડો"]) == 30000000
+    # Punjabi -ਾਂ oblique
+    assert w(["ਦੋ", "ਹਜ਼ਾਰਾਂ"]) == 2000
+    assert w(["ਪੰਜ", "ਲੱਖਾਂ"]) == 500000
+    assert w(["ਤਿੰਨ", "ਕਰੋੜਾਂ"]) == 30000000
+    # Marathi -ो
+    assert w(["दोन", "हजारो"]) == 2000
+    assert w(["पाच", "लाखो"]) == 500000
+    # Bengali -ো indefinite plural
+    assert w(["দুই", "হাজারো"]) == 2000
+    assert w(["পাঁচ", "লাখো"]) == 500000
