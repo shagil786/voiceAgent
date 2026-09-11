@@ -125,7 +125,8 @@ def judge_conversation(rows: list[dict], llm: Any) -> dict:
         return out
     overall = round((scores["tool_choice"] + scores["verdict_quality"]
                      + scores["escalation_judgment"]) / 3, 1)
-    return {"source": "llm-judge", "overall": overall, **scores,
+    axes = {k: scores[k] for k in ("tool_choice", "verdict_quality", "escalation_judgment")}
+    return {"source": "llm-judge", "overall": overall, **axes,
             "reasoning": scores.get("reasoning", "")}
 
 
