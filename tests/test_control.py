@@ -147,3 +147,85 @@ def test_cors_restricted_echoes_allowed_origin(tmp_path):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def _stage_deploy(root, deploy_id, text="Sunrise Vet treats dogs. Cancel with VST-1042."):
+    # Offline deploy staging: compile + save bundle + materialize tenant,
+    # mirroring the deploy endpoint without the HTTP layer.
+    from voiceagent.deploy.bundle import save_bundle, write_live
+    from voiceagent.deploy.compiler import compile_bundle
+    from voiceagent.deploy.materialize import materialize_tenant_bundle
+    chunks = [{"source": "owner_paste", "text": text}]
+    bundle = compile_bundle(deploy_id, chunks, {"offering": "vet"})
+    d = root / deploy_id
+    # Canonical layout, mirroring control.deploy_bundle:
+    # save_bundle(bundle, deploy_dir / "bundle.json").
+    save_bundle(bundle, d / "bundle.json")
+    write_live(str(d), "v1")
+    tenant = materialize_tenant_bundle(
+        {"tools": [], "intents": {}, "entities": None, "policies": {}},
+        {"offering": "vet"}, chunks, deploy_id, d / "tenant")
+    assert tenant["ok"], tenant["errors"]
+    return d
+
+
+def test_deploys_history_lists_staged_and_live(ctl):
+    req, tmp_path = ctl
+    root = tmp_path / "deploy"
+    _stage_deploy(root, "aaa")
+    _stage_deploy(root, "bbb")
+    from voiceagent.deploy.bundle import write_live_deploy
+    write_live_deploy(root, "bbb")
+    out = req("GET", "/api/control/deploys")
+    assert out["live"] == "bbb"
+    ids = [d["deploy_id"] for d in out["deploys"]]
+    assert ids == ["bbb", "aaa"] or sorted(ids) == ["aaa", "bbb"]
+    assert all(d["tenant_ok"] for d in out["deploys"])
+
+
+def test_rollback_repoints_live_after_reverify(ctl):
+    req, tmp_path = ctl
+    root = tmp_path / "deploy"
+    _stage_deploy(root, "aaa")
+    _stage_deploy(root, "bbb")
+    from voiceagent.deploy.bundle import write_live_deploy, read_live_deploy
+    write_live_deploy(root, "bbb")
+    out = req("POST", "/api/control/deploy/rollback", {"deploy_id": "aaa"})
+    assert out["ok"] is True, (out.get("tenant_errors"), out.get("summary"))
+    assert out["deploy_id"] == "aaa"
+    assert read_live_deploy(root) == "aaa"
+
+
+def test_rollback_refuses_bad_targets(ctl):
+    import urllib.error
+    req, tmp_path = ctl
+    root = tmp_path / "deploy"
+    _stage_deploy(root, "aaa")
+    for bad in ["nope", "../evil", "", "aaa/../bbb"]:
+        try:
+            req("POST", "/api/control/deploy/rollback", {"deploy_id": bad})
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+        else:
+            raise AssertionError(f"rollback accepted {bad!r}")
+    # already-live refuses too
+    from voiceagent.deploy.bundle import write_live_deploy
+    write_live_deploy(root, "aaa")
+    try:
+        req("POST", "/api/control/deploy/rollback", {"deploy_id": "aaa"})
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
+    else:
+        raise AssertionError("rollback accepted the live deploy")
+
+
+def test_rollback_fails_closed_on_broken_tenant(ctl):
+    req, tmp_path = ctl
+    root = tmp_path / "deploy"
+    d = _stage_deploy(root, "aaa")
+    (d / "tenant" / "tenant.json").write_text("not: [valid", encoding="utf-8")
+    out = req("POST", "/api/control/deploy/rollback", {"deploy_id": "aaa"})
+    assert out["ok"] is False
+    assert out["tenant_errors"]
+    from voiceagent.deploy.bundle import read_live_deploy
+    assert read_live_deploy(root) is None

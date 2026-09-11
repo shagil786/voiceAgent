@@ -264,6 +264,11 @@ class ControlServer(BaseHTTPRequestHandler):
                     r["conv_id"] = s["conv_id"]
                     scored.append(r)
                 self._send(200, {"scores": scored})
+            elif path == "/api/control/deploys":
+                from voiceagent.deploy.bundle import list_deploys, read_live_deploy
+                root = self.deploy_root or Path("data/deploy")
+                self._send(200, {"deploys": list_deploys(root),
+                                 "live": read_live_deploy(root)})
             else:
                 self._send(404, {"error": f"no such endpoint {path}"})
         except Exception as e:  # noqa: BLE001
@@ -334,7 +339,46 @@ class ControlServer(BaseHTTPRequestHandler):
                 if tenant.get("skipped"):
                     out["summary"] += (" (tools skipped, no params: " +
                                        ", ".join(tenant["skipped"][:3]) + ")")
+                if out.get("live") and tenant.get("ok"):
+                    from voiceagent.deploy.bundle import write_live_deploy as _wld
+                    _wld(root, deploy_id)
                 self._send(200, out)
+            elif path == "/api/control/deploy/rollback":
+                from voiceagent.deploy.bundle import (
+                    load_bundle, safe_deploy_id, write_live_deploy,
+                )
+                from voiceagent.deploy.materialize import verify_files
+                from voiceagent.deploy.selfcheck import run_self_checks
+                target = safe_deploy_id(body.get("deploy_id"))
+                if not target:
+                    raise ValueError("deploy_id missing or invalid")
+                root = self.deploy_root or Path("data/deploy")
+                d = root / target
+                # Canonical layout: bundle files live in the "bundle.json"
+                # subdir (see control.deploy_bundle) - a bare file there is
+                # not a deploy.
+                bdir = d / "bundle.json"
+                if not bdir.is_dir() or not (bdir / "bundle.json").is_file():
+                    raise ValueError(f"unknown deploy {target!r}")
+                from voiceagent.deploy.bundle import read_live_deploy as _rld
+                if _rld(root) == target:
+                    raise ValueError(f"{target!r} is already live")
+                bundle = load_bundle(str(d / "bundle.json"))
+                checks = run_self_checks(bundle)
+                tenant_dir = d / "tenant"
+                tenant_files = {
+                    str(p.relative_to(tenant_dir)): p.read_text(encoding="utf-8")
+                    for p in sorted(tenant_dir.rglob("*")) if p.is_file()
+                } if tenant_dir.is_dir() else {}
+                tenant_errors = verify_files(tenant_files) if tenant_files else ["no tenant bundle staged"]
+                ok = (len(checks) >= 10 and all(c.get("passed") for c in checks)
+                      and not tenant_errors)
+                if ok:
+                    write_live_deploy(root, target)
+                self._send(200, {"ok": ok, "deploy_id": target, "checks": checks,
+                                 "tenant_errors": tenant_errors,
+                                 "tenant_dir": str(tenant_dir),
+                                 "summary": f"{sum(1 for c in checks if c.get('passed'))}/{len(checks)} passed"})
             else:
                 self._send(404, {"error": f"no such endpoint {path}"})
         except ValueError as e:

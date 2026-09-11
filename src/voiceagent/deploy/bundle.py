@@ -8,6 +8,53 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 TOOL_STATES = ("PROPOSED", "APPROVED", "CONNECTED")
 LIVE_POINTER = "live"
+# Root-level pointer: WHICH deploy is live across deploy_ids. Each deploy
+# dir keeps its own per-version `live` file; this file at the deploy ROOT
+# names the deploy_id the operator last promoted (deploy or rollback).
+ROOT_LIVE = "LIVE_DEPLOY"
+
+
+def safe_deploy_id(raw: object) -> str | None:
+    """Sanitized deploy dir name, or None (blocks path traversal)."""
+    s = "".join(c for c in str(raw or "") if c.isalnum() or c in ("-", "_")).strip("-_")
+    return s or None
+
+
+def read_live_deploy(root: str | Path) -> str | None:
+    p = Path(root) / ROOT_LIVE
+    return p.read_text(encoding="utf-8").strip() if p.exists() else None
+
+
+def write_live_deploy(root: str | Path, deploy_id: str) -> None:
+    Path(root).mkdir(parents=True, exist_ok=True)
+    Path(root, ROOT_LIVE).write_text(deploy_id + "\n", encoding="utf-8")
+
+
+def list_deploys(root: str | Path) -> list[dict]:
+    """Every deploy dir with what the console needs: version pointer,
+    tenant-bundle presence, modification time. Newest first."""
+    base = Path(root)
+    if not base.is_dir():
+        return []
+    out = []
+    for d in sorted(base.iterdir()):
+        # Canonical layout (control.deploy_bundle): the bundle lives in the
+        # "bundle.json" SUBDIR - save_bundle(bundle, deploy_dir/"bundle.json").
+        if not d.is_dir() or not (d / "bundle.json").is_dir():
+            continue
+        tenant = d / "tenant" / "tenant.json"
+        try:
+            mtime = d.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        out.append({
+            "deploy_id": d.name,
+            "version": read_live(str(d)),
+            "tenant_ok": tenant.is_file(),
+            "mtime": mtime,
+        })
+    out.sort(key=lambda e: e["mtime"], reverse=True)
+    return out
 
 @dataclass
 class ToolEntry:
