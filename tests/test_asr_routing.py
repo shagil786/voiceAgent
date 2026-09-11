@@ -80,7 +80,9 @@ def test_router_en_hi_hinglish_none_and_unknown_use_qwen_engine():
 def test_router_other_native_langs_use_indic_engine():
     # All of these are in the IndicConformer-600m model card's 22 languages
     # (as,bn,brx,doi,gu,hi,kn,kok,ks,mai,ml,mni,mr,ne,or,pa,sa,sat,sd,ta,te,ur).
-    for lang in ("bn", "mr", "gu", "kn", "ml", "pa"):
+    # ur matters most: Qwen's processor has no "ur" code, so without the
+    # indic route declared-Urdu would run unforced auto-detect.
+    for lang in ("bn", "mr", "gu", "kn", "ml", "pa", "ur"):
         handle = get_asr_for_language(lang, engines=_stub_engines())
         assert isinstance(handle, StubIndicModel), f"{lang} must route to IndicConformer"
 

@@ -144,7 +144,7 @@ def test_voices_routing_alias_are_data_not_code():
     assert langdata.alias_for("te") == ""
     assert langdata.asr_routes() == {
         c: "indic" for c in
-        ["te", "ta", "bn", "mr", "gu", "kn", "ml", "pa"]}
+        ["te", "ta", "bn", "mr", "gu", "kn", "ml", "pa", "ur"]}
     assert len(langdata.engine_languages("indic")) == 22
     assert langdata.engine_languages("nope") == frozenset()
 
