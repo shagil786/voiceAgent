@@ -65,10 +65,33 @@ def tenant_languages(interview: dict, chunks: list[dict]) -> list[str]:
     return ["en"] + seen[:4]
 
 
+# Platform-owned safety valves: every deployment wires these from the
+# platform surface (tools.yaml), so they are NEVER tenant proposals.
+PLATFORM_VALVES = frozenset(
+    {"escalate_to_human", "end_call", "record_feedback"})
+
+
+def _tool_params(t: dict) -> list[str]:
+    """Params for a drafted/v1 tool: the `params` list, else the v1
+    `parameters.properties` keys (the two bundle generations disagree on
+    shape; the boundary translates)."""
+    params = t.get("params")
+    if isinstance(params, list) and params:
+        return [str(p) for p in params]
+    props = t.get("parameters")
+    if isinstance(props, dict):
+        inner = props.get("properties")
+        if isinstance(inner, dict) and inner:
+            return [str(k) for k in inner]
+    return []
+
+
 def build_tenant_files(surfaces: dict, interview: dict,
-                       chunks: list[dict], tenant_name: str) -> dict[str, str]:
-    """Draft surfaces + interview -> {relative_path: file_text}. Pure:
-    no disk, no validation — verify_bundle() decides."""
+                       chunks: list[dict], tenant_name: str
+                       ) -> tuple[dict[str, str], list[str]]:
+    """Draft surfaces + interview -> ({relative_path: file_text}, skipped).
+    Pure: no disk, no validation — verify_bundle() decides. Skipped names
+    parameter-less non-valve tools the proposals gate cannot take."""
     import yaml
     iv = interview or {}
     drafted = surfaces or {}
@@ -101,14 +124,18 @@ def build_tenant_files(surfaces: dict, interview: dict,
                              sort_keys=False))
 
     tools = drafted.get("tools") or []
-    proposals = [t for t in tools if isinstance(t, dict) and t.get("name")]
+    candidates = [t for t in tools
+                  if isinstance(t, dict) and t.get("name")
+                  and t.get("name") not in PLATFORM_VALVES]
+    proposals = [t for t in candidates if _tool_params(t)]
+    skipped = [str(t.get("name")) for t in candidates if not _tool_params(t)]
     if proposals:
         entries = []
         for t in proposals:
             entries.append({
                 "name": t["name"],
                 "description": t.get("description", ""),
-                "params": list(t.get("params", [])),
+                "params": _tool_params(t),
                 "action": t.get("action", t["name"]),
                 "operation": t.get("operation", t["name"]),
                 "operation_params": dict(t.get("operation_params", {})),
@@ -147,7 +174,7 @@ def build_tenant_files(surfaces: dict, interview: dict,
     texts = [t[:4000] for t in texts if t][:12]
     for i, t in enumerate(texts):
         files[f"knowledge/{i:02d}.md"] = t + "\n"
-    return files
+    return files, skipped
 
 
 def _load_validator():
@@ -181,22 +208,22 @@ def materialize_tenant_bundle(surfaces: dict, interview: dict,
                               chunks: list[dict], tenant_name: str,
                               out_dir: str | Path) -> dict:
     """Build, verify, and write the tenant bundle. Returns
-    {ok, files: [rel paths], errors: []}. Writes NOTHING unless the
-    bundle verifies clean."""
+    {ok, files: [rel paths], skipped: [tool names], errors: []}. Writes
+    NOTHING unless the bundle verifies clean."""
     safe = "".join(c for c in str(tenant_name)
                    if c.isalnum() or c in ("-", "_")).strip("-_") or "tenant"
-    files = build_tenant_files(surfaces, interview, chunks, safe)
+    files, skipped = build_tenant_files(surfaces, interview, chunks, safe)
     errors = verify_files(files)
     if errors:
-        return {"ok": False, "files": [], "errors": errors,
-                "tenant": safe}
+        return {"ok": False, "files": [], "skipped": skipped,
+                "errors": errors, "tenant": safe}
     root = Path(out_dir)
     if root.exists():
-        return {"ok": False, "files": [], "errors": [
+        return {"ok": False, "files": [], "skipped": skipped, "errors": [
             f"refusing to overwrite existing {root}"], "tenant": safe}
     for rel, text in files.items():
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8")
-    return {"ok": True, "files": sorted(files), "errors": [],
-            "tenant": safe}
+    return {"ok": True, "files": sorted(files), "skipped": skipped,
+            "errors": [], "tenant": safe}

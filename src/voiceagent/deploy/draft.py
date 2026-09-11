@@ -342,7 +342,8 @@ def preview_bundle(deploy_id: str, chunks: list[dict], interview: dict,
         "risk_class": t.get("risk_class", "read"),
     } for t in surfaces["tools"]] or [
         {"name": t.name, "state": t.state, "description": t.description,
-         "policy_action": t.policy_action} for t in bundle.tools]
+         "policy_action": t.policy_action,
+         "params": [], "parameters": t.parameters} for t in bundle.tools]
     policies = dict(bundle.policies)
     policies.update(surfaces["policies"])
     evals = ([{"name": f"draft-{i + 1:02d}", "turns": 1,

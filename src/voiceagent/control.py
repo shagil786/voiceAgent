@@ -320,6 +320,14 @@ class ControlServer(BaseHTTPRequestHandler):
                     out["live"] = False
                 out["checks"] = checks
                 out["tenant"] = tenant
+                # Summary counts EVERYTHING the dashboard renders, including
+                # the tenant gate — "10/10 passed" beside a failed tenant
+                # check was a self-contradicting deploy report.
+                passed = sum(1 for c in checks if c.get("passed"))
+                out["summary"] = f"{passed}/{len(checks)} passed"
+                if tenant.get("skipped"):
+                    out["summary"] += (" (tools skipped, no params: " +
+                                       ", ".join(tenant["skipped"][:3]) + ")")
                 self._send(200, out)
             else:
                 self._send(404, {"error": f"no such endpoint {path}"})

@@ -80,3 +80,43 @@ def test_empty_surfaces_still_verify(tmp_path):
         {"tools": [], "intents": {}, "entities": None, "policies": {}},
         {"offering": "Info Desk"}, CHUNKS, "info", tmp_path / "t")
     assert out["ok"], out["errors"]
+
+
+def test_v1_tool_shapes_translate_and_valves_skip(tmp_path):
+    # v1 compiler tools carry parameters.properties (not params); platform
+    # valves never become tenant proposals; the rest verifies clean.
+    from voiceagent.deploy.materialize import materialize_tenant_bundle
+    surfaces = {"tools": [
+        {"name": "escalate_to_human", "description": "handoff",
+         "parameters": {"type": "object", "properties": {}},
+         "policy_action": "escalate_to_human"},
+        {"name": "booking", "description": "Handle: booking",
+         "parameters": {"type": "object",
+                        "properties": {"query": {"type": "string"}}},
+         "policy_action": "booking"}],
+        "intents": {}, "entities": None, "policies": {}}
+    out = materialize_tenant_bundle(surfaces, {"offering": "vet"},
+                                    CHUNKS, "vet2", tmp_path / "t")
+    assert out["ok"], out["errors"]
+    text = (tmp_path / "t" / "proposals.yaml").read_text()
+    assert "escalate_to_human" not in text  # platform-owned surface
+    assert "booking" in text and "query" in text  # params translated
+    assert out["skipped"] == []
+
+
+def test_template_preview_materializes_end_to_end(tmp_path):
+    # The no-brain path: v1 tools (parameters.properties) flow through
+    # preview_bundle into a verifying tenant — the exact shape that failed
+    # live review (params lost between compiler and materializer).
+    from voiceagent.deploy.draft import preview_bundle
+    from voiceagent.deploy.materialize import materialize_tenant_bundle
+    chunks = [{"source": "owner_paste",
+               "text": "Sunrise Vet treats dogs. Cancel with VST-1042."}]
+    prev = preview_bundle("e2e", chunks, {"offering": "vet"}, llm=None)
+    assert prev["drafted"] is False
+    out = materialize_tenant_bundle(
+        {"tools": prev["tools"], "intents": prev["intents"],
+         "entities": prev["entities"], "policies": prev["policies"]},
+        {"offering": "vet"}, chunks, "vet3", tmp_path / "t")
+    assert out["ok"], out["errors"]
+    assert out["skipped"] == []
