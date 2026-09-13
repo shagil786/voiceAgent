@@ -1,0 +1,30 @@
+{
+  "resources": {
+    "room": {
+      "RM-101": {"room_id": "RM-101", "type": "deluxe", "rate_per_night": 5500, "sleeps": 2},
+      "RM-102": {"room_id": "RM-102", "type": "standard", "rate_per_night": 3500, "sleeps": 2}
+    },
+    "booking": {}
+  },
+  "operations": {
+    "searchRooms": {
+      "response": {"available": [
+        {"room_id": "RM-101", "type": "deluxe", "rate_per_night": 5500},
+        {"room_id": "RM-102", "type": "standard", "rate_per_night": 3500}
+      ]}
+    },
+    "createBooking": {
+      "create": {"resource": "booking", "id_prefix": "B-", "id_key": "booking_id"},
+      "response": {"status": "BOOKED"}
+    },
+    "cancelBooking": {
+      "patch": {"resource": "booking", "id_from": "booking_id",
+                "set": {"status": "CANCELLED"}},
+      "response": {}
+    },
+    "modifyBooking": {
+      "response": {"status": "BOOKED"}
+    }
+  },
+  "lifecycles": {"booking": ["BOOKED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED"]}
+}

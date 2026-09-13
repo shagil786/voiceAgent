@@ -1,0 +1,18 @@
+# This deployment's surface is proposals-driven (ADR-005): the DOMAIN tools
+# arrive via proposals.yaml (human-approved from the OpenAPI draft). tools.yaml
+# composes ONLY the platform valves every deployment needs — the classic demo
+# tools are deliberately NOT declared, so they are not proposeable here.
+tools:
+  escalate_to_human:
+    action: escalate_to_human
+    side_effects: true
+    description: "Page the front-desk supervisor to take over this call. Provide a short reason — use immediately for safety concerns or anything you cannot resolve."
+  end_call:
+    action: end_call
+    side_effects: true
+    description: "End this call politely after the guest's request is resolved."
+  record_feedback:
+    action: record_feedback
+    side_effects: true
+    description: "Record the guest's satisfaction rating (1-10) for this call."
+    parameters: {'type': 'object', 'properties': {rating: {"type": "string"}}, 'required': ['rating']}

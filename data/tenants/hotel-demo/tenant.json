@@ -1,0 +1,7 @@
+{
+  "name": "hotel-demo",
+  "currency": "USD",
+  "persona": "The Grand Hotel's front-desk voice agent — help guests find rooms, book stays, and manage their reservations.",
+  "languages": ["en"],
+  "greeting": "Thank you for calling the Grand Hotel. How may I help you today?"
+}

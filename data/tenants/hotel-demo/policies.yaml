@@ -1,0 +1,18 @@
+# Grand Hotel — least-privilege action verdicts. Only actions declared here
+# may execute; everything else is DENY (policy engine). cancel_booking was
+# ESCALATE in the onboard draft; the owner reviewed and allowed it here, with
+# a precondition in proposals.yaml (never cancel an already-cancelled booking).
+search_rooms:
+  allow: true
+get_room:
+  allow: true
+get_booking:
+  allow: true
+create_booking:
+  allow: true
+modify_booking:
+  allow: true
+cancel_booking:
+  allow: true
+end_call:
+  allow: true

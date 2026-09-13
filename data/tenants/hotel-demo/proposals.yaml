@@ -1,0 +1,71 @@
+# Grand Hotel — APPROVED tool surface, drafted by scripts/onboard.py from
+# data/fixtures/hotel-openapi.yaml, then reviewed by the owner: descriptions
+# rewritten in house voice, the cancel precondition added, statuses approved.
+# Committing this file IS the human approval for these entries (ADR-005).
+proposals:
+  - name: search_rooms
+    description: "Search available rooms for a stay (check_in and check_out dates, YYYY-MM-DD)."
+    params: [check_in, check_out]
+    action: search_rooms
+    operation: searchRooms
+    param_types: {check_in: string, check_out: string}
+    side_effects: false
+    risk_class: read
+    provenance: ai
+    status: approved
+  - name: get_room
+    description: "Fetch one room's details by its room id (e.g. RM-101)."
+    params: [room_id]
+    action: get_room
+    operation: __fetch__
+    resource_type: room
+    id_param: room_id
+    side_effects: false
+    risk_class: read
+    provenance: ai
+    status: approved
+  - name: get_booking
+    description: "Look up a guest's reservation by its booking id (e.g. B-1001)."
+    params: [booking_id]
+    action: get_booking
+    operation: __fetch__
+    resource_type: booking
+    id_param: booking_id
+    side_effects: false
+    risk_class: read
+    provenance: ai
+    status: approved
+  - name: create_booking
+    description: "Book a room for a guest (guest_name, room_id, check_in). Confirm every detail with the guest BEFORE calling — this mutates their reservation."
+    params: [guest_name, room_id, check_in]
+    action: create_booking
+    operation: createBooking
+    param_types: {guest_name: string, room_id: string, check_in: string}
+    side_effects: true
+    risk_class: mutating
+    provenance: ai
+    status: approved
+  - name: modify_booking
+    description: "Move a reservation's check-out date (booking_id, new_check_out). Confirm the new date with the guest BEFORE calling."
+    params: [booking_id, new_check_out]
+    action: modify_booking
+    operation: modifyBooking
+    resource_type: booking
+    id_param: booking_id
+    side_effects: true
+    risk_class: mutating
+    provenance: ai
+    status: approved
+  - name: cancel_booking
+    description: "Cancel a reservation (booking_id). Confirm with the guest BEFORE calling — cancellations may carry charges per the hotel policy."
+    params: [booking_id]
+    action: cancel_booking
+    operation: cancelBooking
+    resource_type: booking
+    id_param: booking_id
+    preconditions:
+      - {field: status, op: not_in, value: [CANCELLED]}
+    side_effects: true
+    risk_class: high
+    provenance: ai
+    status: approved
