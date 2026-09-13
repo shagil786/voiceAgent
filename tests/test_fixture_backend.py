@@ -130,3 +130,33 @@ def test_missing_or_invalid_file_fails_closed(tmp_path):
     bad.write_text("{not json", encoding="utf-8")
     with pytest.raises(ValueError, match="not valid JSON"):
         FixtureGenericBackend(bad)
+
+
+# --- runtime selection --------------------------------------------------------
+
+def test_runtime_selects_fixture_backend_from_env(tmp_path):
+    from voiceagent.runtime import _erp_from_env
+    f = tmp_path / "fx.json"
+    f.write_text(json.dumps(FIXTURE), encoding="utf-8")
+    be = _erp_from_env({"VOICEAGENT_FIXTURE_BACKEND": str(f)})
+    assert isinstance(be, FixtureGenericBackend)
+
+
+def test_runtime_fixture_backend_missing_file_raises_named_error():
+    from voiceagent.runtime import _erp_from_env
+    with pytest.raises(ValueError, match="VOICEAGENT_FIXTURE_BACKEND"):
+        _erp_from_env({"VOICEAGENT_FIXTURE_BACKEND": "/nonexistent/fx.json"})
+
+
+def test_runtime_erp_url_wins_over_fixture():
+    from voiceagent.erp_http import HttpERP
+    from voiceagent.runtime import _erp_from_env
+    be = _erp_from_env({"VOICEAGENT_ERP_URL": "https://erp.example",
+                        "VOICEAGENT_ERP_TOKEN": "t",
+                        "VOICEAGENT_FIXTURE_BACKEND": "/nonexistent/fx.json"})
+    assert isinstance(be, HttpERP)
+
+
+def test_runtime_no_config_returns_none():
+    from voiceagent.runtime import _erp_from_env
+    assert _erp_from_env({}) is None

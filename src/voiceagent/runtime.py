@@ -454,11 +454,23 @@ from voiceagent.memory import classifier_exemplars  # noqa: E402
 
 
 def _erp_from_env(env: dict[str, str] | None = None):
-    """Real HTTP ERP backend when VOICEAGENT_ERP_URL is configured; None when
-    unset (callers then keep the explicit offline/test default). Live entry
-    points (the LiveKit worker) REQUIRE the URL — no silent mock serving."""
+    """Backend selection by tier: real HTTP ERP when VOICEAGENT_ERP_URL is
+    configured; else a data-only FixtureGenericBackend when
+    VOICEAGENT_FIXTURE_BACKEND names a fixture file (the demo tier for any
+    new domain — fails CLOSED on a missing/invalid file, never a silent
+    swap); None when neither is set (callers keep their offline default).
+    Live entry points (the LiveKit worker) REQUIRE the ERP URL — no silent
+    mock serving."""
     e = os.environ if env is None else env
     if not e.get("VOICEAGENT_ERP_URL"):
+        fixture = e.get("VOICEAGENT_FIXTURE_BACKEND")
+        if fixture:
+            from voiceagent.fixture_backend import FixtureGenericBackend
+            try:
+                return FixtureGenericBackend(fixture)
+            except ValueError as exc:
+                raise ValueError(
+                    f"VOICEAGENT_FIXTURE_BACKEND={fixture!r}: {exc}") from exc
         return None
     from voiceagent.erp_http import HttpERP
     return HttpERP(env=e)
