@@ -101,9 +101,13 @@ Per operation under `paths` (methods get/put/post/patch/delete only):
   `{method}_{singular(resource)}` and listed in the report's
   "synthesized names — review" section. No new ToolProposal field; the
   report is the review surface.
-- **risk class** (deterministic verb map): `GET` → `read`; `DELETE` → `high`;
-  `POST`/`PUT`/`PATCH` → `mutating`, escalated to `high` when the path or
-  operationId contains refund/payment/charge/payout.
+- **risk class** (deterministic verb map): `GET` → `read`; `DELETE` → `high`
+  regardless of name; `POST`/`PUT`/`PATCH` → `mutating`, except that an
+  operationId starting with a read prefix (`search|list|find|fetch|get|
+  lookup|query`) drafts as `read` with `side_effects=False` — POST-search
+  endpoints (`POST /rooms/search`) are reads, and `validate_proposal`
+  forbids `side_effects=true` with `risk_class=read`; escalated to `high`
+  when the path or operationId contains refund/payment/charge/payout.
 - **params**: path parameters + required query parameters + required
   `requestBody` (`application/json`) schema properties, in that order.
   Optional parameters are dropped in v1 and noted in the report
@@ -183,10 +187,15 @@ Semantics:
   unbounded listing).
 - `create_resource(rt, data)` → mints an id from `id_prefix` + counter,
   stores, returns the record. `update_resource` merges and returns.
-- `execute_operation(name, params)` → returns the canned `response`
-  (deep copy); when the operation declares `resource`, it additionally
-  performs the declared create into that resource map — deterministic demo
-  state change, no scripting language.
+- `execute_operation(name, params)` → returns a deep copy of the canned
+  `response`; an optional `create` block (`{"resource", "id_prefix",
+  "id_key"}`) first creates the record from `params` and merges it into
+  the response; an optional `patch` block (`{"resource", "id_from",
+  "set"}`) applies `set` to the record named by `params[id_from]` and
+  merges the updated record into the response (unknown id →
+  `GenericBackendError`) — deterministic demo state changes, no scripting
+  language, and a cancel that actually mutates rather than lying with a
+  canned response.
 - Unknown resource types / operations raise `GenericBackendError` (fail-
   closed, TimeoutError-compatible — the governed timeout path handles it,
   exactly like every other adapter). `get_lifecycle_states` reads the
