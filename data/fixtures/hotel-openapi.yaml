@@ -1,0 +1,83 @@
+# Grand Hotel PMS — the OpenAPI spec the owner hands the platform.
+# This is the ADAPTATION DEMO's source artifact: scripts/onboard.py drafts
+# the hotel tenant's tools from this file; data/fixtures/hotel.json serves
+# the same domain at runtime (FixtureGenericBackend).
+openapi: 3.0.3
+info:
+  title: Grand Hotel PMS
+  version: "1.0.0"
+paths:
+  /rooms/search:
+    post:
+      operationId: searchRooms
+      summary: Search available rooms for a stay window.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                check_in: {type: string}
+                check_out: {type: string}
+                guests: {type: integer}
+              required: [check_in, check_out]
+  /rooms/{room_id}:
+    get:
+      operationId: getRoom
+      summary: Fetch one room by id.
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          schema: {type: string}
+  /bookings:
+    post:
+      operationId: createBooking
+      summary: Create a booking for a room.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                guest_name: {type: string}
+                room_id: {type: string}
+                check_in: {type: string}
+                guests: {type: integer}
+              required: [guest_name, room_id, check_in]
+  /bookings/{booking_id}:
+    get:
+      operationId: getBooking
+      summary: Fetch a booking by id.
+      parameters:
+        - name: booking_id
+          in: path
+          required: true
+          schema: {type: string}
+    patch:
+      operationId: modifyBooking
+      summary: Move a booking's check-out date.
+      parameters:
+        - name: booking_id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_check_out: {type: string}
+              required: [new_check_out]
+    delete:
+      operationId: cancelBooking
+      summary: Cancel a booking.
+      parameters:
+        - name: booking_id
+          in: path
+          required: true
+          schema: {type: string}
