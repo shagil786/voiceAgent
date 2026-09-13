@@ -24,7 +24,7 @@ import wave
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from aiohttp import web
+from aiohttp import WSMsgType, web
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -128,7 +128,13 @@ async def handle_connection(ws, service: ASRService) -> None:
     reader = FrameReader()
     loop = asyncio.get_running_loop()
     while True:
-        raw = await ws.recv()
+        # aiohttp 3.9 removed the recv() alias (caught by Task 4's
+        # real-socket tests): receive() and map any non-data frame
+        # (CLOSE/CLOSING/CLOSED/ERROR) to the old recv() close contract.
+        frame = await ws.receive()
+        if frame.type not in (WSMsgType.TEXT, WSMsgType.BINARY):
+            return
+        raw = frame.data
         if raw is None:
             return
         try:

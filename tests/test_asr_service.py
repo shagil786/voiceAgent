@@ -18,6 +18,7 @@ import json
 import wave
 
 import pytest
+from aiohttp import WSMessage, WSMsgType
 
 from scripts.asr_service import ASRService, handle_connection
 from voiceagent.model_registry import LoadedModelLRU
@@ -54,7 +55,7 @@ def make_service(calls):
 
 
 class FakeWebSocket:
-    """Records sends; replays scripted client frames from recv()."""
+    """Records sends; replays scripted client frames from receive()."""
 
     def __init__(self, frames):
         self.frames = list(frames)
@@ -66,11 +67,12 @@ class FakeWebSocket:
     async def send_bytes(self, data):
         self.sent.append(("bytes", data))
 
-    async def recv(self):
+    async def receive(self):
+        # aiohttp 3.9 removed recv(): handle_connection now uses receive()
+        # and maps non-data frames (CLOSE/CLOSING/CLOSED/ERROR) to "done".
         if not self.frames:
-            return None
-        item = self.frames.pop(0)
-        return item
+            return WSMessage(WSMsgType.CLOSED, None, None)
+        return WSMessage(WSMsgType.TEXT, self.frames.pop(0), None)
 
 
 def _wav_pcm(text="x", rate=16000):
