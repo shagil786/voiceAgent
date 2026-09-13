@@ -285,3 +285,64 @@ def test_enrich_changing_mechanics_is_refused():
 
     with pytest.raises(ValueError, match="may only rewrite 'description'"):
         enrich(result, _sneaky)
+
+
+def test_enrich_removing_side_effects_is_refused():
+    result = parse_openapi(HOTEL_SPEC)
+
+    def _dropper(ops):
+        out = [dict(op) for op in ops]
+        del out[0]["side_effects"]  # would silently reload as False
+        return out
+
+    with pytest.raises(ValueError, match="may only rewrite 'description'"):
+        enrich(result, _dropper)
+
+
+def test_enrich_removing_param_types_is_refused():
+    result = parse_openapi(HOTEL_SPEC)
+
+    def _dropper(ops):
+        out = [dict(op) for op in ops]
+        del out[0]["param_types"]  # typed params would degrade to string
+        return out
+
+    with pytest.raises(ValueError, match="may only rewrite 'description'"):
+        enrich(result, _dropper)
+
+
+def test_enrich_removing_fetch_routing_is_refused():
+    result = parse_openapi(HOTEL_SPEC)
+    idx = next(i for i, op in enumerate(result.operations)
+               if op["tool_name"] == "get_room")
+
+    def _dropper(ops):
+        out = [dict(op) for op in ops]
+        del out[idx]["resource_type"]  # __fetch__ routing silently lost
+        return out
+
+    with pytest.raises(ValueError, match="may only rewrite 'description'"):
+        enrich(result, _dropper)
+
+
+def test_enrich_inplace_mutation_never_touches_the_original():
+    result = parse_openapi(HOTEL_SPEC)
+    desc = result.operations[0]["description"]
+    risk = result.operations[0]["risk_class"]
+
+    def _inplace_description(ops):
+        ops[0]["description"] = "OWNER COPY: in place"
+        return ops  # mutates the handed-in dicts — no copies
+
+    enriched = enrich(result, _inplace_description)
+    assert enriched.operations[0]["description"] == "OWNER COPY: in place"
+    assert result.operations[0]["description"] == desc  # original intact
+
+    def _inplace_mechanics(ops):
+        ops[0]["risk_class"] = "high"
+        return ops
+
+    with pytest.raises(ValueError, match="may only rewrite 'description'"):
+        enrich(result, _inplace_mechanics)
+    assert result.operations[0]["description"] == desc
+    assert result.operations[0]["risk_class"] == risk

@@ -292,13 +292,23 @@ def enrich(result: DraftResult,
     """The prose seam: an enricher may rewrite ONLY each operation's
     'description' and must return the same operations in the same order.
     Mechanics (name/params/operation/risk/status) are deterministic and
-    never LLM-touched. Default (None) is the identity."""
+    never LLM-touched. The guard compares against a snapshot taken before
+    the enricher runs, so a DROPPED key is refused exactly like a changed
+    value, and the enricher works on copies — the input DraftResult is
+    never mutated. Default (None) is the identity."""
     if enricher is None:
         return result
-    out = enricher(list(result.operations))
+    snapshot = [dict(op) for op in result.operations]
+    out = enricher([dict(op) for op in snapshot])
     if len(out) != len(result.operations):
         raise ValueError("enricher must return the same number of operations")
-    for orig, new in zip(result.operations, out):
+    for orig, new in zip(snapshot, out):
+        if set(new) != set(orig):
+            raise ValueError(
+                f"enricher may only rewrite 'description' — it changed the "
+                f"key set of {orig.get('tool_name')!r}: removed "
+                f"{sorted(set(orig) - set(new))}, added "
+                f"{sorted(set(new) - set(orig))}")
         for key, val in new.items():
             if key != "description" and val != orig.get(key):
                 raise ValueError(
