@@ -208,3 +208,80 @@ def test_post_without_any_params_is_skipped_with_note():
     result = parse_openapi(spec)
     assert result.operations == ()
     assert any("no required parameters" in n for n in result.notes)
+
+
+# --- report, artifact writer, enrich seam ------------------------------------
+
+from voiceagent.openapi_draft import discovery_report, enrich, \
+    write_proposals_yaml
+from voiceagent.proposals import load_proposals_yaml
+
+
+def test_discovery_report_speaks_the_onboarding_moment():
+    report = discovery_report(parse_openapi(HOTEL_SPEC),
+                              title="Grand Hotel PMS")
+    assert "Discovered API: Grand Hotel PMS" in report
+    assert "6 operations: 3 read, 2 mutating, 1 high-risk" in report
+    assert "[HIGH RISK] cancel_booking(booking_id)" in report
+    assert "[read] search_rooms(check_in, check_out)" in report
+    assert "status: proposed" in report
+
+
+def test_write_then_load_roundtrip_is_the_approval_artifact(tmp_path):
+    result = parse_openapi(HOTEL_SPEC)
+    out = tmp_path / "proposals.yaml"
+    names = write_proposals_yaml(result, out)
+    assert set(names) == {"search_rooms", "get_room", "create_booking",
+                          "get_booking", "modify_booking", "cancel_booking"}
+    props = load_proposals_yaml(out)
+    assert all(p.status == "proposed" and p.provenance == "ai"
+               for p in props)
+    by = {p.name: p for p in props}
+    assert by["create_booking"].param_types == \
+        {"guest_name": "string", "room_id": "string", "check_in": "string"}
+    assert by["get_room"].operation == "__fetch__"
+    assert by["get_room"].resource_type == "room"
+    assert by["cancel_booking"].risk_class == "high"
+
+
+def test_writer_refuses_invalid_drafts(tmp_path):
+    bad = DraftResult(
+        operations=({"operation": "x", "tool_name": "Bad Name!",
+                     "description": "d", "params": [], "side_effects": False,
+                     "risk_class": "read", "param_types": {},
+                     "action": "x"},),
+        notes=())
+    with pytest.raises(ValueError, match="refusing to write invalid draft"):
+        write_proposals_yaml(bad, tmp_path / "proposals.yaml")
+
+
+def test_enrich_default_is_identity():
+    result = parse_openapi(HOTEL_SPEC)
+    assert enrich(result) is result
+
+
+def test_enrich_may_only_touch_descriptions():
+    result = parse_openapi(HOTEL_SPEC)
+
+    def _enricher(ops):
+        out = [{**op, "description": f"OWNER COPY: {op['description']}"}
+               for op in ops]
+        return out
+
+    enriched = enrich(result, _enricher)
+    assert enriched.operations[0]["description"].startswith("OWNER COPY")
+    assert enriched.operations[0]["params"] == \
+        result.operations[0]["params"]
+    assert enriched.notes == result.notes
+
+
+def test_enrich_changing_mechanics_is_refused():
+    result = parse_openapi(HOTEL_SPEC)
+
+    def _sneaky(ops):
+        out = [dict(op) for op in ops]
+        out[0]["risk_class"] = "high"  # NOT allowed — risk is deterministic
+        return out
+
+    with pytest.raises(ValueError, match="may only rewrite 'description'"):
+        enrich(result, _sneaky)
