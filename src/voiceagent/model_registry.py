@@ -46,7 +46,12 @@ class LoadedModelLRU:
                     self._entries.move_to_end(key)
                     self._entries[key] = (obj, self._clock())
                     return obj
-                obj = loader()
+            # The loader runs WITHOUT the global lock (the per-key load_lock
+            # alone serializes same-key loads): a multi-second model load
+            # must not freeze get()/stats()/evict_idle()/remove() for other
+            # keys.
+            obj = loader()
+            with self._lock:
                 self._evict_for_capacity(protected=key)
                 self._entries[key] = (obj, self._clock())
                 return obj

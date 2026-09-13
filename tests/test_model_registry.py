@@ -89,3 +89,47 @@ def test_remove():
     assert reg.remove("a") is False
     assert reg.get("a", lambda: FakeModel("a")) is not None
     assert FakeModel.loads == 2
+
+
+def test_slow_load_does_not_block_unrelated_keys_or_stats():
+    # Review fix round 1: the loader must run WITHOUT the global registry
+    # lock, or one slow model load freezes get()/stats() for every key.
+    reg = LoadedModelLRU(capacity=2, idle_unload_s=600)
+    a_entered = threading.Event()
+    a_release = threading.Event()
+    a_done = threading.Event()
+    b_done = threading.Event()
+    stats_done = threading.Event()
+
+    def slow_loader():
+        a_entered.set()
+        a_release.wait(timeout=5)
+        return FakeModel("a")
+
+    def load_a():
+        reg.get("a", slow_loader)
+        a_done.set()
+
+    t_a = threading.Thread(target=load_a)
+    t_a.start()
+    assert a_entered.wait(timeout=5)       # a's load is in flight
+
+    t_stats = threading.Thread(
+        target=lambda: (reg.stats(), stats_done.set()))
+    t_stats.start()
+    t_b = threading.Thread(
+        target=lambda: (reg.get("b", lambda: FakeModel("b")),
+                        b_done.set()))
+    t_b.start()
+
+    # a_done cannot fire before a_release is set, so these asserts prove
+    # b's get and stats() both completed while a's load was still pending.
+    assert b_done.wait(timeout=1.0)
+    assert stats_done.wait(timeout=1.0)
+    assert not a_done.is_set()
+
+    a_release.set()
+    t_a.join(timeout=5); t_b.join(timeout=5); t_stats.join(timeout=5)
+    assert FakeModel.loads == 2
+    # b inserted while a was still loading, so b is the older entry
+    assert reg.stats()["loaded_keys"] == ["b", "a"]
