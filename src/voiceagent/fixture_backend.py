@@ -131,12 +131,13 @@ class FixtureGenericBackend:
         create = op.get("create")
         if create:
             rt = create["resource"]
+            self._require(rt)
             n = self._counters.get(rt, 1000) + 1
             self._counters[rt] = n
             rid = f"{create.get('id_prefix', 'X-')}{n}"
             id_key = create.get("id_key", f"{rt}_id")
             rec = {id_key: rid, **params}
-            self._resources.setdefault(rt, {})[rid] = rec
+            self._resources[rt][rid] = rec
             result.update(copy.deepcopy(rec))
         patch = op.get("patch")
         if patch:

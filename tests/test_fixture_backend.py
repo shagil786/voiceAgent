@@ -81,6 +81,25 @@ def test_create_effect_mints_record_and_merges_response(be):
     assert out2["order_id"] == "O-1002"  # counter increments
 
 
+def test_create_into_undeclared_resource_fails_closed(tmp_path):
+    fixture = dict(FIXTURE)
+    fixture["resources"] = {"gadget": {}}
+    fixture["operations"] = {
+        "createWidget": {"create": {"resource": "widget",
+                                    "id_prefix": "W-",
+                                    "id_key": "widget_id"},
+                         "response": {}},
+    }
+    f = tmp_path / "fx-undeclared.json"
+    f.write_text(json.dumps(fixture), encoding="utf-8")
+    be = FixtureGenericBackend(f)
+    with pytest.raises(GenericBackendError, match="resource_type"):
+        be.execute_operation("createWidget", {"kind": "basic"})
+    # No phantom resource map was minted: "widget" stays undeclared.
+    with pytest.raises(GenericBackendError, match="resource_type"):
+        be.get_resource("widget", "W-1001")
+
+
 def test_patch_effect_mutates_and_returns_updated_record(be):
     be.execute_operation("createOrder", {"gadget_id": "G-1"})
     out = be.execute_operation("cancelOrder", {"order_id": "O-1001"})
