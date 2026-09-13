@@ -66,6 +66,7 @@ class ToolProposal:
     operation: str                   # GenericBackend.execute_operation name
     operation_params: dict[str, str] = field(default_factory=dict)
     # tool param -> backend operation param (identity when absent)
+    param_types: dict[str, str] = field(default_factory=dict)
     resource_type: str | None = None
     id_param: str | None = None
     # __list__ lookups (e.g. find-by-phone): tool param carrying the key +
@@ -103,6 +104,16 @@ def validate_proposal(prop: ToolProposal) -> list[str]:
         errs.append(f"{prop.name}: side_effects=true but risk_class=read")
     if prop.id_param and prop.id_param not in prop.params:
         errs.append(f"{prop.name}: id_param {prop.id_param!r} not in params")
+    if prop.param_types:
+        bad = sorted(set(prop.param_types) - set(prop.params))
+        if bad:
+            errs.append(f"{prop.name}: param_types name(s) not in params: "
+                        f"{bad}")
+        try:
+            from voiceagent.tools import parse_param_types
+            parse_param_types(dict(prop.param_types), where=prop.name)
+        except ValueError as exc:
+            errs.append(str(exc))
     if prop.operation == "__list__":
         if not prop.resource_type:
             errs.append(f"{prop.name}: __list__ requires resource_type")
@@ -160,6 +171,7 @@ def compile_approved(gw: ToolGateway, backend: Any,
             action=prop.action,
             description=prop.description,
             resource=resource,
+            param_types=dict(prop.param_types),
         )
         gw.specs[prop.name] = spec
         gw.register_binding(
@@ -208,7 +220,8 @@ def load_proposals_yaml(path: str | Path) -> list[ToolProposal]:
         if not isinstance(e, dict):
             raise ValueError(f"{path}: proposal #{i} must be a mapping")
         allowed = {"name", "description", "params", "action", "operation",
-                   "operation_params", "resource_type", "id_param",
+                   "operation_params", "param_types",
+                   "resource_type", "id_param",
                    "filter_param", "filter_key",
                    "preconditions", "facts", "side_effects", "risk_class",
                    "provenance", "status"}
@@ -224,6 +237,7 @@ def load_proposals_yaml(path: str | Path) -> list[ToolProposal]:
             action=str(e.get("action", e["name"])),
             operation=str(e.get("operation", "")),
             operation_params=dict(e.get("operation_params", {})),
+            param_types=dict(e.get("param_types", {})),
             resource_type=e.get("resource_type"),
             id_param=e.get("id_param"),
             filter_param=e.get("filter_param"),
@@ -246,8 +260,7 @@ def gateway_tool_meta(prop: ToolProposal) -> dict:
     execution goes through the gateway spec/binding compile_approved made."""
     properties = {}
     for pname in prop.params:
-        ptype = "string"  # proposals declare string params by default;
-        properties[pname] = {"type": ptype}  # typed coercion is a ToolSpec
+        properties[pname] = {"type": prop.param_types.get(pname, "string")}
     return {
         "action": prop.action,
         "description": prop.description,
@@ -290,6 +303,7 @@ def draft_from_api_spec(spec: dict[str, Any], *,
             action=op.get("action", op["tool_name"]),
             operation=op["operation"],
             operation_params=dict(op.get("operation_params", {})),
+            param_types=dict(op.get("param_types", {})),
             resource_type=op.get("resource_type"),
             id_param=op.get("id_param"),
             filter_param=op.get("filter_param"),

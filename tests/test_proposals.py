@@ -9,9 +9,11 @@ from __future__ import annotations
 import pytest
 
 from voiceagent.demo_repairs import RepairsBackend, build_repairs_gateway
-from voiceagent.proposals import (APPROVED, PROPOSED, REJECTED, ToolProposal,
-                                  compile_approved, draft_from_api_spec,
-                                  validate_proposal)
+from voiceagent.proposals import (APPROVED, PROPOSED, REJECTED, RISK_MUTATING,
+                                  RISK_READ, ToolProposal, compile_approved,
+                                  draft_from_api_spec, gateway_tool_meta,
+                                  load_proposals_yaml, validate_proposal)
+from voiceagent.tools import ToolGateway
 
 
 def _approved(name="cancel_visit", description="Cancel a booking.",
@@ -147,3 +149,70 @@ def test_escalate_valve_survives_proposal_surface():
     gw = build_repairs_gateway(RepairsBackend())
     compile_approved(gw, gw.erp, [_approved(name="cancel_visit")])
     assert "escalate_to_human" in set(gw.specs) & set(gw.bindings)
+
+
+# --- param_types: OpenAPI types ride the declaration (front-door sprint) -----
+
+def _typed_prop(**over):
+    kw = dict(name="create_booking", description="book a room",
+              params=("guest_name", "nights"),
+              action="create_booking", operation="createBooking",
+              param_types={"nights": "integer"},
+              side_effects=True, risk_class=RISK_MUTATING, provenance="ai")
+    kw.update(over)
+    return ToolProposal(**kw)
+
+
+def test_param_types_roundtrip_to_gateway_tool_meta():
+    meta = gateway_tool_meta(_typed_prop())
+    assert meta["parameters"]["properties"]["nights"] == {"type": "integer"}
+    assert meta["parameters"]["properties"]["guest_name"] == {"type": "string"}
+
+
+def test_param_types_absent_defaults_to_strings():
+    prop = ToolProposal(name="x", description="d", params=("a",),
+                        action="x", operation="x")
+    meta = gateway_tool_meta(prop)
+    assert meta["parameters"]["properties"]["a"] == {"type": "string"}
+
+
+def test_param_types_unknown_param_is_a_validation_error():
+    prop = _typed_prop(param_types={"ghost": "integer"})
+    assert any("ghost" in e and "not in params" in e
+               for e in validate_proposal(prop))
+
+
+def test_param_types_bad_type_value_is_a_validation_error():
+    prop = _typed_prop(param_types={"nights": "float"})
+    assert validate_proposal(prop)  # parse_param_types rejects "float"
+
+
+def test_compile_approved_threads_param_types_into_toolspec():
+    gw = ToolGateway(erp=object(), specs={})
+    registered = compile_approved(gw, object(), [_typed_prop(status=APPROVED)])
+    assert registered == ["create_booking"]
+    spec = gw.specs["create_booking"]
+    assert spec.param_types == {"nights": "integer"}
+
+
+def test_load_proposals_yaml_accepts_param_types(tmp_path):
+    (tmp_path / "proposals.yaml").write_text(
+        "proposals:\n"
+        "  - name: book_room\n"
+        "    description: book\n"
+        "    params: [nights]\n"
+        "    action: book_room\n"
+        "    operation: createBooking\n"
+        "    param_types: {nights: integer}\n"
+        "    status: proposed\n", encoding="utf-8")
+    props = load_proposals_yaml(tmp_path / "proposals.yaml")
+    assert props[0].param_types == {"nights": "integer"}
+
+
+def test_draft_from_api_spec_carries_param_types():
+    ops = [{"operation": "createBooking", "tool_name": "create_booking",
+            "description": "d", "params": ["nights"],
+            "param_types": {"nights": "integer"}, "side_effects": True,
+            "risk_class": RISK_MUTATING}]
+    (prop,) = draft_from_api_spec({"operations": ops})
+    assert prop.param_types == {"nights": "integer"}
