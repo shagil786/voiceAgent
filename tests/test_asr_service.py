@@ -158,5 +158,17 @@ def test_handle_connection_reports_engine_failure_as_error_op():
 def test_warm_preloads_declared_route():
     calls = {}
     svc = make_service(calls)
-    assert svc.warm("en") == "qwen"
+    # Legacy parity: mirrors voiceagent.asr.warmup_asr_for_language —
+    # returns the NORMALIZED language code, not the engine key.
+    assert svc.warm("en") == "en"
     assert "qwen" in calls
+    assert "qwen" in svc.registry.stats()["loaded_keys"]
+
+
+def test_warm_blind_returns_none_but_warms():
+    calls = {}
+    svc = make_service(calls)
+    # Blind warm warms the qwen slot but returns no language code.
+    assert svc.warm(None) is None
+    assert "qwen" in calls
+    assert "qwen" in svc.registry.stats()["loaded_keys"]

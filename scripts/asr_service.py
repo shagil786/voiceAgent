@@ -96,6 +96,10 @@ class ASRService:
             os.unlink(path)
 
     def warm(self, language: str | None) -> str | None:
+        """Preload the routed engine slot (+ the whisper fallback slot) and
+        return the NORMALIZED language code — mirrors the legacy
+        voiceagent.asr.warmup_asr_for_language contract (None for a blind
+        warm), not the engine key."""
         base = asr_mod._normalize_lang(language)
         if base is None:
             key = "qwen"
@@ -105,7 +109,7 @@ class ASRService:
             key = "qwen"
         self.registry.get(key, self._loader_for(key))
         self.registry.get("whisper", self._loaders["whisper"])
-        return key
+        return base
 
     def describe(self) -> dict:
         stats = self.registry.stats()
