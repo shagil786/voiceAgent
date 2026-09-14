@@ -383,6 +383,7 @@ class IntentMemoryStore:
         with self._lock:
             for stmt in self._SCHEMA:
                 self._conn.execute(stmt)
+            self._migrate_legacy_episodes()
             self._conn.commit()
         self._embed = embedder or default_embed
         self._ttl_days = ttl_days
@@ -402,6 +403,21 @@ class IntentMemoryStore:
             # (construction happens at process start) — the first capture must
             # never load a SentenceTransformer mid-call.
             self._embed(["memory warmup"])
+
+    def _migrate_legacy_episodes(self) -> None:
+        """Pre-session_id databases (created before ADR-002 capture carried
+        session ids) lack episodes.session_id; CREATE TABLE IF NOT EXISTS is
+        a no-op on them, so every capture INSERT failed. Backfill the column
+        with empty ids (old rows genuinely had none) — idempotent."""
+        cols = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(episodes)")}
+        if "session_id" not in cols:
+            self._conn.execute(
+                "ALTER TABLE episodes ADD COLUMN session_id TEXT"
+                " NOT NULL DEFAULT ''")
+            self._conn.execute(
+                "UPDATE episodes SET session_id = ''"
+                " WHERE session_id IS NULL")
 
     # -- capture --------------------------------------------------------------
 
