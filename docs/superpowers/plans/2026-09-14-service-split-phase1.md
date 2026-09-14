@@ -2075,13 +2075,26 @@ git commit -m "test(services): real-model wire parity + e2e proof; runbook servi
 
 ## Completion checklist (maps to spec Goals 1–7)
 
-- [ ] `service_protocol.py` v1 codec + tests (G1)
-- [ ] `LoadedModelLRU` + tests (G2/G3 lazy-load core)
-- [ ] ASR service wrapping existing handles + tests (G2)
-- [ ] TTS service + `synthesize_speakable` split + tests (G3)
-- [ ] Brain dispatchers, fail-closed, loop-safe + tests (G4)
-- [ ] Import surgery: conftest clean, intent.py lazy, config lazy (G5)
-- [ ] Import-contract test green (G5, CI-assertable boundary)
-- [ ] `ml` marker registered; default tier < 10 s/test; before/after wall + peak-RSS recorded (G6)
-- [ ] voice_e2e_check 4/4 + 2 XFAIL against services; legacy path re-verified (G7)
-- [ ] Runbook section committed
+- [x] `service_protocol.py` v1 codec + tests (G1)
+- [x] `LoadedModelLRU` + tests (G2/G3 lazy-load core)
+- [x] ASR service wrapping existing handles + tests (G2)
+- [x] TTS service + `synthesize_speakable` split + tests (G3)
+- [x] Brain dispatchers, fail-closed, loop-safe + tests (G4)
+- [x] Import surgery: conftest clean, intent.py lazy, config lazy (G5)
+- [x] Import-contract test green (G5, CI-assertable boundary)
+- [x] `ml` marker registered; default tier < 10 s/test; before/after wall + peak-RSS recorded (G6)
+- [x] voice_e2e_check 4/4 + 2 XFAIL against services; legacy path re-verified (G7)
+- [x] Runbook section committed
+
+## Sprint headline (measured 2026-09-14, single-process fast tier)
+
+| Metric | Baseline (pre-split) | After (phase 1 done) |
+|---|---|---|
+| Fast-tier wall time | 828 s | **99.6 s** (8.3x) |
+| Peak RSS | ~16 GB | **1.05 GB** (15x) |
+| Result | 1089 passed / 3 skipped / 1 xfailed, no aborts | same |
+
+Note: the T7-era 209 s figure was the 6-chunk sweep (per-process startup
+overhead); the single-process number above is the honest tier measurement.
+The full-suite abort root cause is documented in the 4b5b804 commit body
+(duplicate libomp; ST-before-faiss restored at session start).
