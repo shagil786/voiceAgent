@@ -81,7 +81,7 @@ def asr_latency(audio_path: str | None = None,
     """Production-accurate ASR latency (M5b-2): the language-routed path —
     known-language contexts route (te/ta -> IndicConformer); the blind path
     stays on whisper small auto-detect."""
-    from voiceagent.asr import transcribe_wav_routed
+    from voiceagent.asr_client import transcribe_wav_routed
     t0 = time.time()
     if audio_path and Path(audio_path).exists():
         text = transcribe_wav_routed(audio_path, language=language)

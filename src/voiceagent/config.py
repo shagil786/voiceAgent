@@ -11,9 +11,10 @@ Design notes:
 - Defaults are verbatim copies of today's hardcoded behavior (NOT guesses):
     - candidate model stems: derived from the model registry
       (llm.load_model_registry -> data/models/registry.yaml), single source.
-    - voices: a copy of tts.VOICE_REGISTRY (piper voice names).
-  They are COPIED rather than imported so this module never pulls in heavy
-  third-party deps (llm.py imports llama_cpp at module top).
+    - voices: tts.VOICE_REGISTRY (piper voice names), single source.
+  Both resolve LAZILY (function-level import / module __getattr__) so this
+  module stays light at import time (llm.py imports llama_cpp at module top;
+  tts.py pulls voice/download plumbing).
 - Tenant voices are opportunistic: tenant.py ignores unknown keys, so when
   `tenant` is a TenantConfig the voices live only in the tenant.json file.
   load_config therefore also accepts a Mapping (parsed tenant.json dict) or
@@ -39,7 +40,21 @@ def default_candidate_models() -> list[str]:
 
 # SINGLE SOURCE: tts.VOICE_REGISTRY (a verbatim copy here drifted stale —
 # it kept the old male Hindi voice after the registry moved to priyamvada).
-from voiceagent.tts import VOICE_REGISTRY as DEFAULT_VOICES  # noqa: E402
+# Lazy via module __getattr__ (PEP 562): config consumers must not import the
+# tts module (and its voice/download plumbing) merely for the default names.
+# NOTE: module __getattr__ only serves EXTERNAL attribute access
+# (config.DEFAULT_VOICES) — bare-name reads inside this module do not hit it,
+# so in-module call sites resolve through _default_voices().
+def _default_voices() -> dict[str, str]:
+    from voiceagent.tts import VOICE_REGISTRY
+    return VOICE_REGISTRY
+
+
+def __getattr__(name):
+    if name == "DEFAULT_VOICES":
+        from voiceagent.tts import VOICE_REGISTRY
+        return VOICE_REGISTRY
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 DEFAULT_MODELS_DIR = "data/models"
 DEFAULT_EMBEDDING_SPACE = "latin"  # mirrors knowledge.LATIN_SPACE
@@ -52,7 +67,7 @@ class RuntimeConfig:
     candidate_models: list[str] = field(
         default_factory=default_candidate_models)
     voices: dict[str, str] = field(
-        default_factory=lambda: dict(DEFAULT_VOICES))
+        default_factory=lambda: dict(_default_voices()))
     embedding_space: str = DEFAULT_EMBEDDING_SPACE
     frontier_url: str | None = None
     frontier_model: str | None = None
@@ -145,7 +160,7 @@ def load_config(env: Mapping[str, str] | None = None,
     cand = _parse_list(e.get("VOICEAGENT_CANDIDATE_MODELS"))
     candidate_models = cand if cand else default_candidate_models()
 
-    voices: dict[str, str] = dict(DEFAULT_VOICES)
+    voices: dict[str, str] = dict(_default_voices())
     t_voices = _tenant_voices(tenant)
     if t_voices:
         voices.update(t_voices)

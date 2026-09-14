@@ -7,10 +7,10 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from voiceagent.asr import transcribe_wav_routed
+from voiceagent.asr_client import transcribe_wav_routed
 from voiceagent.chat import run_turn
 from voiceagent.memory import SQLiteMemory
-from voiceagent.tts import speak
+from voiceagent.tts_client import speak
 
 _MEMORY: SQLiteMemory | None = None
 

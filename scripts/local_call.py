@@ -117,7 +117,7 @@ def build_call_env():
     """Same deps the LiveKit worker builds: governed orchestrator over the
     real ERP (VOICEAGENT_ERP_URL required) + warmed ASR/classifier."""
     from voiceagent.runtime import build_orchestrator
-    from voiceagent.asr import warmup_asr
+    from voiceagent.asr_client import warmup_asr
 
     if not os.environ.get("VOICEAGENT_ERP_URL"):
         logger.error("VOICEAGENT_ERP_URL not set - live-call parity requires "

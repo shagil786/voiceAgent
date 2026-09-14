@@ -33,7 +33,7 @@ _PIPELINE_SAMPLE_RATE = 16000
 
 def _default_asr(pcm16: bytes, language: str | None = None) -> str:
     """16k mono int16 PCM -> text via temp WAV + `transcribe_wav_routed`."""
-    from voiceagent.asr import transcribe_wav_routed
+    from voiceagent.asr_client import transcribe_wav_routed
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         path = tmp.name

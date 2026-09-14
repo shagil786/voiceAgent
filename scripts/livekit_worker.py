@@ -61,9 +61,10 @@ def build_deps():
     except Exception:
         logger.warning("frontier warmup failed (continuing)", exc_info=True)
     # Warm the ASR engine (whisper-small CPU load is ~100s on first use —
-    # never make the first caller pay it).
+    # never make the first caller pay it). The asr_client dispatcher decides
+    # in-process (legacy) vs the VOICEAGENT_ASR_URL service per call.
     try:
-        from voiceagent.asr import warmup_asr
+        from voiceagent.asr_client import warmup_asr
         warmup_asr()
         logger.info("asr warmup ok")
     except Exception:
@@ -81,17 +82,19 @@ def build_deps():
     language = os.environ.get("VOICEAGENT_DEFAULT_LANG") or None
     # Warm the DECLARED route (Qwen core or Indic conformer, not just the
     # whisper fallback) + the declared TTS voice, so the first real turn
-    # never pays a multi-GB model load or voice download mid-call.
+    # never pays a multi-GB model load or voice download mid-call. Both
+    # dispatchers (asr_client/tts_client) decide in-process vs the configured
+    # services per call.
     try:
-        from voiceagent.asr import warmup_asr_for_language
+        from voiceagent.asr_client import warmup_asr_for_language
         warmed = warmup_asr_for_language(language)
         logger.info("declared-asr warmup ok (%s)", warmed)
     except Exception:
         logger.warning("declared-asr warmup failed (continuing)",
                        exc_info=True)
     try:
-        from voiceagent.tts import get_tts_handle
-        voice = get_tts_handle().warm(language)
+        from voiceagent.tts_client import warm_tts
+        voice = warm_tts(language)
         logger.info("tts warmup ok (%s)", voice)
     except Exception:
         logger.warning("tts warmup failed (continuing)", exc_info=True)
