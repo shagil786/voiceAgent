@@ -1742,10 +1742,9 @@ def __getattr__(name):
 Run: `.venv/bin/python -m pytest tests/test_service_swap.py tests/test_voice_agent.py tests/test_config.py tests/test_livekit_inbound.py -v`
 Expected: PASS. If a test pins the direct `voiceagent.asr` import, update the pin to `asr_client` (behavior contract unchanged) and note it in the commit body.
 
-- [ ] **Step 5: Full fast-relevant check**
+- [ ] **Step 5: Full-suite gate — DEFERRED to Task 8 (ruling 2026-09-14)**
 
-Run: `.venv/bin/python -m pytest tests -q -x -p no:cacheprovider`
-Expected: all pass (suite still runs everything here — `ml` marking is Task 7; this run is the pre-marker sanity gate).
+Do NOT run the full suite in this task: until Task 7's markers exist, a full run loads every model and spikes ~16-20 GB RAM on the 16 GB Mac mini (violates the no-heavy-runs-without-warning constraint; it actually happened during execution and was killed). Task 6's changes are import swaps — targeted verification is sufficient: run the wiring test + the stub-based suites touching the swapped call sites (test_service_swap, test_voice_agent, test_config, test_livekit_inbound, test_voice, test_tts_service, test_asr_client — all fast). The full-suite before/after measurement happens in Task 8 where the fast tier exists.
 
 - [ ] **Step 6: Commit**
 
