@@ -190,6 +190,12 @@ class TTSHandle:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 out_path = tmp.name
         text = speech_text(text)
+        return self.synthesize_speakable(text, language, out_path)
+
+    def synthesize_speakable(self, text: str, language: str | None,
+                             out_path: str) -> str:
+        """Synthesize ALREADY-SPEAKABLE text (speech_text applied upstream —
+        the wire contract for the TTS service). speak() = speech_text + this."""
         _, voice_name = self.voice_for(language, text)
         voice = self._get_voice(voice_name)
         with wave.open(out_path, "wb") as w:

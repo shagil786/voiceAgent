@@ -63,3 +63,44 @@ def test_speech_text_leaves_short_numbers_alone():
     from voiceagent.tts import speech_text
 
     assert speech_text("Order 7734 is ready") == "Order 7734 is ready"
+
+
+def test_synthesize_speakable_skips_normalization():
+    """synthesize_speakable is the wire contract: the client (brain) already
+    applied speech_text, so the handle must NOT re-normalize (spelled IDs
+    must survive verbatim)."""
+    from voiceagent.tts import TTSHandle
+    captured = {}
+
+    class StubVoice:
+        def synthesize_wav(self, text, w, syn_config=None):
+            captured["text"] = text
+            # real PiperVoice writes the wav header; replicate that contract
+            # or Wave_write.close() raises (FakeVoice precedent).
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(22050)
+            w.writeframes(b"\x00\x00" * 100)
+
+    handle = TTSHandle(registry={"en": "en_US-amy-medium"},
+                       voice_loader=lambda name, d: StubVoice())
+    handle.synthesize_speakable("O R D, 9 0 2 1", "en", out_path="/tmp/x.wav")
+    assert captured["text"] == "O R D, 9 0 2 1"  # NOT re-folded/spelled
+
+
+def test_speak_still_normalizes():
+    from voiceagent.tts import TTSHandle
+    captured = {}
+
+    class StubVoice:
+        def synthesize_wav(self, text, w, syn_config=None):
+            captured["text"] = text
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(22050)
+            w.writeframes(b"\x00\x00" * 100)
+
+    handle = TTSHandle(registry={"en": "en_US-amy-medium"},
+                       voice_loader=lambda name, d: StubVoice())
+    handle.speak("**ORD-9021**", "en", out_path="/tmp/x.wav")
+    assert captured["text"] == "O R D, 9 0 2 1"
