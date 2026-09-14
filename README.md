@@ -46,7 +46,7 @@ LEARNING LOOPS
 | **Voice I/O** (Qwen3-ASR primary + whisper fallback + Indic routing, Piper TTS, barge-in/VAD) | ✅ built; e2e standing bar green (2026-09-14: wire + in-process legs) |
 | **Capability services** (ASR/TTS split: `scripts/asr_service.py` :8710, `scripts/tts_service.py` :8711 — URLs unset = legacy in-process, URLs set = fail-closed remote; docs/telephony-runbook.md) | ✅ built; wire-vs-in-process parity proven (tests/test_services_ml.py) |
 | **Outbound** (dialer with DND scrub + window, sub-600ms AMD logic, swarm organs) | ✅ built, synthetic-only validation |
-| **Tests** | ✅ 875 collected, 871 / 3 skipped / 1 xfailed |
+| **Tests** | ✅ 1107 collected — fast tier 1089 passed / 3 skipped / 1 xfailed (97s); ml tier 15 (bounded, real-model) |
 | **Batch-learn job** | ✅ on `main` |
 | **Operator packs, adversarial harness, onboarding drill** | ✅ on `feat/operator-packs-harness` |
 | **Telephony limb** (SIP/WebRTC + real number) | ⏳ built on `feat/livekit-limb` — loopback-verified, first PSTN drill pending (docs/telephony-runbook.md) |
