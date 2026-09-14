@@ -81,6 +81,21 @@ def test_create_effect_mints_record_and_merges_response(be):
     assert out2["order_id"] == "O-1002"  # counter increments
 
 
+def test_create_operation_caller_params_cannot_hijack_the_minted_id(be):
+    out = be.execute_operation("createOrder",
+                               {"gadget_id": "G-1", "order_id": "FAKE"})
+    assert out["order_id"] == "O-1001"  # the mint wins, never "FAKE"
+    stored = be.get_resource("order", "O-1001")
+    assert stored["order_id"] == "O-1001"
+    assert be.get_resource("order", "FAKE") is None
+
+
+def test_create_resource_caller_data_cannot_hijack_the_minted_id(be):
+    rec = be.create_resource("gadget", {"gadget_id": "FAKE", "kind": "x"})
+    assert rec["gadget_id"] == "GA-1001"  # the mint wins, never "FAKE"
+    assert be.get_resource("gadget", "FAKE") is None
+
+
 def test_create_into_undeclared_resource_fails_closed(tmp_path):
     fixture = dict(FIXTURE)
     fixture["resources"] = {"gadget": {}}

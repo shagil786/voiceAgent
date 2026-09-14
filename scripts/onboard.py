@@ -11,6 +11,9 @@ Prints the discovery report, then writes fail-closed data only:
   policies.yaml    starter verdicts: reads ALLOW, mutating ALLOW (the
                    brain still gathers parameters and confirms side
                    effects), high-risk ESCALATE
+  tools.yaml       the three universal valves only (escalate_to_human,
+                   end_call, record_feedback) — the domain surface
+                   arrives via approved proposals (ADR-005)
   tenant.json      name/currency scaffold; persona fields for the owner
   intents/ knowledge/  empty dirs (owner fills)
   README.md        the review checklist
@@ -46,6 +49,36 @@ Review checklist before this bundle goes live:
 4. intents/ — add one YAML list of exemplar phrases per intent.
 5. knowledge/ — add markdown docs (policies, FAQs) the agent may quote.
 6. Validate: .venv/bin/python scripts/validate_tenant.py <this dir>
+
+tools.yaml is already written: it declares the universal valves only
+(escalate_to_human, end_call, record_feedback), so nothing else is
+proposeable until you approve domain tools in proposals.yaml.
+"""
+
+
+# tools.yaml written verbatim into every scaffold (structure mirrors the
+# committed hotel-demo bundle): the brain's proposal surface declares ONLY
+# the platform valves, so a fresh scaffold never inherits the e-commerce
+# builtin tools via runtime._bundle_gateway_tools. Domain tools arrive
+# exclusively through approved proposals.yaml entries (ADR-005).
+_TOOLS_YAML = """\
+# The brain's proposal surface (ADR-005): DOMAIN tools arrive via
+# proposals.yaml once you approve them — tools.yaml composes ONLY the
+# platform valves every deployment needs. Nothing else is proposeable.
+tools:
+  escalate_to_human:
+    action: escalate_to_human
+    side_effects: true
+    description: "Page a human supervisor to take over this call. Provide a short reason — use immediately for safety concerns or anything you cannot resolve."
+  end_call:
+    action: end_call
+    side_effects: true
+    description: "End this call politely after the caller's request is resolved."
+  record_feedback:
+    action: record_feedback
+    side_effects: true
+    description: "Record the caller's satisfaction rating (1-10) for this call."
+    parameters: {'type': 'object', 'properties': {rating: {"type": "string"}}, 'required': ['rating']}
 """
 
 
@@ -100,7 +133,8 @@ def main(argv=None) -> int:
     names = write_proposals_yaml(result, out / "proposals.yaml")
     (out / "policies.yaml").write_text(
         _starter_policies(result.operations), encoding="utf-8")
-    bundle_name = args.name or title or "tenant"
+    (out / "tools.yaml").write_text(_TOOLS_YAML, encoding="utf-8")
+    bundle_name = args.name or _slugify(title) or "tenant"
     (out / "tenant.json").write_text(json.dumps({
         "name": bundle_name,
         "currency": "USD",

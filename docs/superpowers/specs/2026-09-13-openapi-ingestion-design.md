@@ -101,13 +101,16 @@ Per operation under `paths` (methods get/put/post/patch/delete only):
   `{method}_{singular(resource)}` and listed in the report's
   "synthesized names — review" section. No new ToolProposal field; the
   report is the review surface.
-- **risk class** (deterministic verb map): `GET` → `read`; `DELETE` → `high`
-  regardless of name; `POST`/`PUT`/`PATCH` → `mutating`, except that an
-  operationId starting with a read prefix (`search|list|find|fetch|get|
-  lookup|query`) drafts as `read` with `side_effects=False` — POST-search
-  endpoints (`POST /rooms/search`) are reads, and `validate_proposal`
-  forbids `side_effects=true` with `risk_class=read`; escalated to `high`
-  when the path or operationId contains refund/payment/charge/payout.
+- **risk class** (deterministic verb map, checked in this exact order):
+  `DELETE` → `high` regardless of name; `GET` → `read`; a `POST`/`PUT`/
+  `PATCH` whose operationId or path contains refund/payment/charge/payout
+  → `high` (money tokens are checked BEFORE the read prefixes, so a
+  `POST getRefund` can never draft as a read); otherwise a `POST`/`PUT`/
+  `PATCH` operationId starting with a read prefix (`search|list|find|
+  fetch|get|lookup|query`) drafts as `read` with `side_effects=False` —
+  POST-search endpoints (`POST /rooms/search`) are reads, and
+  `validate_proposal` forbids `side_effects=true` with `risk_class=read`;
+  anything else → `mutating`.
 - **params**: path parameters + required query parameters + required
   `requestBody` (`application/json`) schema properties, in that order.
   Optional parameters are dropped in v1 and noted in the report

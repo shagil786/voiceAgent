@@ -186,6 +186,34 @@ def test_refund_named_post_escalates_to_high():
     assert op["risk_class"] == "high"
 
 
+def test_money_tokens_beat_read_prefix_on_non_get():
+    # A POST named getRefund used to draft as a read (read prefix checked
+    # first) — a mutating money operation with no confirmation gate. Money
+    # tokens must be checked BEFORE the read prefixes.
+    spec = {"openapi": "3.1.0",
+            "paths": {"/refunds": {"post": {
+                "operationId": "getRefund",
+                "requestBody": {"content": {"application/json": {"schema": {
+                    "type": "object",
+                    "properties": {"payment_id": {"type": "string"}},
+                    "required": ["payment_id"]}}}}}}}}
+    (op,) = parse_openapi(spec).operations
+    assert op["risk_class"] == "high"
+    assert op["side_effects"] is True
+
+
+def test_delete_beats_read_prefix():
+    spec = {"openapi": "3.1.0",
+            "paths": {"/widgets/{widget_id}": {"delete": {
+                "operationId": "searchFoo",
+                "parameters": [{"name": "widget_id", "in": "path",
+                                "required": True,
+                                "schema": {"type": "string"}}]}}}}
+    (op,) = parse_openapi(spec).operations
+    assert op["risk_class"] == "high"
+    assert op["side_effects"] is True
+
+
 def test_refs_resolved_and_unscalar_required_property_dropped_with_note():
     spec = {"openapi": "3.1.0",
             "components": {"schemas": {"Guest": {

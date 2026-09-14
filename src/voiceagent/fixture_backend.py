@@ -27,7 +27,8 @@ Semantics (deterministic, no scripting language):
   - get_resource/list_resources read the resource maps (deep copies);
     list requires a non-empty filter and exact-matches record fields.
   - create_resource/update_resource implement the protocol generically
-    (ids minted "<RT[:2].upper()>-<n>").
+    (ids minted "<RT[:2].upper()>-<n>"; a caller-supplied id field never
+    overrides the minted id — the mint wins).
   - execute_operation returns a deep copy of "response"; an optional
     "create" first creates the record from params (merged into the
     response); an optional "patch" applies "set" to the record named by
@@ -105,7 +106,7 @@ class FixtureGenericBackend:
         n = self._counters.get(resource_type, 1000) + 1
         self._counters[resource_type] = n
         rid = f"{resource_type[:2].upper()}-{n}"
-        rec = {f"{resource_type}_id": rid, **data}
+        rec = {**data, f"{resource_type}_id": rid}
         self._resources[resource_type][rid] = rec
         return copy.deepcopy(rec)
 
@@ -136,7 +137,7 @@ class FixtureGenericBackend:
             self._counters[rt] = n
             rid = f"{create.get('id_prefix', 'X-')}{n}"
             id_key = create.get("id_key", f"{rt}_id")
-            rec = {id_key: rid, **params}
+            rec = {**params, id_key: rid}
             self._resources[rt][rid] = rec
             result.update(copy.deepcopy(rec))
         patch = op.get("patch")

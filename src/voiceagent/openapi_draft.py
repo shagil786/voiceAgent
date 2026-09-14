@@ -10,11 +10,13 @@ rewrite DESCRIPTIONS — never names, params, operations, or risk.
 
 Drafting rules (pinned in docs/superpowers/specs/
 2026-09-13-openapi-ingestion-design.md):
-  - risk: DELETE -> high (regardless of name); GET -> read;
-    operationId starting with a read prefix (search/list/find/fetch/get/
-    lookup/query) -> read with side_effects=False (POST-search endpoints
-    are reads); operationId or path containing refund/payment/charge/
-    payout -> high; otherwise mutating.
+  - risk (checked in this exact order): DELETE -> high (regardless of
+    name); GET -> read; non-GET whose operationId or path contains
+    refund/payment/charge/payout -> high (money tokens beat the read
+    prefixes — a POST getRefund is never a read); non-GET operationId
+    starting with a read prefix (search/list/find/fetch/get/lookup/query)
+    -> read with side_effects=False (POST-search endpoints are reads);
+    otherwise mutating.
   - params: path params + REQUIRED query params + REQUIRED requestBody
     (application/json) properties. Optional params are dropped and noted.
   - routing: GET /res/{id} -> __fetch__; GET /res with exactly one
@@ -62,8 +64,10 @@ def _singularize(segment: str) -> str:
 
 
 def _resolve_ref(doc: dict, node: Any, depth: int = 0) -> Any:
-    """Resolve local '#/...' $refs (chained, depth-capped). External refs
-    are left as-is and fail the scalar checks downstream."""
+    """Resolve local '#/...' $refs (chained, depth-capped). External or
+    broken refs resolve to the original node; a required body property
+    whose schema carries no scalar type then drafts as a plain string
+    param — visible in proposals.yaml for owner review."""
     if depth > 10 or not isinstance(node, dict):
         return node
     ref = node.get("$ref")
@@ -86,15 +90,19 @@ def _openapi_type(schema: dict) -> str:
 
 
 def _risk_for(method: str, op_id: str, path: str) -> str:
+    # Order matters: money tokens are checked BEFORE the read prefixes so
+    # a mutating POST/PUT/PATCH named getRefund/fetchPayout can never
+    # draft as a side-effect-free read (the safe direction — a misjudged
+    # read loses its confirmation gate and review marker).
     if method == "delete":
         return "high"
     if method == "get":
         return "read"
-    if op_id.lower().startswith(_READ_PREFIXES):
-        return "read"
     low = f"{op_id} {path}".lower()
     if any(tok in low for tok in _HIGH_TOKENS):
         return "high"
+    if op_id.lower().startswith(_READ_PREFIXES):
+        return "read"
     return "mutating"
 
 
