@@ -30,6 +30,35 @@ the fallback.
   the Indic engine; Telugu/Tamil callers get whisper instead of the routed path.
 - Python env with `livekit` + `livekit-api` installed (pinned in `requirements.txt`).
 
+## Capability services (ASR/TTS)
+
+The brain (LiveKit worker) can run ASR/TTS **in-process** (legacy) or talk to
+**capability services** over WebSocket. Invariant: **URLs unset = exact
+legacy in-process behavior; URLs set = fail-closed remote (no fallback)** —
+a down service surfaces as a call error, never silently degrades to
+in-process loading.
+
+Boot order: **services before the worker** (the worker's clients connect
+lazily, but warmup parity tests and first-call latency assume they are up).
+
+```bash
+set -a; source .env; set +a
+.venv/bin/python scripts/asr_service.py --port 8710 > /tmp/asr_service.log 2>&1 &
+.venv/bin/python scripts/tts_service.py --port 8711 > /tmp/tts_service.log 2>&1 &
+export VOICEAGENT_ASR_URL=ws://127.0.0.1:8710/ws VOICEAGENT_TTS_URL=ws://127.0.0.1:8711/ws
+# then start the worker (scripts/livekit_worker.py) as usual
+```
+
+Ports: **8710** (ASR), **8711** (TTS). Health probe: `GET /health` → `{"ok": true}`.
+
+Tuning (env, read by the services and the brain-side clients):
+
+- `VOICEAGENT_SERVICE_MAX_LOADED` — per-service LRU capacity (default 2).
+- `VOICEAGENT_SERVICE_IDLE_UNLOAD_S` — idle unload (default 600 s).
+- `VOICEAGENT_SERVICE_TIMEOUT_S` — client-side wire timeout (default 300 s).
+- `VOICEAGENT_SERVICE_TOKEN` — shared auth token; when set, the worker must
+  present it and the services reject unmatched callers.
+
 ## Trunk + dispatch rule inventory
 
 Fill trunk IDs from your LiveKit console — **this doc does not invent them.**

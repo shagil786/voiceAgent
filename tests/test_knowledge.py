@@ -4,6 +4,21 @@ from pathlib import Path
 from voiceagent.knowledge import load_docs, build_index
 
 
+def test_load_docs_whole_file_fallback_when_no_headers():
+    """Tenant-bundle knowledge files may have no "# " sections; the parser
+    must keep them (whole file = one doc), not silently drop them (an empty
+    corpus dies later in build_index on encode([]).shape[1])."""
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        (d / "eta.md").write_text(
+            "Deliveries occur between 9:00 and 19:00 local time.\n\n"
+            "order kab aayega (hinglish)\n")
+        (d / "empty.md").write_text("# Section only\n")
+        docs = load_docs(str(d))
+        assert [x["section"] for x in docs] == ["eta"]
+        assert "Deliveries occur" in docs[0]["text"]
+
+
 def test_load_docs_parses_markdown_sections():
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)

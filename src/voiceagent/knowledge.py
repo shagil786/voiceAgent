@@ -88,6 +88,17 @@ def load_docs(data_dir: str) -> list[dict]:
                 current_lines.append(line.strip())
         if current_title and current_lines:
             docs.append(_make_doc(section, current_title, current_lines))
+        elif not docs or docs[-1]["section"] != section:
+            # No "# " sections in this file (tenant bundles author
+            # header-less knowledge — the RAG chunker accepts those).
+            # Fall back to the whole file as one doc instead of silently
+            # dropping it: an empty corpus later dies in build_index on
+            # encode([]).shape[1] (IndexError), which is no diagnostic.
+            body = [l.strip() for l in
+                    md_path.read_text(encoding="utf-8").splitlines()
+                    if l.strip() and not l.startswith("# ")]
+            if body:
+                docs.append(_make_doc(section, md_path.stem, body))
     return docs
 
 

@@ -4,7 +4,10 @@ step, save/load, and the adapter card without downloads or GPUs."""
 import json
 
 import pytest
-import torch
+# NOTE: no module-level `import torch` here. Collection must stay torch-free:
+# torch's OpenMP + faiss in one process aborts (OMP Error #15) at the first
+# parallel faiss search — see tests/test_index_cache.py. The torch users in
+# this file are all inside the ml-marked test, which imports lazily.
 
 
 class StubTok:
@@ -55,6 +58,7 @@ def _rows(tmp_path):
 
 @pytest.mark.ml  # real torch+peft LoRA training loop (MPS/CPU)
 def test_train_loop_end_to_end(tmp_path):
+    import torch  # ml tier only — keep collection torch-free (OMP #15)
     import sys
     sys.path.insert(0, "scripts")
     from train_adapter import encode_rows, load_rows, train

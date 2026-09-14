@@ -43,7 +43,8 @@ LEARNING LOOPS
 | **RAG** (`knowledge_rag.py` — chunked retrieval with per-claim provenance, dual-space script-routed MiniLM/LaBSE search, per-space floors + sentence-level anti-dilution rescoring, fail-open to the whole-file cap) | ✅ multilingual ruler 1.00 (24 fixtures: en/hinglish/hindi/tanglish/banglish/es/fr/de/pt/te/bn; eval gate: `voiceagent.rag_eval`) |
 | **Governance** (policy DSL + validator 7/7, decision log, injection guard, frustration detector) | ✅ enforced |
 | **Generic domains** (ADR-004/005: GenericBackend resource-verb protocol, registration-based tool bindings, hybrid tool proposals — AI-drafted + operator-authored, human-approved; worked examples: clinic + repairs, both zero core change) | ✅ on `main` (`demo_repairs.py`, `data/tenants/example-repairs/`, `docs/adr/ADR-004/005`) |
-| **Voice I/O** (Qwen3-ASR primary + whisper fallback + Indic routing, Piper TTS, barge-in/VAD) | ✅ built, needs fresh e2e latency run |
+| **Voice I/O** (Qwen3-ASR primary + whisper fallback + Indic routing, Piper TTS, barge-in/VAD) | ✅ built; e2e standing bar green (2026-09-14: wire + in-process legs) |
+| **Capability services** (ASR/TTS split: `scripts/asr_service.py` :8710, `scripts/tts_service.py` :8711 — URLs unset = legacy in-process, URLs set = fail-closed remote; docs/telephony-runbook.md) | ✅ built; wire-vs-in-process parity proven (tests/test_services_ml.py) |
 | **Outbound** (dialer with DND scrub + window, sub-600ms AMD logic, swarm organs) | ✅ built, synthetic-only validation |
 | **Tests** | ✅ 875 collected, 871 / 3 skipped / 1 xfailed |
 | **Batch-learn job** | ✅ on `main` |
