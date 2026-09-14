@@ -34,6 +34,19 @@ class StubVoice:
         w.writeframes(b"\x00\x00" * 100)
 
 
+class BigWavVoice:
+    """Synthesizes a >4 MiB WAV — aiohttp 3.9's client-side default
+    max_msg_size — to prove the dispatcher's raised inbound cap."""
+
+    NFRAMES = 2_646_000  # 120s of 22050 Hz/16-bit mono ≈ 5.29 MB
+
+    def synthesize_wav(self, text, w, syn_config=None):
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(22050)
+        w.writeframes(b"\x00\x00" * self.NFRAMES)
+
+
 def make_service():
     reg = LoadedModelLRU(capacity=2, idle_unload_s=600)
     svc = TTSService(registry=reg,
@@ -42,7 +55,7 @@ def make_service():
     return svc
 
 
-def _serve(monkeypatch):
+def _serve(monkeypatch, service=None):
     """Boot a real stub service on an ephemeral port; return (url, stop).
 
     Brief-note adaptation (verified empirically in Task 4): booting via
@@ -50,7 +63,7 @@ def _serve(monkeypatch):
     AppRunner lives on a background thread's loop that keeps running.
     Same surface: AppRunner + TCPSite on port 0 + runner.addresses.
     """
-    runner = web.AppRunner(build_app(make_service()))
+    runner = web.AppRunner(build_app(service or make_service()))
     loop = asyncio.new_event_loop()
     started = threading.Event()
 
@@ -95,6 +108,28 @@ def test_client_speak_writes_wav_file(tmp_path, monkeypatch):
         assert path == out
         with wave.open(out, "rb") as w:
             assert w.getnframes() > 0
+    finally:
+        stop()
+
+
+def test_client_speak_roundtrips_wav_over_4mib(tmp_path, monkeypatch):
+    """The synthesize reply carries the whole WAV in one binary frame;
+    aiohttp 3.9's client default max_msg_size is 4 MiB (~95s of 22050 Hz
+    16-bit mono), so the dispatcher raises it to match the service's
+    inbound cap (64 MiB) or long replies die as MessageTooBig."""
+    svc = TTSService(registry=LoadedModelLRU(capacity=2, idle_unload_s=600),
+                     voice_loader=lambda name, d: BigWavVoice(),
+                     registry_map=dict(VOICE_REGISTRY))
+    url, stop = _serve(monkeypatch, service=svc)
+    monkeypatch.setenv("VOICEAGENT_TTS_URL", url)
+    try:
+        out = str(tmp_path / "big.wav")
+        assert tts_client.speak("hello there", out_path=out) == out
+        with wave.open(out, "rb") as w:
+            assert w.getnchannels() == 1
+            assert w.getsampwidth() == 2
+            assert w.getframerate() == 22050
+            assert w.getnframes() == BigWavVoice.NFRAMES
     finally:
         stop()
 

@@ -46,7 +46,12 @@ async def _remote_speak(url: str, text: str, language: str | None,
     import aiohttp
     timeout = aiohttp.ClientTimeout(total=_timeout())
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.ws_connect(url) as ws:
+        # The synthesize reply carries the whole WAV in one binary frame —
+        # aiohttp 3.9's client-side default max_msg_size is 4 MiB (~95s of
+        # 22050 Hz/16-bit mono), so raise it to match the service's inbound
+        # cap (build_app) or long replies die as MessageTooBig.
+        async with session.ws_connect(
+                url, max_msg_size=64 * 1024 * 1024) as ws:
             await ws.send_str(json_text({
                 "op": "synthesize", "req_id": 1, "language": language,
                 "text": text}))
