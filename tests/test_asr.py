@@ -1,6 +1,10 @@
 # tests/test_asr.py
 import wave
 import tempfile
+
+import pytest
+
+pytestmark = pytest.mark.ml  # real whisper-tiny engine load
 from pathlib import Path
 from voiceagent.asr import transcribe_wav
 

@@ -544,6 +544,7 @@ def test_turn_result_new_fields_default_empty():
     assert r.retrieved_chunk_ids == [] and r.knowledge_gaps == []
 
 
+@pytest.mark.ml  # real LaBSE encoder load + encode
 def test_real_encoder_retrieval_ranks_matching_section_first():
     pytest.importorskip("sentence_transformers")
     from voiceagent.memory import default_embed

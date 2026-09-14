@@ -1,4 +1,5 @@
 # tests/test_tenant.py — M6a: tenant config seam (persona/currency as DATA).
+import pytest
 import json
 from pathlib import Path
 
@@ -137,6 +138,7 @@ def test_bundle_surfaces_resolve(tmp_path):
     assert t.policy_file().endswith("policies.yaml")
     assert "never_say" in (root / "tenant.json").read_text()
 
+@pytest.mark.ml  # builds the real IntentClassifier (embedders)
 def test_tenant_exemplars_drive_the_classifier(tmp_path):
     root = _make_bundle(tmp_path / "acme",
                         exemplar=["where is my acme package zyx",

@@ -1,4 +1,5 @@
 # tests/test_benchmark.py
+import pytest
 import json
 import tempfile
 from pathlib import Path
@@ -49,6 +50,7 @@ def test_estimate_vps_cost_returns_tier():
     assert cost["vps_tier"] == "2-4vCPU/8GB"
     assert cost["vps_cost_rs_estimate"] > 0
 
+@pytest.mark.ml  # real GGUF model sweep
 def test_sweep_all_models_returns_one_report_per_available_model(monkeypatch):
     # Patch at the source modules: sweep_all_models imports these inside the
     # function, which binds at call time, so patching the module attributes

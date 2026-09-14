@@ -3,6 +3,7 @@ random GPT-2 + stub tokenizer proves data prep, LoRA wrapping, a training
 step, save/load, and the adapter card without downloads or GPUs."""
 import json
 
+import pytest
 import torch
 
 
@@ -52,6 +53,7 @@ def _rows(tmp_path):
     return p
 
 
+@pytest.mark.ml  # real torch+peft LoRA training loop (MPS/CPU)
 def test_train_loop_end_to_end(tmp_path):
     import sys
     sys.path.insert(0, "scripts")

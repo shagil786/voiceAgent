@@ -18,7 +18,12 @@ covered by test_knowledge.py / test_intent.py via the default models)."""
 import pickle
 from pathlib import Path
 
-import torch  # noqa: F401  — load torch OpenMP before faiss (macOS segfault)
+# NOTE (2026-09-14): no `import torch` here. This file fakes the embedder
+# (only real faiss is used), and bare torch+faiss in one process aborts with
+# OMP Error #15 (duplicate libomp.dylib) at the first parallel faiss search
+# (observed on torch 2.14.0 + faiss-cpu 1.9.0, macOS arm64). The real-model
+# path stays safe via knowledge._ml_imports(), which imports
+# sentence_transformers (hence torch) before faiss — verified separately.
 import faiss
 import numpy as np
 import pytest
@@ -59,7 +64,9 @@ class _FakeST:
 
 @pytest.fixture
 def fake_st(monkeypatch):
-    monkeypatch.setattr(kb, "SentenceTransformer", _FakeST)
+    # Service split: the seam is knowledge._ml_imports (lazy ST+faiss);
+    # real faiss passes through, only the encoder is faked.
+    monkeypatch.setattr(kb, "_ml_imports", lambda: (_FakeST, faiss))
     return _FakeST
 
 
@@ -79,7 +86,7 @@ def spy_st(monkeypatch):
             self.queries.extend(texts)
             return super().encode(texts, normalize_embeddings=normalize_embeddings)
 
-    monkeypatch.setattr(kb, "SentenceTransformer", _SpyST)
+    monkeypatch.setattr(kb, "_ml_imports", lambda: (_SpyST, faiss))
     return created
 
 
@@ -287,7 +294,7 @@ def test_single_space_handle_searches_its_only_space(spy_st, tmp_path):
     # Legacy constructor: one index + one model. No dual routing — every
     # query goes to the only space (dim guard still enforced). The model is
     # built via the patched constructor so the spy records it.
-    model = kb.SentenceTransformer("solo")
+    model = kb._ml_imports()[0]("solo")  # via the patched seam
     handle = IndexHandle(faiss.IndexFlatIP(8), ["a"], model,
                          model_name="solo", dim=8)
     handle._store = {"texts": ["t"], "sections": ["s"]}

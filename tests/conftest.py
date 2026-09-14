@@ -1,8 +1,9 @@
-"""Test-suite-wide import guarantees.
+"""Test-suite-wide configuration.
 
-torch must be imported before faiss on macOS (OpenMP runtime conflict
-causes a hard segfault otherwise). Importing it here makes every test
-module safe regardless of collection order.
+Historical note (2026-09-14 service split): this module used to import
+torch at session start because macOS segfaults when faiss loads before
+torch's OpenMP runtime. The guard now lives at the ONLY faiss import site
+(voiceagent/knowledge.py, sentence-transformers before `import faiss`),
+and the default test tier must not load ML libraries at all — see
+tests/test_import_contract.py.
 """
-
-import torch  # noqa: F401

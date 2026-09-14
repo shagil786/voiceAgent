@@ -341,6 +341,7 @@ class FakeMemoryWithPrototypes:
         return self._protos
 
 
+@pytest.mark.ml  # builds the real IntentClassifier (embedders)
 def test_classifier_exemplars_appends_prototypes_after_declared():
     mem = FakeMemoryWithPrototypes(
         [("speak_to_human", ["please connect me to a manager"], 0.8)])
@@ -430,6 +431,7 @@ def test_classifier_exemplars_no_memory_returns_declared_unchanged():
     assert classifier_exemplars(None, None, TENANT) is None
 
 
+@pytest.mark.ml  # builds the real IntentClassifier (embedders)
 def test_floor_garbage_prototype_cannot_degrade_seed_classification():
     """THE ADR-002 floor test: with declared exemplars + a garbage prototype,
     seed-intent phrases still resolve to the seed labels (real encoder)."""
@@ -793,6 +795,7 @@ def test_orchestrator_sidecar_lazy_builds_real_classifier(monkeypatch, tmp_path)
     assert "Happy to help" in res.reply
 
 
+@pytest.mark.ml  # builds the real IntentClassifier (embedders)
 def test_reseed_updates_real_classifier():
     """M2 on the REAL classifier: reseed() swaps the exemplar matrices in
     place — a learned phrase resolves to its label, seeds still win."""

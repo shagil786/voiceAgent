@@ -10,7 +10,7 @@ def test_tts_latency_returns_seconds():
 def test_asr_latency_delegates_to_routed_asr(monkeypatch, tmp_path):
     """M5b-2: asr_latency measures the production language-routed path, not a
     bare whisper model. Missing audio must skip ASR entirely."""
-    import voiceagent.asr as asr_mod
+    import voiceagent.asr_client as asr_mod
     from voiceagent.voice import asr_latency
 
     calls = []

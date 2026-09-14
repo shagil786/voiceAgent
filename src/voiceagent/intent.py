@@ -27,7 +27,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from voiceagent.knowledge import (DEFAULT_EMBEDDER, LATIN_SPACE, NATIVE_SPACE,
                                   SPACE_EMBEDDERS, route_space)
@@ -83,6 +82,9 @@ class IntentClassifier:
         # exemplars: per-tenant intent exemplars (tenant bundle, M6b);
         # None -> the built-in INTENT_EXEMPLARS.
         self._exemplars = exemplars if exemplars is not None else INTENT_EXEMPLARS
+        # Lazy: importing this module must stay ML-free (import-contract
+        # test) — the embedders load only when a classifier is BUILT.
+        from sentence_transformers import SentenceTransformer
         self._native_model = SentenceTransformer(model_name)
         self._latin_model = SentenceTransformer(latin_model_name)
         self._intents: list[str] = []

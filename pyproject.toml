@@ -7,6 +7,15 @@ description = "CPU-only multilingual AI support agent - M0 benchmark spike"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+# Service-split test tiers (2026-09-14): model-weight tests carry
+# @pytest.mark.ml and are DESELECTED by default — the default run is the
+# fast tier (brain + stubbed services, no ML libraries loaded). The heavy
+# tier is `pytest -m ml` (CI nightly / pre-release). The default tier is
+# what keeps a full-suite run from spiking ~16 GB on the 16 GB Mac mini.
+markers = [
+    "ml: loads real model weights or voices (deselected by default; run with -m ml)",
+]
+addopts = "-m 'not ml'"
 
 # The remaining suite warnings all originate inside third-party wheels, not
 # platform code (evidence in the 2026-09-07 audit §7/#2 and §14):

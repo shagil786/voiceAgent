@@ -1,6 +1,9 @@
 # tests/test_tts.py
+import pytest
+
 from voiceagent.tts import TTSHandle, VOICE_REGISTRY, synthesize_to_wav
 
+@pytest.mark.ml  # real piper voice load + synthesis
 def test_synthesize_to_wav_creates_file():
     import tempfile
     from pathlib import Path

@@ -7,12 +7,19 @@ import re
 from pathlib import Path
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
-# NOTE: sentence-transformers (torch) is imported BEFORE faiss deliberately.
-# Loading torch's OpenMP runtime first avoids a fatal macOS segfault when
+
+# Lazy ML imports (import contract, tests/test_import_contract.py): importing
+# this module must stay ML-free — sentence-transformers (torch) and faiss
+# load only when an index is BUILT or a cached one is deserialized. This
+# helper is the ONLY faiss import site and preserves the macOS OpenMP guard
+# in every call path: sentence-transformers (torch) is imported BEFORE faiss —
+# loading torch's OpenMP runtime first avoids a fatal macOS segfault when
 # faiss and torch coexist in one process (test suite + voice server paths).
-import faiss
+def _ml_imports():
+    from sentence_transformers import SentenceTransformer
+    import faiss
+    return SentenceTransformer, faiss
 
 from voiceagent.langid import NATIVE_SCRIPT_LANGS, detect_language
 
@@ -179,6 +186,7 @@ def build_index(docs: list[dict],
     the hybrid pair; overriding a name swaps that space's encoder."""
     texts = [d["text"] for d in docs]
     ids = [d["id"] for d in docs]
+    SentenceTransformer, faiss = _ml_imports()
     spaces: dict[str, dict] = {}
     for space, name in ((NATIVE_SPACE, model_name),
                         (LATIN_SPACE, latin_model_name)):
@@ -306,6 +314,7 @@ def save_index(handle: IndexHandle, docs: list[dict],
     primary (native) space — cache_is_valid's contract."""
     p = Path(cache_path)
     p.parent.mkdir(parents=True, exist_ok=True)
+    _, faiss = _ml_imports()
     primary = handle._spaces[NATIVE_SPACE]
     payload = {
         "version": CACHE_VERSION,
@@ -336,6 +345,7 @@ def load_or_build_index(docs: list[dict],
     a 384-dim MiniLM-only cache is never served for hybrid queries."""
     corpus_hash = docs_hash(docs)
     meta = read_cache_metadata(cache_path)
+    SentenceTransformer, faiss = _ml_imports()
     if hybrid_cache_is_valid(meta, model_name, corpus_hash,
                              latin_model_name=latin_model_name):
         spaces: dict[str, dict] = {}

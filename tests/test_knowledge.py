@@ -1,3 +1,4 @@
+import pytest
 import tempfile
 from pathlib import Path
 from voiceagent.knowledge import load_docs, build_index
@@ -16,6 +17,7 @@ def test_load_docs_parses_markdown_sections():
         assert any("5-7 business days" in t for t in texts)
 
 
+@pytest.mark.ml  # real embedder index build
 def test_build_index_and_search_returns_relevant_doc():
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)
@@ -30,6 +32,7 @@ def test_build_index_and_search_returns_relevant_doc():
         assert "5-7 business days" in results[0]["text"]
 
 
+@pytest.mark.ml  # real embedder index build
 def test_build_index_native_script_search_hits_same_docs():
     # M5b hybrid: native-script queries are served by the native (LaBSE)
     # space over the SAME chunks — cross-lingual retrieval must survive the
