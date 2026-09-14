@@ -1,6 +1,6 @@
 # OpenAPI Ingestion — Adaptation Front Door Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Drop an OpenAPI 3.x spec into the platform and get a governed voice agent — deterministic parser → ToolProposal drafts → human approval → compiled tools executing over a data-only fixture backend, proven end-to-end with a hotel tenant that adds zero domain code.
 
@@ -31,7 +31,7 @@
 - Consumes: `tools.parse_param_types(value, where)` (exists, `tools.py:296`), `ToolSpec.param_types` (exists, `tools.py:222`).
 - Produces: `ToolProposal.param_types: dict[str, str]` (new field, default `{}`); `gateway_tool_meta(prop)` now emits typed `properties`; `compile_approved` threads `param_types` into the lowered `ToolSpec`; `draft_from_api_spec` reads an optional `"param_types"` key from its operations dicts (later tasks rely on all four).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_proposals.py` (reuse the file's existing imports of `ToolProposal`, `validate_proposal`, `gateway_tool_meta`, `compile_approved`, `RISK_MUTATING`, `RISK_READ`, `PROPOSED`, `APPROVED`; add `import pytest` and `from voiceagent.tools import ToolGateway` if not already imported):
 
@@ -103,12 +103,12 @@ def test_draft_from_api_spec_carries_param_types():
     assert prop.param_types == {"nights": "integer"}
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `.venv/bin/python -m pytest tests/test_proposals.py -q -k param_types`
 Expected: FAIL — `ToolProposal` has no `param_types` field (TypeError: unexpected keyword argument).
 
-- [ ] **Step 3: Implement in `src/voiceagent/proposals.py`**
+- [x] **Step 3: Implement in `src/voiceagent/proposals.py`**
 
 1. In the `ToolProposal` dataclass (after the `operation_params` field), add:
 
@@ -149,12 +149,12 @@ Expected: FAIL — `ToolProposal` has no `param_types` field (TypeError: unexpec
 
 6. In `draft_from_api_spec`, add `param_types=dict(op.get("param_types", {})),` to the `ToolProposal(...)` construction.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `.venv/bin/python -m pytest tests/test_proposals.py tests/test_proposals_deploy.py -q`
 Expected: PASS (new tests + all existing proposal tests).
 
-- [ ] **Step 5: Full suite + commit**
+- [x] **Step 5: Full suite + commit**
 
 Run: `.venv/bin/python -m pytest -q`
 Expected: all green (additive change; default-tenant behavior byte-identical).
@@ -179,7 +179,7 @@ git commit -m "feat(proposals): param_types rides the declaration — typed tool
   - `parse_openapi(doc: dict) -> DraftResult` — raises `ValueError` on non-3.x
   - Each operations dict has exactly the keys `draft_from_api_spec` reads: `operation, tool_name, description, params, side_effects, risk_class, param_types, action` plus optional `resource_type, id_param, filter_param`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_openapi_draft.py`:
 
@@ -396,12 +396,12 @@ def test_post_without_any_params_is_skipped_with_note():
     assert any("no required parameters" in n for n in result.notes)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `.venv/bin/python -m pytest tests/test_openapi_draft.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'voiceagent.openapi_draft'`.
 
-- [ ] **Step 3: Create `src/voiceagent/openapi_draft.py`**
+- [x] **Step 3: Create `src/voiceagent/openapi_draft.py`**
 
 ```python
 # src/voiceagent/openapi_draft.py — OpenAPI 3.x → ToolProposal drafts.
@@ -617,12 +617,12 @@ def parse_openapi(doc: dict) -> DraftResult:
 
 Note: `Callable` is imported here for Task 3's `enrich` seam; if the linter objects at this task, remove it and re-add in Task 3.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `.venv/bin/python -m pytest tests/test_openapi_draft.py -q`
 Expected: PASS (all 13).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/voiceagent/openapi_draft.py tests/test_openapi_draft.py
@@ -641,7 +641,7 @@ git commit -m "feat(adaptation): deterministic OpenAPI 3.x drafter (parse_openap
 - Consumes: `DraftResult`/`parse_openapi` (Task 2); `proposals.draft_from_api_spec`, `proposals.validate_proposal`, `proposals.PROPOSED` (exists).
 - Produces (used by Task 6): `discovery_report(result: DraftResult, title: str = "") -> str`; `write_proposals_yaml(result: DraftResult, path) -> list[str]`; `enrich(result: DraftResult, enricher: Enricher | None = None) -> DraftResult` where `Enricher = Callable[[list[dict]], list[dict]]`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_openapi_draft.py` (add imports `json`, `yaml`, `Path`, and `from voiceagent.proposals import load_proposals_yaml`):
 
@@ -722,12 +722,12 @@ def test_enrich_changing_mechanics_is_refused():
         enrich(result, _sneaky)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `.venv/bin/python -m pytest tests/test_openapi_draft.py -q -k "report or write or enrich"`
 Expected: FAIL — ImportError: cannot import name 'discovery_report'.
 
-- [ ] **Step 3: Append the implementation to `src/voiceagent/openapi_draft.py`**
+- [x] **Step 3: Append the implementation to `src/voiceagent/openapi_draft.py`**
 
 ```python
 # --- report, artifact writer, prose seam -------------------------------------
@@ -827,12 +827,12 @@ def enrich(result: DraftResult,
 
 Also add to the module's imports at the top: `from pathlib import Path` and `import yaml` (moving `json` there if you prefer — one import block, linter-clean).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `.venv/bin/python -m pytest tests/test_openapi_draft.py tests/test_proposals.py -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/voiceagent/openapi_draft.py tests/test_openapi_draft.py
@@ -851,7 +851,7 @@ git commit -m "feat(adaptation): discovery report, proposals.yaml writer, enrich
 - Consumes: `generic_backend.GenericBackendError` (exists, `generic_backend.py:55`).
 - Produces: `FixtureGenericBackend(path: str | Path)` implementing the full `GenericBackend` protocol (`get_resource`, `list_resources`, `create_resource`, `update_resource`, `execute_operation`, `get_lifecycle_states`); raises `ValueError` at construction for missing/invalid files. Task 5 wires it into runtime; Task 8 uses it as the hotel backend.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_fixture_backend.py`:
 
@@ -971,12 +971,12 @@ def test_missing_or_invalid_file_fails_closed(tmp_path):
         FixtureGenericBackend(bad)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `.venv/bin/python -m pytest tests/test_fixture_backend.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'voiceagent.fixture_backend'`.
 
-- [ ] **Step 3: Create `src/voiceagent/fixture_backend.py`**
+- [x] **Step 3: Create `src/voiceagent/fixture_backend.py`**
 
 ```python
 # src/voiceagent/fixture_backend.py — data-only GenericBackend (ADR-004).
@@ -1140,12 +1140,12 @@ class FixtureGenericBackend:
         return list(self._lifecycles[resource_type])
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `.venv/bin/python -m pytest tests/test_fixture_backend.py -q`
 Expected: PASS (all 12).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/voiceagent/fixture_backend.py tests/test_fixture_backend.py
@@ -1164,7 +1164,7 @@ git commit -m "feat(adaptation): FixtureGenericBackend — any domain demoable f
 - Consumes: `FixtureGenericBackend` (Task 4).
 - Produces: backend selection order everywhere `build_orchestrator` resolves a backend: explicit `erp` arg → `VOICEAGENT_ERP_URL` (HttpERP) → `VOICEAGENT_FIXTURE_BACKEND` (FixtureGenericBackend, fail-closed on bad file) → MockERP with the loud warning. Task 8's e2e can run via env alone.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_fixture_backend.py`:
 
@@ -1199,12 +1199,12 @@ def test_runtime_no_config_returns_none():
     assert _erp_from_env({}) is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `.venv/bin/python -m pytest tests/test_fixture_backend.py -q -k runtime`
 Expected: FAIL — fixture env var is not read (`_erp_from_env` returns `None`).
 
-- [ ] **Step 3: Extend `_erp_from_env` in `src/voiceagent/runtime.py`**
+- [x] **Step 3: Extend `_erp_from_env` in `src/voiceagent/runtime.py`**
 
 Replace the function body (currently `runtime.py:456-464`) with:
 
@@ -1232,12 +1232,12 @@ def _erp_from_env(env: dict[str, str] | None = None):
     return HttpERP(env=e)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `.venv/bin/python -m pytest tests/test_fixture_backend.py tests/test_runtime.py tests/test_demo_warning.py -q`
 Expected: PASS (selection order preserved for all existing callers).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/voiceagent/runtime.py tests/test_fixture_backend.py
@@ -1256,7 +1256,7 @@ git commit -m "feat(runtime): VOICEAGENT_FIXTURE_BACKEND — data-only backend t
 - Consumes: `parse_openapi`, `discovery_report`, `write_proposals_yaml` (Tasks 2–3); `yaml` for spec loading (YAML is a superset of JSON, so both file types load the same way).
 - Produces: a bundle scaffold on disk — `proposals.yaml` (all proposed), `policies.yaml` (starter verdicts), `tenant.json`, `intents/`, `knowledge/`, `README.md`; exit code 0; report on stdout. Task 7's committed hotel bundle is the hand-reviewed descendant of exactly this output.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_onboard_cli.py`:
 
@@ -1317,7 +1317,7 @@ def test_onboard_scaffold_loads_through_the_bundle_loader(tmp_path):
     assert t.config.name == "Grand Hotel"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_onboard_cli.py -q`
 Expected: FAIL — `data/fixtures/hotel-openapi.yaml` does not exist yet; create it now as part of this task (it is the CLI's input fixture, needed by the test):
@@ -1413,7 +1413,7 @@ paths:
 Then re-run: `.venv/bin/python -m pytest tests/test_onboard_cli.py -q`
 Expected: FAIL — `scripts/onboard.py` does not exist.
 
-- [ ] **Step 3: Create `scripts/onboard.py`**
+- [x] **Step 3: Create `scripts/onboard.py`**
 
 ```python
 # scripts/onboard.py — the adaptation front door.
@@ -1543,12 +1543,12 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_onboard_cli.py -q`
 Expected: PASS (all 3).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/onboard.py tests/test_onboard_cli.py data/fixtures/hotel-openapi.yaml
@@ -1575,7 +1575,7 @@ git commit -m "feat(onboard): adaptation front-door CLI — spec in, fail-closed
 - Consumes: the Task 6 CLI output shape (the committed bundle is the reviewed descendant of that scaffold: descriptions owner-edited, preconditions added by the owner, statuses flipped to approved).
 - Produces: `FixtureGenericBackend("data/fixtures/hotel.json")` + `build_orchestrator(tenant="hotel-demo", erp=...)` — the exact wiring Task 8's conversation tests drive. Operation names in the fixture (`searchRooms`, `createBooking`, `cancelBooking`) match the committed proposals' `operation:` values.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_hotel_adaptation.py` with just the validator gate for now:
 
@@ -1606,12 +1606,12 @@ def test_hotel_bundle_validates():
     assert "[PASS]" in r.stdout
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_hotel_adaptation.py -q`
 Expected: FAIL — the bundle directory does not exist.
 
-- [ ] **Step 3: Create the fixture and bundle (data only)**
+- [x] **Step 3: Create the fixture and bundle (data only)**
 
 `data/fixtures/hotel.json`:
 
@@ -1836,12 +1836,12 @@ subject to availability.
 Breakfast is served 07:00-10:00 in the atrium; included with every booking.
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_hotel_adaptation.py -q`
 Expected: PASS (validator accepts the bundle, including `param_types` through `validate_proposal`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add data/fixtures/hotel.json data/tenants/hotel-demo tests/test_hotel_adaptation.py
@@ -1859,7 +1859,7 @@ git commit -m "data(hotel): tenant bundle + fixture — the domain is data, zero
 - Consumes: everything prior. Test vocabulary from `tests/test_orchestrator.py`: `ScriptedBrain`, `reply(content, calls=[])`, `tc(call_id, name, **args)` — import them exactly like the clinic suite does (`from tests.test_orchestrator import ScriptedBrain, reply, tc`); `orch.brain.client = ScriptedBrain([...])` swaps the stub in; `orch.handle_turn(session_id, text, authenticated=True)` returns a result with `.actions` (list of dicts with `tool/action/verdict/ok/value/error`) and `.reply`. `DecisionLog.query(action=..., verdict=...)` reads recorded verdicts.
 - Produces: the sprint's acceptance evidence.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_hotel_adaptation.py`:
 
@@ -1982,17 +1982,17 @@ def test_proposed_variant_registers_nothing(tmp_path):
     assert {"escalate_to_human", "end_call"} <= surface  # valves remain
 ```
 
-- [ ] **Step 2: Run tests to verify they fail or reveal wiring gaps**
+- [x] **Step 2: Run tests to verify they fail or reveal wiring gaps**
 
 Run: `.venv/bin/python -m pytest tests/test_hotel_adaptation.py -q`
 Expected: the Task 7 validator test still PASSES; the new tests may pass immediately (they assert existing machinery wired through new data) — if any fail, the failure is a real wiring bug in the bundle (operation name mismatch, missing policy action, wrong param name). Fix the DATA, never the core.
 
-- [ ] **Step 3: Full suite**
+- [x] **Step 3: Full suite**
 
 Run: `.venv/bin/python -m pytest -q`
 Expected: all green — 737 prior tests + the new ~30.
 
-- [ ] **Step 4: Neutrality spot-check (manual, 30 seconds)**
+- [x] **Step 4: Neutrality spot-check (manual, 30 seconds)**
 
 Run: `git diff --stat 585d2c6..HEAD -- src/voiceagent/`
 Expected: only `proposals.py` (param_types), `openapi_draft.py` (new), `fixture_backend.py` (new), `runtime.py` (backend selection) — no other core file touched. Domain words may appear in docstring EXAMPLES (the pattern `generic_backend.py` already established: resource types are data — "orders", "appointments", "rooms"); they must not appear in code identifiers. Spot-check identifiers only:
@@ -2000,7 +2000,7 @@ Expected: only `proposals.py` (param_types), `openapi_draft.py` (new), `fixture_
 Run: `grep -n "hotel\|grand" src/voiceagent/openapi_draft.py src/voiceagent/fixture_backend.py`
 Expected: no output at all (no hotel-specific identifiers anywhere).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/test_hotel_adaptation.py
