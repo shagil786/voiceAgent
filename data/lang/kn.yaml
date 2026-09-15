@@ -1,5 +1,8 @@
 # Platform language data: Kannada.
 code: kn
+# No piper voice upstream (see docs/multilingual-tts-coverage.md);
+# mms: prefix routes to the Meta MMS-TTS VITS backend.
+tts_voice: mms:kan
 asr_engine: indic
 scripts: [Kannada]
 digits: "೦೧೨೩೪೫೬೭೮೯"

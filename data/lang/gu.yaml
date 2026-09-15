@@ -1,5 +1,8 @@
 # Platform language data: Gujarati.
 code: gu
+# No piper voice upstream (see docs/multilingual-tts-coverage.md);
+# mms: prefix routes to the Meta MMS-TTS VITS backend.
+tts_voice: mms:guj
 asr_engine: indic
 scripts: [Gujarati]
 digits: "૦૧૨૩૪૫૬૭૮૯"

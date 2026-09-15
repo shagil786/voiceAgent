@@ -81,6 +81,55 @@ def _real_voice_loader(voice_name: str, model_dir: str):
         return PiperVoice.load(onnx)
 
 
+# --- MMS-TTS backend (languages piper does not cover) ------------------------
+# Voice names with an "mms:<iso>" prefix (data/lang/*.yaml) load Meta's
+# MMS-TTS VITS models via transformers. Same lazy-download pattern as
+# ensure_voice; heavier first load (~15s, cached in HF_HOME thereafter).
+
+_MMS_LANG = {"tam": "ta", "kan": "kn", "pan": "pa", "guj": "gu"}
+
+
+class MMSVoice:
+    """Adapts a transformers VITS model to the piper voice contract:
+    synthesize_wav(text, wav_writer, syn_config=None) writes a complete WAV
+    (like PiperVoice, the Wave_write close handles the header)."""
+
+    def __init__(self, model_id: str):
+        import torch  # noqa: F401 — VITS runs under no_grad on CPU
+        from transformers import VitsModel, AutoTokenizer
+        self._torch = torch
+        self._model = VitsModel.from_pretrained(model_id)
+        self._model.eval()
+        self._tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.sample_rate = self._model.config.sampling_rate
+
+    def synthesize_wav(self, text, w, syn_config=None):
+        torch = self._torch
+        inputs = self._tokenizer(text, return_tensors="pt")
+        with torch.no_grad():
+            out = self._model(**inputs).waveform
+        wav = out.squeeze().numpy()
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(self.sample_rate)
+        import struct
+        w.writeframes(b"".join(
+            struct.pack("<h", int(max(-1.0, min(1.0, x)) * 32767))
+            for x in wav))
+
+
+def _load_mms_voice(voice_name: str, model_dir: str):
+    """Loader for "mms:<iso>" voice names (MMS-TTS VITS via transformers).
+    Idempotent: HF hub cache means the second load is fast."""
+    from transformers import logging as hf_logging
+    hf_logging.set_verbosity_error()
+    return MMSVoice(f"facebook/mms-tts-{voice_name.split(':', 1)[1]}")
+
+
+def is_mms_voice(voice_name: str) -> bool:
+    return voice_name.startswith("mms:")
+
+
 
 _RE_DIGIT_RUN = re.compile(r"\d{8,}")
 _RE_NONSPEECH = __import__("re").compile(
@@ -168,7 +217,9 @@ class TTSHandle:
     def _get_voice(self, voice_name: str):
         voice = self._voices.get(voice_name)
         if voice is None:
-            voice = self._voice_loader(voice_name, self._model_dir)
+            loader = (_load_mms_voice if is_mms_voice(voice_name)
+                      else self._voice_loader)
+            voice = loader(voice_name, self._model_dir)
             self._voices[voice_name] = voice
         return voice
 

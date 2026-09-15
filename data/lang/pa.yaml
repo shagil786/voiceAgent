@@ -1,5 +1,8 @@
 # Platform language data: Punjabi (Gurmukhi).
 code: pa
+# No piper voice upstream (see docs/multilingual-tts-coverage.md);
+# mms: prefix routes to the Meta MMS-TTS VITS backend.
+tts_voice: mms:pan
 asr_engine: indic
 scripts: [Gurmukhi]
 digits: "੦੧੨੩੪੫੬੭੮੯"

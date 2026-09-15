@@ -154,8 +154,9 @@ def alias_for(code: str) -> str:
 
 
 def voice_registry() -> dict[str, str]:
-    """Text language -> piper voice name, from lang files' `tts_voice:`.
-    Codes without one (ta/gu/kn/pa) fall back downstream with a warning."""
+    """Text language -> voice name from lang files' `tts_voice:`.
+    Plain names are piper voices; an "mms:<iso>" prefix routes to the
+    Meta MMS-TTS backend (languages piper does not cover)."""
     return {code: e["tts_voice"] for code, e in tables().items()
             if e.get("tts_voice")}
 

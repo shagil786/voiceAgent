@@ -1,5 +1,8 @@
 # Platform language data: ta.
 code: ta
+# No piper voice upstream (see docs/multilingual-tts-coverage.md);
+# mms: prefix routes to the Meta MMS-TTS VITS backend.
+tts_voice: mms:tam
 asr_engine: indic
 scripts: [Tamil]
 digits: "௦௧௨௩௪௫௬௭௮௯"

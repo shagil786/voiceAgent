@@ -25,13 +25,22 @@ declared voice and verified synthesis per language.
 
 Sample WAVs: data/out/voice-multiling-smoke/
 
-## Known limits (upstream gap, not platform)
+## MMS-TTS backend (2026-09-15): the piper gap is CLOSED
 
-- **gu / kn / pa / ta**: rhasspy/piper-voices ships NO voice for Gujarati,
-  Kannada, Punjabi, Tamil (verified via HF repo tree API 2026-09-15). ASR
-  fully works for these (IndicConformer); replies fall back to the en
-  fallback voice with a warning. Adding a voice later = one `tts_voice:`
-  data line, zero code.
-- **it**: upstream only ships it_IT-riccardo-x_low (no medium); declared
-  policy is to wait for a medium voice rather than ship x_low quality
-  (see data/lang/it.yaml).
+gu / kn / pa / ta now speak via Meta MMS-TTS (facebook/mms-tts-{tam,kan,pan,guj},
+VITS via transformers — already a dependency, ungated). Declared as
+`tts_voice: mms:<iso>` in the lang files; `TTSHandle._get_voice` routes
+the prefix to the MMS loader, which adapts VITS to the piper voice
+contract (synthesize_wav). Verified: ta/kn/pa/gu synthesize real speech
+(~0.5-1.4s CPU for a sentence, 16kHz mono; first model load ~15s then
+HF-cached). Samples: data/out/voice-multiling-smoke/{ta,kn,pa,gu}-mms.wav
+
+## Known limits (remaining, upstream)
+
+- **it**: upstream piper only ships it_IT-riccardo-x_low (no medium);
+  declared policy is to wait for a medium voice rather than ship x_low
+  quality (see data/lang/it.yaml). Could also route to mms:eng-style
+  Italian (facebook/mms-tts-ita) if x_low quality stays unacceptable —
+  one data line when decided.
+- MMS voices are 16kHz mono (piper medium is 22kHz) — slightly lower
+  fidelity, acceptable for telephony (8kHz trunk anyway).
