@@ -55,6 +55,35 @@ def make_service():
     return svc
 
 
+def test_mms_voice_serves_over_the_wire(monkeypatch, tmp_path):
+    """ta/gu/kn/pa resolve to mms: names; the service must dispatch them to
+    the MMS loader (never the piper loader) and return real WAV bytes."""
+    piper_calls, mms_calls = [], []
+
+    def piper_loader(name, d):
+        piper_calls.append(name)
+        return StubVoice()
+
+    def mms_loader(name, d):
+        mms_calls.append(name)
+        return StubVoice()
+
+    svc = TTSService(registry=LoadedModelLRU(capacity=2, idle_unload_s=600),
+                     voice_loader=piper_loader, mms_loader=mms_loader,
+                     registry_map=dict(VOICE_REGISTRY))
+    url, stop = _serve(monkeypatch, service=svc)
+    monkeypatch.setenv("VOICEAGENT_TTS_URL", url)
+    try:
+        out = str(tmp_path / "ta.wav")
+        tts_client.speak("வணக்கம்", language="ta", out_path=out)
+        with wave.open(out, "rb") as w:
+            assert w.getnframes() > 0
+    finally:
+        stop()
+    assert mms_calls == ["mms:tam"]
+    assert piper_calls == []  # mms names must never reach piper
+
+
 def _serve(monkeypatch, service=None):
     """Boot a real stub service on an ephemeral port; return (url, stop).
 

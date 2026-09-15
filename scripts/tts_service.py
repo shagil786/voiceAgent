@@ -39,12 +39,15 @@ EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
 class TTSService:
     def __init__(self, registry=None, voice_loader=None, registry_map=None,
-                 model_dir=None):
+                 model_dir=None, mms_loader=None):
         self._model_dir = model_dir or "data/models"
         self._registry_map = registry_map if registry_map is not None \
             else dict(tts_mod.VOICE_REGISTRY)
         self._registry_map.update(tts_mod.voice_overrides_from_env())
         self._voice_loader = voice_loader or tts_mod._real_voice_loader
+        # mms: voices (piper-gap languages) dispatch to the MMS backend —
+        # same split as TTSHandle._get_voice; injectable for tests.
+        self._mms_loader = mms_loader or tts_mod._load_mms_voice
         self.registry = registry or LoadedModelLRU(
             capacity=int(os.environ.get("VOICEAGENT_SERVICE_MAX_LOADED", 2)),
             idle_unload_s=float(
@@ -58,9 +61,10 @@ class TTSService:
         owns normalization; spelled IDs must survive verbatim."""
         t0 = time.time()
         _, voice_name = self._resolver.voice_for(language, text)
+        loader = (self._mms_loader if tts_mod.is_mms_voice(voice_name)
+                  else self._voice_loader)
         voice = self.registry.get(
-            f"voice:{voice_name}",
-            lambda: self._voice_loader(voice_name, self._model_dir))
+            f"voice:{voice_name}", lambda: loader(voice_name, self._model_dir))
         buf = io.BytesIO()
         with wave.open(buf, "wb") as w:
             length_scale = self._resolver._length_scale
@@ -79,9 +83,10 @@ class TTSService:
         base = (str(language or "en").strip().lower().replace("_", "-")
                 .split("-")[0] or "en")
         _, voice_name = self._resolver.voice_for(base, "")
+        loader = (self._mms_loader if tts_mod.is_mms_voice(voice_name)
+                  else self._voice_loader)
         self.registry.get(
-            f"voice:{voice_name}",
-            lambda: self._voice_loader(voice_name, self._model_dir))
+            f"voice:{voice_name}", lambda: loader(voice_name, self._model_dir))
         return voice_name
 
     def describe(self) -> dict:
