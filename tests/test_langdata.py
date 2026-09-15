@@ -134,10 +134,11 @@ def test_voices_routing_alias_are_data_not_code():
             assert lit not in src, f"{lit!r} survives in {mod.__name__}"
     # Loaded values equal the historical behavior, from files:
     from voiceagent.tts import VOICE_REGISTRY, resolve_voice_lang
-    assert len(VOICE_REGISTRY) == 13
+    # Registry size is data (one line per lang file), not a constant.
+    assert len(VOICE_REGISTRY) == 17
     assert VOICE_REGISTRY["te"] == "te_IN-maya-medium"
     assert VOICE_REGISTRY["ur"] == "ur_PK-fasih-medium"
-    assert "ta" not in VOICE_REGISTRY  # fallback path preserved
+    assert VOICE_REGISTRY["ta"] == "mms:tam"  # MMS backend, not fallback
     assert resolve_voice_lang("hinglish") == "hi"
     assert resolve_voice_lang("te") == "te"
     assert langdata.alias_for("hinglish") == "hi"

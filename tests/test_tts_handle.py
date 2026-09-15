@@ -36,6 +36,11 @@ def _make_handle(tmp_path, calls, **kw):
     def loader(voice_name, model_dir):
         calls.append(voice_name)
         return FakeVoice(voice_name)
+    # mms voices must NEVER reach the piper loader — record if they do.
+    def mms_guard(voice_name, model_dir):
+        calls.append("MMS-LEAKED:" + voice_name)
+        return FakeVoice(voice_name)
+    kw.setdefault("mms_loader", mms_guard)
     return TTSHandle(model_dir=str(tmp_path), voice_loader=loader, **kw)
 
 
@@ -51,9 +56,13 @@ TA_TEXT = "உங்கள் ஆர்டர் நாளை வரும்." 
 
 # ---------------------------------------------------------------- registry
 
-def test_registry_covers_en_hi_te_and_excludes_ta():
+def test_registry_covers_en_hi_te_and_mms_gap_langs():
     assert {"en", "hi", "te"} <= set(VOICE_REGISTRY)
-    assert "ta" not in VOICE_REGISTRY
+    # piper-gap languages route to the MMS backend (mms: prefix)
+    assert VOICE_REGISTRY["ta"] == "mms:tam"
+    assert VOICE_REGISTRY["kn"] == "mms:kan"
+    assert VOICE_REGISTRY["pa"] == "mms:pan"
+    assert VOICE_REGISTRY["gu"] == "mms:guj"
     assert VOICE_REGISTRY["en"] == "en_US-lessac-medium"
     assert VOICE_REGISTRY["hi"] == "hi_IN-priyamvada-medium"
     assert VOICE_REGISTRY["te"] == "te_IN-maya-medium"
@@ -105,17 +114,26 @@ def test_explicit_language_overrides_detection(tmp_path):
 
 # ------------------------------------------------------------------- fallback
 
-def test_tamil_falls_back_to_en_with_warning(tmp_path):
-    calls, warns = [], []
-    h = _make_handle(tmp_path, calls, warn=warns.append)
+def test_tamil_routes_to_mms_backend(tmp_path):
+    """ta now has a voice (MMS backend, mms: prefix in data/lang/ta.yaml):
+    the MMS loader (not the piper loader) is asked — no en fallback, no
+    warning."""
+    mms_calls, warns = [], []
+
+    def mms_loader(voice_name, model_dir):
+        mms_calls.append(voice_name)
+        return FakeVoice(voice_name)
+
+    h = _make_handle(tmp_path, [], mms_loader=mms_loader, warn=warns.append)
     h.speak(TA_TEXT, out_path=_out(tmp_path))
-    assert calls == ["en_US-lessac-medium"]          # ta not registered
-    assert len(warns) == 1
-    assert "ta" in warns[0] and "en" in warns[0]     # names both languages
+    assert mms_calls == ["mms:tam"]
+    assert warns == []
 
 
 def test_any_unregistered_language_warns_and_uses_en(tmp_path):
-    for bogus in ("ta", "gu", "kn", "pa", "xx", "kl"):
+    # ta/gu/kn/pa are registered now (mms backend); only truly-unknown
+    # codes exercise the fallback path.
+    for bogus in ("xx", "kl"):
         calls, warns = [], []
         h = _make_handle(tmp_path, calls, warn=warns.append)
         h.speak("some words", language=bogus, out_path=_out(tmp_path, bogus))
@@ -127,9 +145,9 @@ def test_any_unregistered_language_warns_and_uses_en(tmp_path):
 def test_fallback_voice_is_injectable(tmp_path):
     calls, warns = [], []
     h = _make_handle(tmp_path, calls, fallback_voice="hi", warn=warns.append)
-    h.speak(TA_TEXT, out_path=_out(tmp_path))
+    h.speak("some words", language="xx", out_path=_out(tmp_path))
     assert calls == ["hi_IN-priyamvada-medium"]
-    assert "hi" in warns[0]
+    assert "xx" in warns[0]
 
 
 def test_fallback_does_not_raise(tmp_path):

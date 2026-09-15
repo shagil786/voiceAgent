@@ -188,6 +188,7 @@ class TTSHandle:
                  fallback_voice: str = "en",
                  length_scale: float | None = None,
                  voice_loader: Callable[[str, str], object] | None = None,
+                 mms_loader: Callable[[str, str], object] | None = None,
                  warn: Callable[[str], None] | None = None):
         self._model_dir = model_dir
         self._registry = dict(registry if registry is not None else VOICE_REGISTRY)
@@ -198,6 +199,7 @@ class TTSHandle:
                                                 DEFAULT_LENGTH_SCALE))
         self._length_scale = length_scale
         self._voice_loader = voice_loader or _real_voice_loader
+        self._mms_loader = mms_loader or _load_mms_voice
         self._warn = warn or (lambda msg: logger.warning(msg))
         self._voices: dict[str, object] = {}
 
@@ -217,7 +219,7 @@ class TTSHandle:
     def _get_voice(self, voice_name: str):
         voice = self._voices.get(voice_name)
         if voice is None:
-            loader = (_load_mms_voice if is_mms_voice(voice_name)
+            loader = (self._mms_loader if is_mms_voice(voice_name)
                       else self._voice_loader)
             voice = loader(voice_name, self._model_dir)
             self._voices[voice_name] = voice
